@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Role = "DEVELOPER" | "MANAGER" | "CLIENT";
 
@@ -90,11 +91,6 @@ export default function AdminTenantsPage() {
     router.replace("/");
   };
 
-  // ★ 追加：新規テナント作成ボタン
-  const handleCreateTenant = () => {
-    router.push("/admin/tenants/new");
-  };
-
   if (loading) {
     return <div className="p-4">読み込み中...</div>;
   }
@@ -118,38 +114,23 @@ export default function AdminTenantsPage() {
 
   return (
     <div className="p-4">
-      {/* 上部ヘッダー＋新規テナント作成ボタン */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">開発者オーバービュー（テナント一覧）</h1>
-          {me && (
-            <div className="mt-1 text-sm text-gray-700">
-              ログイン中: {me.email}（role: {me.role}
-              {me.tenantId != null
-                ? ` / tenantId: ${me.tenantId}`
-                : " / 全テナント管理"}
-              ）
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          {/* ★ 新規テナント作成ボタン */}
-          <button
-            onClick={handleCreateTenant}
-            className="px-3 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700"
-          >
-            新規テナントを作成
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-bold">開発者オーバービュー（テナント一覧）</h1>
+        <button
+          onClick={handleLogout}
+          className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+        >
+          ログアウト
+        </button>
       </div>
+
+      {me && (
+        <div className="mb-4 text-sm text-gray-700">
+          ログイン中: {me.email}（role: {me.role}
+          {me.tenantId != null ? ` / tenantId: ${me.tenantId}` : " / 全テナント管理"}
+          ）
+        </div>
+      )}
 
       {tenants.length === 0 ? (
         <p>まだテナントがありません。</p>
@@ -192,15 +173,12 @@ export default function AdminTenantsPage() {
                   {t.bookingsCount}
                 </td>
                 <td className="border px-2 py-1 text-center">
-                  {/* ここは今まで通り、LINE設定や契約編集などのリンクを並べてOK */}
-                  <button
-                    onClick={() =>
-                      router.push(`/admin/tenants/${t.id}/line-settings`)
-                    }
+                  <Link
+                    href={`/admin/tenants/${t.id}/line-settings`}
                     className="text-xs text-blue-600 underline"
                   >
                     LINE設定
-                  </button>
+                  </Link>
                 </td>
               </tr>
             ))}
