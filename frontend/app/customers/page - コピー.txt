@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from 'react';
 import TenantLayout from "../components/TenantLayout";
 
 type Customer = {
@@ -20,7 +20,7 @@ type Me = {
   email: string;
   name: string | null;
   tenantId: number | null;
-  role: "DEVELOPER" | "MANAGER" | "CLIENT";
+  role: 'DEVELOPER' | 'MANAGER' | 'CLIENT';
 };
 
 export default function CustomersPage() {
@@ -31,102 +31,82 @@ export default function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
 
   // 新規登録フォーム用 state
-  const [lastName, setLastName] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [address1, setAddress1] = useState("");
-  const [address2, setAddress2] = useState("");
-  const [mobilePhone, setMobilePhone] = useState("");
-  const [lineUid, setLineUid] = useState("");
-  const [birthday, setBirthday] = useState("");
+  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [address1, setAddress1] = useState('');
+  const [address2, setAddress2] = useState('');
+  const [mobilePhone, setMobilePhone] = useState('');
+  const [lineUid, setLineUid] = useState('');
+  const [birthday, setBirthday] = useState('');
 
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
   // ★ 一括送信用 state
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<number[]>([]);
-  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
   const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
 
-  // ★ 初回ロード：トークンから /auth/me → customers の順で取得
+  // 初回ロード：トークンから me と customers を取得
   useEffect(() => {
-    const run = async () => {
-      setLoading(true);
-      setError(null);
+    const savedToken =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('auth_token')
+        : null;
 
-      const savedToken =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem("auth_token")
-          : null;
+    if (!savedToken) {
+      setLoading(false);
+      setError('先にログインしてください（トップページからログイン）');
+      return;
+    }
 
-      if (!savedToken) {
-        setLoading(false);
-        setError("先にログインしてください（トップページからログイン）");
-        return;
-      }
+    setToken(savedToken);
 
-      setToken(savedToken);
-      const headers = { Authorization: `Bearer ${savedToken}` };
-
-      try {
-        // ① まず /auth/me でテナント有効チェック
-        const meRes = await fetch("http://localhost:4000/auth/me", { headers });
-
-        if (!meRes.ok) {
-          const data = await meRes.json().catch(() => null);
-          let msg: string = "ログイン情報の取得に失敗しました";
-          const m = data?.message;
-          if (typeof m === "string") {
-            msg = m;
-          } else if (Array.isArray(m) && m[0]) {
-            msg = String(m[0]);
-          }
-          setError(msg); // ここに「テナントが無効になっています」「有効期限が切れています」などが入る
-          setLoading(false);
-          return; // ★ ここで終了 → customers は取りに行かない
-        }
-
-        const meData: Me = await meRes.json();
-        setMe(meData);
-
-        // ② テナントが有効な場合だけ顧客一覧を取得
-        const customersRes = await fetch("http://localhost:4000/customers", {
-          headers,
-        });
-
-        if (!customersRes.ok) {
-          const data = await customersRes.json().catch(() => null);
-          let msg: string = "顧客一覧の取得に失敗しました";
-          const m = data?.message;
-          if (typeof m === "string") {
-            msg = m;
-          } else if (Array.isArray(m) && m[0]) {
-            msg = String(m[0]);
-          }
-          throw new Error(msg);
-        }
-
-        const data: Customer[] = await customersRes.json();
-        setCustomers(data);
-      } catch (err: any) {
+    // 自分情報
+    fetch('http://localhost:4000/auth/me', {
+      headers: { Authorization: `Bearer ${savedToken}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('auth me error');
+        return res.json();
+      })
+      .then((data: Me) => {
+        setMe(data);
+      })
+      .catch((err) => {
         console.error(err);
-        setError(err?.message ?? "顧客一覧の取得に失敗しました");
-      } finally {
-        setLoading(false);
-      }
-    };
+        setError('ログイン情報の取得に失敗しました');
+      });
 
-    run();
+    // 顧客一覧
+    fetch('http://localhost:4000/customers', {
+      headers: { Authorization: `Bearer ${savedToken}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('customers api error');
+        return res.json();
+      })
+      .then((data: Customer[]) => {
+        setCustomers(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError('顧客一覧の取得に失敗しました');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   // 日付表示用
   const formatDate = (value?: string | null) => {
-    if (!value) return "";
+    if (!value) return '';
     const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleDateString("ja-JP");
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('ja-JP');
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -135,20 +115,20 @@ export default function CustomersPage() {
     setFormSuccess(null);
 
     if (!token) {
-      setFormError("トークンがありません。再度ログインしてください。");
+      setFormError('トークンがありません。再度ログインしてください。');
       return;
     }
 
     if (!lastName || !firstName || !mobilePhone) {
-      setFormError("姓・名・携帯番号は必須です");
+      setFormError('姓・名・携帯番号は必須です');
       return;
     }
 
     try {
-      const res = await fetch("http://localhost:4000/customers", {
-        method: "POST",
+      const res = await fetch('http://localhost:4000/customers', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -165,10 +145,11 @@ export default function CustomersPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        let msg: string = "顧客の登録に失敗しました";
+        // ★ msg を必ず string にする（null を混ぜない）
+        let msg: string = '顧客の登録に失敗しました';
         if (data?.message) {
           msg = Array.isArray(data.message)
-            ? data.message.join(", ")
+            ? data.message.join(', ')
             : String(data.message);
         }
         throw new Error(msg);
@@ -177,18 +158,18 @@ export default function CustomersPage() {
       const created: Customer = await res.json();
       setCustomers((prev) => [...prev, created]);
 
-      setFormSuccess("顧客を登録しました");
-      setLastName("");
-      setFirstName("");
-      setPostalCode("");
-      setAddress1("");
-      setAddress2("");
-      setMobilePhone("");
-      setLineUid("");
-      setBirthday("");
+      setFormSuccess('顧客を登録しました');
+      setLastName('');
+      setFirstName('');
+      setPostalCode('');
+      setAddress1('');
+      setAddress2('');
+      setMobilePhone('');
+      setLineUid('');
+      setBirthday('');
     } catch (err: any) {
       console.error(err);
-      setFormError(err.message ?? "顧客の登録に失敗しました");
+      setFormError(err.message ?? '顧客の登録に失敗しました');
     }
   };
 
@@ -204,26 +185,26 @@ export default function CustomersPage() {
     setBroadcastSuccess(null);
 
     if (!token) {
-      setBroadcastError("トークンがありません。再ログインしてください。");
+      setBroadcastError('トークンがありません。再ログインしてください。');
       return;
     }
     if (selectedCustomerIds.length === 0) {
-      setBroadcastError("送信先の顧客を1件以上選択してください。");
+      setBroadcastError('送信先の顧客を1件以上選択してください。');
       return;
     }
     if (!broadcastMessage.trim()) {
-      setBroadcastError("メッセージ内容を入力してください。");
+      setBroadcastError('メッセージ内容を入力してください。');
       return;
     }
 
     setBroadcasting(true);
     try {
       const res = await fetch(
-        "http://localhost:4000/messages/send-to-customers",
+        'http://localhost:4000/messages/send-to-customers',
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
@@ -235,10 +216,10 @@ export default function CustomersPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        let msg: string = "メッセージの送信に失敗しました";
+        let msg: string = 'メッセージの送信に失敗しました';
         if (data?.message) {
           msg = Array.isArray(data.message)
-            ? data.message.join(", ")
+            ? data.message.join(', ')
             : String(data.message);
         }
         throw new Error(msg);
@@ -248,11 +229,13 @@ export default function CustomersPage() {
       setBroadcastSuccess(
         `送信が完了しました（${result.sentCount}件 / 対象 ${result.targetCount}件）`,
       );
+      // 選択は解除しておく
       setSelectedCustomerIds([]);
-      setBroadcastMessage("");
+      // メッセージは一旦空にする
+      setBroadcastMessage('');
     } catch (err: any) {
       console.error(err);
-      setBroadcastError(err.message ?? "メッセージの送信に失敗しました");
+      setBroadcastError(err.message ?? 'メッセージの送信に失敗しました');
     } finally {
       setBroadcasting(false);
     }
@@ -268,26 +251,16 @@ export default function CustomersPage() {
     );
   }
 
-  // ★ 追加：エラー時は顧客UIを一切表示せず、メッセージだけ
-  if (error) {
-    return (
-      <TenantLayout>
-        <main className="min-h-screen flex flex-col items-center p-4 gap-6">
-          <h1 className="text-2xl font-bold mt-4">顧客管理</h1>
-          <div className="text-red-600 border border-red-400 px-4 py-2 rounded w-full max-w-2xl whitespace-pre-wrap">
-            {error}
-          </div>
-        </main>
-      </TenantLayout>
-    );
-  }
-
   return (
     <TenantLayout>
       <main className="min-h-screen flex flex-col items-center p-4 gap-6">
         <h1 className="text-2xl font-bold mt-4">顧客管理</h1>
 
-        {/* error は early return で処理済みなのでここでは表示しない */}
+        {error && (
+          <div className="text-red-600 border border-red-400 px-4 py-2 rounded w-full max-w-2xl">
+            {error}
+          </div>
+        )}
 
         {me && (
           <div className="border rounded-md px-4 py-3 bg-gray-50 w-full max-w-2xl">
@@ -333,9 +306,7 @@ export default function CustomersPage() {
             </div>
 
             <div>
-              <label className="block text-sm mb-1">
-                郵便番号（ハイフンなし）
-              </label>
+              <label className="block text-sm mb-1">郵便番号（ハイフンなし）</label>
               <input
                 className="w-full border rounded px-2 py-1 text-sm"
                 value={postalCode}
@@ -377,8 +348,7 @@ export default function CustomersPage() {
                 placeholder="例: 09012345678"
               />
               <p className="text-[11px] text-gray-500 mt-1">
-                ※ 携帯番号が重複している場合は登録不可（サーバ側でチェック）
-                想定。
+                ※ 携帯番号が重複している場合は登録不可（サーバ側でチェック）想定。
               </p>
             </div>
 
@@ -451,7 +421,7 @@ export default function CustomersPage() {
                 disabled={broadcasting}
                 className="px-3 py-1 text-xs rounded bg-green-600 text-white disabled:opacity-60"
               >
-                {broadcasting ? "送信中..." : "選択した顧客に送信"}
+                {broadcasting ? '送信中...' : '選択した顧客に送信'}
               </button>
             </div>
           </div>
@@ -480,9 +450,9 @@ export default function CustomersPage() {
                 <tbody>
                   {customers.map((c) => {
                     const fullAddress =
-                      (c.postalCode ? `〒${c.postalCode} ` : "") +
-                      (c.address1 ?? "") +
-                      (c.address2 ? ` ${c.address2}` : "");
+                      (c.postalCode ? `〒${c.postalCode} ` : '') +
+                      (c.address1 ?? '') +
+                      (c.address2 ? ` ${c.address2}` : '');
 
                     return (
                       <tr key={c.id} className="hover:bg-gray-50">
@@ -499,9 +469,9 @@ export default function CustomersPage() {
                         </td>
                         <td className="border px-2 py-1">{fullAddress}</td>
                         <td className="border px-2 py-1">
-                          {c.mobilePhone ?? ""}
+                          {c.mobilePhone ?? ''}
                         </td>
-                        <td className="border px-2 py-1">{c.lineUid ?? ""}</td>
+                        <td className="border px-2 py-1">{c.lineUid ?? ''}</td>
                         <td className="border px-2 py-1">
                           {formatDate(c.birthday)}
                         </td>

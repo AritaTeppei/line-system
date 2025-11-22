@@ -47,29 +47,16 @@ export default function AdminTenantsPage() {
     const headers = { Authorization: `Bearer ${savedToken}` };
 
     const fetchMe = fetch("http://localhost:4000/auth/me", { headers })
-  .then(async (res) => {
-    if (!res.ok) {
-      let msg = "auth me error";
-      try {
-        const data = await res.json();
-        if (typeof data?.message === "string") {
-          msg = data.message;
-        } else if (Array.isArray(data?.message) && data.message[0]) {
-          msg = data.message[0];
+      .then((res) => {
+        if (!res.ok) throw new Error("auth me error");
+        return res.json() as Promise<Me>;
+      })
+      .then((data) => {
+        setMe(data);
+        if (data.role !== "DEVELOPER") {
+          throw new Error("このページは開発者ユーザー専用です");
         }
-      } catch {
-        // ignore
-      }
-      throw new Error(msg);
-    }
-    return res.json() as Promise<Me>;
-  })
-  .then((data) => {
-    setMe(data);
-    if (data.role !== "DEVELOPER") {
-      throw new Error("このページは開発者ユーザー専用です");
-    }
-  });
+      });
 
     const fetchTenants = fetch(
       "http://localhost:4000/admin/tenants/overview",

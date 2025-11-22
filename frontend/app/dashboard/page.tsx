@@ -61,6 +61,22 @@ export default function DashboardPage() {
           Authorization: `Bearer ${savedToken}`,
         };
 
+        // ★ ここを追加：まず /auth/me でテナント有効チェックを通す
+        const meRes = await fetch("http://localhost:4000/auth/me", {
+          headers,
+        });
+
+        if (!meRes.ok) {
+          const data = await meRes.json().catch(() => null);
+          const msg =
+            data?.message ||
+            (Array.isArray(data?.message) ? data.message.join(", ") : null) ||
+            "認証情報の確認に失敗しました。";
+
+          // ここで throw すると下の catch に入り、error にメッセージが載る
+          throw new Error(msg);
+        }
+
         const [remindersRes, bookingsRes] = await Promise.all([
           fetch(
             `http://localhost:4000/reminders/preview?date=${encodeURIComponent(
@@ -125,6 +141,40 @@ export default function DashboardPage() {
     }
     router.replace("/");
   };
+
+  // ★ 追加：読み込み中はダッシュボードを描画しない
+  if (loading) {
+    return (
+      <TenantLayout>
+        <div className="w-full max-w-[960px]">
+          <p className="text-sm">読み込み中...</p>
+        </div>
+      </TenantLayout>
+    );
+  }
+
+  // ★ 追加：エラーがあるときもダッシュボードは描画せず、
+  //         メッセージだけ出す（ここに「テナントが無効になっています...」が載る）
+  if (error) {
+    return (
+      <TenantLayout>
+        <div className="w-full max-w-[960px]">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-2xl font-bold">ダッシュボード</h1>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+            >
+              ログアウト
+            </button>
+          </div>
+          <p className="text-red-600 text-sm whitespace-pre-wrap mt-4">
+            {error}
+          </p>
+        </div>
+      </TenantLayout>
+    );
+  }
 
   return (
     <TenantLayout>
