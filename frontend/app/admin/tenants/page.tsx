@@ -95,6 +95,48 @@ export default function AdminTenantsPage() {
     router.push("/admin/tenants/new");
   };
 
+    // ★ 追加：テナント編集ボタン（編集ページへ遷移）
+  const handleEditTenant = (id: number) => {
+    router.push(`/admin/tenants/${id}/edit`);
+  };
+
+  // ★ 追加：テナント削除ボタン（API叩いて一覧から削除）
+  const handleDeleteTenant = async (id: number) => {
+    const ok = window.confirm(
+      `テナント ID: ${id} を削除しますか？\n関連するデータがある場合は消える可能性があります。`,
+    );
+    if (!ok) return;
+
+    const savedToken =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("auth_token")
+        : null;
+
+    if (!savedToken) {
+      alert("ログイン情報がありません。再ログインしてください。");
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:4000/admin/tenants/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${savedToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error("テナント削除APIエラー");
+      }
+
+      // 削除成功したので state を更新
+      setTenants((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      console.error(e);
+      alert("テナントの削除に失敗しました。コンソールログを確認してください。");
+    }
+  };
+
   if (loading) {
     return <div className="p-4">読み込み中...</div>;
   }
@@ -192,16 +234,35 @@ export default function AdminTenantsPage() {
                   {t.bookingsCount}
                 </td>
                 <td className="border px-2 py-1 text-center">
-                  {/* ここは今まで通り、LINE設定や契約編集などのリンクを並べてOK */}
-                  <button
-                    onClick={() =>
-                      router.push(`/admin/tenants/${t.id}/line-settings`)
-                    }
-                    className="text-xs text-blue-600 underline"
-                  >
-                    LINE設定
-                  </button>
-                </td>
+  <div className="flex items-center justify-center gap-2">
+    {/* 編集ボタン */}
+    <button
+      onClick={() => handleEditTenant(t.id)}
+      className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+    >
+      編集
+    </button>
+
+    {/* 削除ボタン */}
+    <button
+      onClick={() => handleDeleteTenant(t.id)}
+      className="px-2 py-0.5 text-xs rounded bg-red-600 text-white hover:bg-red-700"
+    >
+      削除
+    </button>
+
+    {/* 既存の LINE 設定リンク */}
+    <button
+      onClick={() =>
+        router.push(`/admin/tenants/${t.id}/line-settings`)
+      }
+      className="text-xs text-blue-600 underline"
+    >
+      LINE設定
+    </button>
+  </div>
+</td>
+
               </tr>
             ))}
           </tbody>
