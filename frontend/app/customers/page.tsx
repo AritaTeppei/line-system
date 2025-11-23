@@ -30,7 +30,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 新規登録フォーム用 state
+  // 新規登録＆編集フォーム用 state
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [postalCode, setPostalCode] = useState("");
@@ -43,6 +43,11 @@ export default function CustomersPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
+  // ★ どの顧客を編集中か（null のときは新規モード）
+  const [editingCustomerId, setEditingCustomerId] = useState<number | null>(
+    null,
+  );
+
   // ★ 一括送信用 state
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<number[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState("");
@@ -50,7 +55,7 @@ export default function CustomersPage() {
   const [broadcastSuccess, setBroadcastSuccess] = useState<string | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
 
-  // ★ 初回ロード：トークンから /auth/me → customers の順で取得
+  // 初回ロード：トークンから /auth/me → customers の順で取得
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -129,7 +134,19 @@ export default function CustomersPage() {
     return d.toLocaleDateString("ja-JP");
   };
 
-  const handleCreate = async (e: FormEvent) => {
+  // フォームの入力値をリセットする小さいヘルパー
+  const resetFormFields = () => {
+    setLastName("");
+    setFirstName("");
+    setPostalCode("");
+    setAddress1("");
+    setAddress2("");
+    setMobilePhone("");
+    setLineUid("");
+    setBirthday("");
+  };
+
+  const handleCreateOrUpdate = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
@@ -144,28 +161,142 @@ export default function CustomersPage() {
       return;
     }
 
+    const payload = {
+      lastName,
+      firstName,
+      postalCode: postalCode || undefined,
+      address1: address1 || undefined,
+      address2: address2 || undefined,
+      mobilePhone: mobilePhone || undefined,
+      lineUid: lineUid || undefined,
+      birthday: birthday || undefined,
+    };
+
     try {
-      const res = await fetch("http://localhost:4000/customers", {
-        method: "POST",
+      // ★ editingCustomerId が null → 新規作成（POST）
+      if (editingCustomerId == null) {
+        const res = await fetch("http://localhost:4000/customers", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          let msg: string = "顧客の登録に失敗しました";
+          if (data?.message) {
+            msg = Array.isArray(data.message)
+              ? data.message.join(", ")
+              : String(data.message);
+          }
+          throw new Error(msg);
+        }
+
+        const created: Customer = await res.json();
+        setCustomers((prev) => [...prev, created]);
+        setFormSuccess("顧客を登録しました");
+        resetFormFields();
+      } else {
+        // ★ editingCustomerId がある → 更新（PATCH）
+        const res = await fetch(
+          `http://localhost:4000/customers/${editingCustomerId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          },
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          let msg: string = "顧客情報の更新に失敗しました";
+          if (data?.message) {
+            msg = Array.isArray(data.message)
+              ? data.message.join(", ")
+              : String(data.message);
+          }
+          throw new Error(msg);
+        }
+
+        const updated: Customer = await res.json();
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === updated.id ? updated : c)),
+        );
+        setFormSuccess("顧客情報を更新しました");
+        setEditingCustomerId(null);
+        resetFormFields();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err.message ?? "顧客の登録・更新に失敗しました");
+    }
+  };
+
+  // 編集ボタン：選んだ顧客の情報をフォームにセット
+  const handleEditClick = (c: Customer) => {
+    setEditingCustomerId(c.id);
+    setFormError(null);
+    setFormSuccess(null);
+
+    setLastName(c.lastName ?? "");
+    setFirstName(c.firstName ?? "");
+    setPostalCode(c.postalCode ?? "");
+    setAddress1(c.address1 ?? "");
+    setAddress2(c.address2 ?? "");
+    setMobilePhone(c.mobilePhone ?? "");
+    setLineUid(c.lineUid ?? "");
+    // birthday は "YYYY-MM-DD" 形式にして input[type=date] に入れる
+    if (c.birthday) {
+      try {
+        const d = new Date(c.birthday);
+        if (!Number.isNaN(d.getTime())) {
+          setBirthday(d.toISOString().slice(0, 10));
+        } else {
+          setBirthday("");
+        }
+      } catch {
+        setBirthday("");
+      }
+    } else {
+      setBirthday("");
+    }
+  };
+
+  // 編集キャンセル
+  const handleCancelEdit = () => {
+    setEditingCustomerId(null);
+    resetFormFields();
+    setFormError(null);
+    setFormSuccess(null);
+  };
+
+  // 削除ボタン
+  const handleDeleteClick = async (id: number) => {
+    if (!token) {
+      setFormError("トークンがありません。再ログインしてください。");
+      return;
+    }
+
+    const ok = window.confirm("この顧客を削除してもよろしいですか？");
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`http://localhost:4000/customers/${id}`, {
+        method: "DELETE",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          lastName,
-          firstName,
-          postalCode: postalCode || undefined,
-          address1: address1 || undefined,
-          address2: address2 || undefined,
-          mobilePhone: mobilePhone || undefined,
-          lineUid: lineUid || undefined,
-          birthday: birthday || undefined,
-        }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        let msg: string = "顧客の登録に失敗しました";
+        let msg: string = "顧客の削除に失敗しました";
         if (data?.message) {
           msg = Array.isArray(data.message)
             ? data.message.join(", ")
@@ -174,21 +305,15 @@ export default function CustomersPage() {
         throw new Error(msg);
       }
 
-      const created: Customer = await res.json();
-      setCustomers((prev) => [...prev, created]);
-
-      setFormSuccess("顧客を登録しました");
-      setLastName("");
-      setFirstName("");
-      setPostalCode("");
-      setAddress1("");
-      setAddress2("");
-      setMobilePhone("");
-      setLineUid("");
-      setBirthday("");
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+      // 削除対象を編集中だったらフォームもリセット
+      if (editingCustomerId === id) {
+        handleCancelEdit();
+      }
+      setFormSuccess("顧客を削除しました");
     } catch (err: any) {
       console.error(err);
-      setFormError(err.message ?? "顧客の登録に失敗しました");
+      setFormError(err.message ?? "顧客の削除に失敗しました");
     }
   };
 
@@ -268,7 +393,7 @@ export default function CustomersPage() {
     );
   }
 
-  // ★ 追加：エラー時は顧客UIを一切表示せず、メッセージだけ
+  // ★ エラー時は顧客UIを一切表示せず、メッセージだけ
   if (error) {
     return (
       <TenantLayout>
@@ -287,8 +412,6 @@ export default function CustomersPage() {
       <main className="min-h-screen flex flex-col items-center p-4 gap-6">
         <h1 className="text-2xl font-bold mt-4">顧客管理</h1>
 
-        {/* error は early return で処理済みなのでここでは表示しない */}
-
         {me && (
           <div className="border rounded-md px-4 py-3 bg-gray-50 w-full max-w-2xl">
             <p>
@@ -297,9 +420,14 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {/* 新規登録フォーム */}
+        {/* 新規登録＆編集フォーム */}
         <section className="border rounded-md px-4 py-4 w-full max-w-2xl bg-white">
-          <h2 className="font-semibold mb-3">顧客新規登録（テナント側入力）</h2>
+          <h2 className="font-semibold mb-1">顧客登録／編集（テナント側入力）</h2>
+          {editingCustomerId != null && (
+            <p className="mb-2 text-xs text-orange-600">
+              顧客ID {editingCustomerId} を編集中です。編集をやめて新規登録に戻る場合は「編集をキャンセル」を押してください。
+            </p>
+          )}
 
           {formError && (
             <div className="mb-2 text-sm text-red-600">{formError}</div>
@@ -308,7 +436,7 @@ export default function CustomersPage() {
             <div className="mb-2 text-sm text-green-600">{formSuccess}</div>
           )}
 
-          <form className="space-y-3" onSubmit={handleCreate}>
+          <form className="space-y-3" onSubmit={handleCreateOrUpdate}>
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="block text-sm mb-1">
@@ -377,8 +505,7 @@ export default function CustomersPage() {
                 placeholder="例: 09012345678"
               />
               <p className="text-[11px] text-gray-500 mt-1">
-                ※ 携帯番号が重複している場合は登録不可（サーバ側でチェック）
-                想定。
+                ※ 携帯番号が重複している場合は登録不可（サーバ側でチェック）想定。
               </p>
             </div>
 
@@ -402,13 +529,22 @@ export default function CustomersPage() {
               />
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex gap-2">
               <button
                 type="submit"
                 className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700"
               >
-                顧客を登録
+                {editingCustomerId == null ? "顧客を登録" : "顧客情報を更新"}
               </button>
+              {editingCustomerId != null && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1.5 text-sm rounded border border-gray-400 text-gray-700 hover:bg-gray-100"
+                >
+                  編集をキャンセル
+                </button>
+              )}
             </div>
           </form>
         </section>
@@ -475,6 +611,8 @@ export default function CustomersPage() {
                     <th className="border px-2 py-1 text-left">携帯番号</th>
                     <th className="border px-2 py-1 text-left">LINE UID</th>
                     <th className="border px-2 py-1 text-left">誕生日</th>
+                    {/* ★ 操作列 */}
+                    <th className="border px-2 py-1 text-left">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -504,6 +642,24 @@ export default function CustomersPage() {
                         <td className="border px-2 py-1">{c.lineUid ?? ""}</td>
                         <td className="border px-2 py-1">
                           {formatDate(c.birthday)}
+                        </td>
+                        <td className="border px-2 py-1">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEditClick(c)}
+                              className="px-2 py-0.5 border rounded text-[11px] hover:bg-gray-100"
+                            >
+                              編集
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClick(c.id)}
+                              className="px-2 py-0.5 border rounded text-[11px] text-red-700 hover:bg-red-50"
+                            >
+                              削除
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

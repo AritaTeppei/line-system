@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { FormEvent, useEffect, useState } from 'react';
 import TenantLayout from "../components/TenantLayout";
@@ -44,7 +44,7 @@ export default function CarsPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // 新規登録フォーム
+  // 新規登録＆編集フォーム
   const [customerId, setCustomerId] = useState<string>('');
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [chassisNumber, setChassisNumber] = useState('');
@@ -58,7 +58,10 @@ export default function CarsPage() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // ★ 一括送信用
+  // ★ 編集中の車両ID（null のときは新規モード）
+  const [editingCarId, setEditingCarId] = useState<number | null>(null);
+
+  // 一括送信用
   const [selectedCarIds, setSelectedCarIds] = useState<number[]>([]);
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
@@ -70,6 +73,17 @@ export default function CarsPage() {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
     return d.toLocaleDateString('ja-JP');
+  };
+
+  const resetFormFields = () => {
+    setCustomerId('');
+    setRegistrationNumber('');
+    setChassisNumber('');
+    setCarName('');
+    setShakenDate('');
+    setInspectionDate('');
+    setCustomReminderDate('');
+    setCustomDaysBefore('');
   };
 
   // 初期ロード
@@ -128,7 +142,7 @@ export default function CarsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleCreateCar = async (e: FormEvent) => {
+  const handleCreateOrUpdateCar = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
@@ -157,13 +171,115 @@ export default function CarsPage() {
       if (customReminderDate) body.customReminderDate = customReminderDate;
       if (customDaysBefore) body.customDaysBefore = Number(customDaysBefore);
 
-      const res = await fetch('http://localhost:4000/cars', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
+      if (editingCarId == null) {
+        // 新規登録
+        const res = await fetch('http://localhost:4000/cars', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const msg =
+            data?.message ||
+            (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
+            '車両の登録に失敗しました';
+          throw new Error(msg);
+        }
+
+        const created: Car = await res.json();
+        setCars((prev) => [...prev, created]);
+        setFormSuccess('車両を登録しました');
+        resetFormFields();
+      } else {
+        // 編集更新
+        const res = await fetch(
+          `http://localhost:4000/cars/${editingCarId}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          },
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          const msg =
+            data?.message ||
+            (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
+            '車両情報の更新に失敗しました';
+          throw new Error(msg);
+        }
+
+        const updated: Car = await res.json();
+        setCars((prev) =>
+          prev.map((c) => (c.id === updated.id ? updated : c)),
+        );
+        setFormSuccess('車両情報を更新しました');
+        setEditingCarId(null);
+        resetFormFields();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err.message ?? '車両の登録・更新に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (car: Car) => {
+    setEditingCarId(car.id);
+    setFormError(null);
+    setFormSuccess(null);
+
+    setCustomerId(String(car.customerId));
+    setRegistrationNumber(car.registrationNumber);
+    setChassisNumber(car.chassisNumber);
+    setCarName(car.carName);
+
+    // 日付系は input[type="date"] 形式 (YYYY-MM-DD) に変換
+    const toDateInputValue = (value?: string | null) => {
+      if (!value) return '';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toISOString().slice(0, 10);
+    };
+
+    setShakenDate(toDateInputValue(car.shakenDate));
+    setInspectionDate(toDateInputValue(car.inspectionDate));
+    setCustomReminderDate(toDateInputValue(car.customReminderDate));
+    setCustomDaysBefore(
+      car.customDaysBefore != null ? String(car.customDaysBefore) : '',
+    );
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCarId(null);
+    resetFormFields();
+    setFormError(null);
+    setFormSuccess(null);
+  };
+
+  const handleDeleteClick = async (id: number) => {
+    if (!token) {
+      setFormError('トークンがありません。再ログインしてください。');
+      return;
+    }
+
+    const ok = window.confirm('この車両を削除してもよろしいですか？');
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`http://localhost:4000/cars/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
@@ -171,31 +287,22 @@ export default function CarsPage() {
         const msg =
           data?.message ||
           (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
-          '車両の登録に失敗しました';
+          '車両の削除に失敗しました';
         throw new Error(msg);
       }
 
-      const created: Car = await res.json();
-      setCars((prev) => [...prev, created]);
-
-      setFormSuccess('車両を登録しました');
-      setCustomerId('');
-      setRegistrationNumber('');
-      setChassisNumber('');
-      setCarName('');
-      setShakenDate('');
-      setInspectionDate('');
-      setCustomReminderDate('');
-      setCustomDaysBefore('');
+      setCars((prev) => prev.filter((c) => c.id !== id));
+      if (editingCarId === id) {
+        handleCancelEdit();
+      }
+      setFormSuccess('車両を削除しました');
     } catch (err: any) {
       console.error(err);
-      setFormError(err.message ?? '車両の登録に失敗しました');
-    } finally {
-      setSubmitting(false);
+      setFormError(err.message ?? '車両の削除に失敗しました');
     }
   };
 
-  // ★ チェックボックス ON/OFF
+  // チェックボックス ON/OFF
   const toggleCarSelection = (id: number) => {
     setSelectedCarIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -280,244 +387,280 @@ export default function CarsPage() {
 
   return (
     <TenantLayout>
-    <main className="min-h-screen flex flex-col items-center p-4 gap-6">
-      <h1 className="text-2xl font-bold mt-4">車両管理</h1>
+      <main className="min-h-screen flex flex-col items-center p-4 gap-6">
+        <h1 className="text-2xl font-bold mt-4">車両管理</h1>
 
-      {me && (
-        <div className="border rounded-md px-4 py-3 bg-gray-50 w-full max-w-3xl">
-          <p>
-            ログイン中: {me.name ?? me.email}（ロール: {me.role}）
-          </p>
-        </div>
-      )}
-
-      {/* 車両登録フォーム */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-white">
-        <h2 className="font-semibold mb-3">車両新規登録</h2>
-        <form
-          className="grid grid-cols-1 md:grid-cols-2 gap-3"
-          onSubmit={handleCreateCar}
-        >
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">
-              顧客 <span className="text-red-500">*</span>
-            </label>
-            <select
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-            >
-              <option value="">選択してください</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.lastName} {c.firstName}
-                </option>
-              ))}
-            </select>
+        {me && (
+          <div className="border rounded-md px-4 py-3 bg-gray-50 w-full max-w-3xl">
+            <p>
+              ログイン中: {me.name ?? me.email}（ロール: {me.role}）
+            </p>
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm mb-1">
-              登録番号（例: 福岡333は1234） <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={registrationNumber}
-              onChange={(e) => setRegistrationNumber(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">
-              車台番号（例: VZR-1234568） <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={chassisNumber}
-              onChange={(e) => setChassisNumber(e.target.value)}
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">
-              車名（例: トヨタ ハイエース） <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={carName}
-              onChange={(e) => setCarName(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">車検日</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={shakenDate}
-              onChange={(e) => setShakenDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">点検日</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={inspectionDate}
-              onChange={(e) => setInspectionDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">任意日付</label>
-            <input
-              type="date"
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={customReminderDate}
-              onChange={(e) => setCustomReminderDate(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">任意日付の何日前に通知するか</label>
-            <input
-              type="number"
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={customDaysBefore}
-              onChange={(e) => setCustomDaysBefore(e.target.value)}
-              min={0}
-            />
-          </div>
-
-          {formError && (
-            <div className="md:col-span-2 text-sm text-red-600">
-              {formError}
-            </div>
+        {/* 車両登録／編集フォーム */}
+        <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-white">
+          <h2 className="font-semibold mb-2">
+            車両{editingCarId == null ? '新規登録' : `編集（ID: ${editingCarId}）`}
+          </h2>
+          {editingCarId != null && (
+            <p className="text-xs text-orange-600 mb-2">
+              編集をやめて新規登録に戻る場合は「編集をキャンセル」を押してください。
+            </p>
           )}
-          {formSuccess && (
-            <div className="md:col-span-2 text-sm text-green-600">
-              {formSuccess}
-            </div>
-          )}
-
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-4 py-1 border rounded-md text-sm bg-gray-100 disabled:opacity-60"
-            >
-              {submitting ? '登録中...' : '登録'}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* 一括送信エリア */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-white">
-        <h2 className="font-semibold mb-3">選択した車両の顧客への一括メッセージ送信</h2>
-        <p className="text-xs text-gray-600 mb-2">
-          車両に紐づく顧客の LINE UID が登録されている場合のみ送信されます。
-        </p>
-        <textarea
-          className="w-full border rounded px-2 py-1 text-sm h-24"
-          placeholder="送信したいメッセージを入力してください"
-          value={broadcastMessage}
-          onChange={(e) => setBroadcastMessage(e.target.value)}
-        />
-        {broadcastError && (
-          <p className="text-sm text-red-600 mt-2">{broadcastError}</p>
-        )}
-        {broadcastSuccess && (
-          <p className="text-sm text-green-600 mt-2">{broadcastSuccess}</p>
-        )}
-        <button
-          type="button"
-          onClick={handleBroadcast}
-          disabled={broadcasting}
-          className="mt-2 px-4 py-1 border rounded-md text-sm bg-gray-100 disabled:opacity-60"
-        >
-          {broadcasting ? '送信中...' : '選択した車両の顧客に送信'}
-        </button>
-        <p className="text-xs text-gray-500 mt-1">
-          選択中の車両: {selectedCarIds.length}件
-        </p>
-      </section>
-
-      {/* 車両一覧 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-gray-50">
-        <h2 className="font-semibold mb-3">車両一覧</h2>
-        {cars.length === 0 && (
-          <p className="text-sm text-gray-600">
-            まだ車両が登録されていません。
-          </p>
-        )}
-        <div className="space-y-2">
-          {cars.map((car) => {
-            const selected = selectedCarIds.includes(car.id);
-            return (
-              <div
-                key={car.id}
-                className="border-b last:border-b-0 py-2 text-sm flex flex-col gap-1"
+          <form
+            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            onSubmit={handleCreateOrUpdateCar}
+          >
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1">
+                顧客 <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
               >
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => toggleCarSelection(car.id)}
-                  />
-                  <span className="font-semibold">
-                    {car.carName}（{car.registrationNumber}）
-                  </span>
-                </div>
-                <div className="text-gray-700 ml-6">
-                  車台番号: {car.chassisNumber}
-                </div>
-                <div className="text-xs text-gray-500 ml-6">
-                  顧客: {car.customer.lastName} {car.customer.firstName}
-                  {car.customer.lineUid ? (
-                    <span className="ml-2 text-green-700">
-                      （LINE連携済）
-                    </span>
-                  ) : (
-                    <span className="ml-2 text-red-500">（LINE未連携）</span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 ml-6">
-                  車検日:{' '}
-                  {car.shakenDate ? (
-                    <span>{formatDate(car.shakenDate)}</span>
-                  ) : (
-                    <span className="text-gray-400">未設定</span>
-                  )}
-                  {' / '}
-                  点検日:{' '}
-                  {car.inspectionDate ? (
-                    <span>{formatDate(car.inspectionDate)}</span>
-                  ) : (
-                    <span className="text-gray-400">未設定</span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 ml-6">
-                  任意日付:{' '}
-                  {car.customReminderDate ? (
-                    <span>{formatDate(car.customReminderDate)}</span>
-                  ) : (
-                    <span className="text-gray-400">未設定</span>
-                  )}
-                  {car.customReminderDate && (
-                    <>
-                      {' '}
-                      / {car.customDaysBefore ?? 0}日前通知
-                    </>
-                  )}
-                </div>
+                <option value="">選択してください</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.lastName} {c.firstName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">
+                登録番号（例: 福岡333は1234） <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={registrationNumber}
+                onChange={(e) => setRegistrationNumber(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">
+                車台番号（例: VZR-1234568） <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={chassisNumber}
+                onChange={(e) => setChassisNumber(e.target.value)}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1">
+                車名（例: トヨタ ハイエース） <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={carName}
+                onChange={(e) => setCarName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">車検日</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={shakenDate}
+                onChange={(e) => setShakenDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">点検日</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={inspectionDate}
+                onChange={(e) => setInspectionDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">任意日付</label>
+              <input
+                type="date"
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={customReminderDate}
+                onChange={(e) => setCustomReminderDate(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1">任意日付の何日前に通知するか</label>
+              <input
+                type="number"
+                className="w-full border rounded px-2 py-1 text-sm"
+                value={customDaysBefore}
+                onChange={(e) => setCustomDaysBefore(e.target.value)}
+                min={0}
+              />
+            </div>
+
+            {formError && (
+              <div className="md:col-span-2 text-sm text-red-600">
+                {formError}
               </div>
-            );
-          })}
-        </div>
-      </section>
-    </main>
+            )}
+            {formSuccess && (
+              <div className="md:col-span-2 text-sm text-green-600">
+                {formSuccess}
+              </div>
+            )}
+
+            <div className="md:col-span-2 flex gap-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-1 border rounded-md text-sm bg-gray-100 disabled:opacity-60"
+              >
+                {submitting
+                  ? '処理中...'
+                  : editingCarId == null
+                    ? '登録'
+                    : '更新'}
+              </button>
+              {editingCarId != null && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1 border rounded-md text-sm bg-white"
+                >
+                  編集をキャンセル
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
+
+        {/* 一括送信エリア */}
+        <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-white">
+          <h2 className="font-semibold mb-3">選択した車両の顧客への一括メッセージ送信</h2>
+          <p className="text-xs text-gray-600 mb-2">
+            車両に紐づく顧客の LINE UID が登録されている場合のみ送信されます。
+          </p>
+          <textarea
+            className="w-full border rounded px-2 py-1 text-sm h-24"
+            placeholder="送信したいメッセージを入力してください"
+            value={broadcastMessage}
+            onChange={(e) => setBroadcastMessage(e.target.value)}
+          />
+          {broadcastError && (
+            <p className="text-sm text-red-600 mt-2">{broadcastError}</p>
+          )}
+          {broadcastSuccess && (
+            <p className="text-sm text-green-600 mt-2">{broadcastSuccess}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleBroadcast}
+            disabled={broadcasting}
+            className="mt-2 px-4 py-1 border rounded-md text-sm bg-gray-100 disabled:opacity-60"
+          >
+            {broadcasting ? '送信中...' : '選択した車両の顧客に送信'}
+          </button>
+          <p className="text-xs text-gray-500 mt-1">
+            選択中の車両: {selectedCarIds.length}件
+          </p>
+        </section>
+
+        {/* 車両一覧 */}
+        <section className="border rounded-md px-4 py-4 w-full max-w-3xl bg-gray-50">
+          <h2 className="font-semibold mb-3">車両一覧</h2>
+          {cars.length === 0 && (
+            <p className="text-sm text-gray-600">
+              まだ車両が登録されていません。
+            </p>
+          )}
+          <div className="space-y-2">
+            {cars.map((car) => {
+              const selected = selectedCarIds.includes(car.id);
+              return (
+                <div
+                  key={car.id}
+                  className="border-b last:border-b-0 py-2 text-sm flex flex-col gap-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => toggleCarSelection(car.id)}
+                    />
+                    <span className="font-semibold">
+                      {car.carName}（{car.registrationNumber}）
+                    </span>
+                  </div>
+                  <div className="text-gray-700 ml-6">
+                    車台番号: {car.chassisNumber}
+                  </div>
+                  <div className="text-xs text-gray-500 ml-6">
+                    顧客: {car.customer.lastName} {car.customer.firstName}
+                    {car.customer.lineUid ? (
+                      <span className="ml-2 text-green-700">
+                        （LINE連携済）
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-red-500">（LINE未連携）</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 ml-6">
+                    車検日:{' '}
+                    {car.shakenDate ? (
+                      <span>{formatDate(car.shakenDate)}</span>
+                    ) : (
+                      <span className="text-gray-400">未設定</span>
+                    )}
+                    {' / '}
+                    点検日:{' '}
+                    {car.inspectionDate ? (
+                      <span>{formatDate(car.inspectionDate)}</span>
+                    ) : (
+                      <span className="text-gray-400">未設定</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 ml-6">
+                    任意日付:{' '}
+                    {car.customReminderDate ? (
+                      <span>{formatDate(car.customReminderDate)}</span>
+                    ) : (
+                      <span className="text-gray-400">未設定</span>
+                    )}
+                    {car.customReminderDate && (
+                      <>
+                        {' '}
+                        / {car.customDaysBefore ?? 0}日前通知
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-2 ml-6 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleEditClick(car)}
+                      className="px-2 py-0.5 border rounded text-[11px] hover:bg-white bg-gray-100"
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(car.id)}
+                      className="px-2 py-0.5 border rounded text-[11px] text-red-700 hover:bg-red-50 bg-white"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </main>
     </TenantLayout>
   );
 }
