@@ -279,7 +279,16 @@ export default function AdminTenantEditPage() {
           )}
         </div>
 
-        <div className="flex gap-2">
+                <div className="flex gap-2">
+          {/* ★ 追加：ログインユーザー管理ボタン */}
+          <button
+            type="button"
+            onClick={() => router.push(`/admin/tenants/${tenant.id}/user`)}
+            className="px-3 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-700"
+          >
+            ログインユーザー管理
+          </button>
+
           <button
             onClick={handleBack}
             className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
@@ -293,6 +302,7 @@ export default function AdminTenantEditPage() {
             ログアウト
           </button>
         </div>
+
       </div>
 
       {/* エラー表示 */}
@@ -374,8 +384,6 @@ export default function AdminTenantEditPage() {
           />
         </div>
       </div>
-
-
         <div>
           <label className="block text-sm font-medium mb-1">
             テナント名 <span className="text-red-600">*</span>
