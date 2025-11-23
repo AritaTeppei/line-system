@@ -1,7 +1,6 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 type PreviewResponse = {
@@ -9,7 +8,7 @@ type PreviewResponse = {
   lineUidMasked: string;
 };
 
-function PublicRegisterCustomerInner() {
+export default function PublicRegisterCustomerPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
@@ -100,9 +99,7 @@ function PublicRegisterCustomerInner() {
       }
 
       await res.json(); // customer が返ってくるが、今は使わない
-      setSubmitSuccess(
-        'ご登録ありがとうございました。これでLINE連携が完了しました。',
-      );
+      setSubmitSuccess('ご登録ありがとうございました。これでLINE連携が完了しました。');
     } catch (err: any) {
       setSubmitError(err.message ?? '登録に失敗しました');
     } finally {
@@ -187,9 +184,7 @@ function PublicRegisterCustomerInner() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">
-              住所1（市区町村〜番地）
-            </label>
+            <label className="block text-sm mb-1">住所1（市区町村〜番地）</label>
             <input
               className="w-full border rounded px-2 py-1 text-sm"
               value={address1}
@@ -223,14 +218,5 @@ function PublicRegisterCustomerInner() {
         </form>
       </div>
     </main>
-  );
-}
-
-// useSearchParams を使うコンポーネントを Suspense で包む
-export default function PublicRegisterCustomerPage() {
-  return (
-    <Suspense fallback={<div className="p-4">読み込み中...</div>}>
-      <PublicRegisterCustomerInner />
-    </Suspense>
   );
 }
