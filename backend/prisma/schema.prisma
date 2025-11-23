@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String
+  plan            String
+  isActive        Boolean   @default(true)
+  validUntil      DateTime?
+  lineChannelId   String?
+  lineSecret      String?
+  lineAccessToken String?
+
+  lineSettings LineSettings?
+
+  users                  User[]
+  customers              Customer[] // ★ 追加
+  cars                   Car[] // ★ 追加
+  customerRegisterTokens CustomerRegisterToken[]
+  messageLogs            MessageLog[]
+  bookings               Booking[]
+
+  companyName         String?  // 会社名
+  companyAddress1     String?  // 住所1
+  companyAddress2     String?  // 住所2
+  representativeName  String?  // 代表者名
+  contactPhone        String?  // 代表電話
+  contactMobile       String?  // 担当者携帯など
+
+  // subscriptions   Subscription[] //
+}
+
+model User {
+  id Int @id @default(autoincrement())
+
+  // ★ 開発者は tenantId = null を許可
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  email    String  @unique
+  name     String?
+  password String
+
+  // ★ ロールを追加（開発者 / 管理者 / クライアント）
+  role UserRole @default(MANAGER)
+
+  createdAt DateTime @default(now())
+}
+
+enum UserRole {
+  DEVELOPER
+  MANAGER
+  CLIENT
+}
+
+model Customer {
+  id       Int    @id @default(autoincrement())
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  lastName    String
+  firstName   String
+  postalCode  String?
+  address1    String?
+  address2    String?
+  mobilePhone String?
+  lineUid     String?
+  //lineSettings   LineSettings?
+
+  // ★ 追加：誕生日
+  birthday DateTime?
+
+  cars        Car[]
+  messageLogs MessageLog[]
+  bookings    Booking[]
+
+  @@unique([tenantId, lineUid], map: "customer_tenant_lineuid_unique")
+  @@unique([tenantId, mobilePhone], map: "customer_tenant_mobile_unique")
+}
+
+model CustomerRegisterToken {
+  id       Int    @id @default(autoincrement())
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  lineUid String // LINEのUID（userId）
+
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model Car {
+  id       Int    @id @default(autoincrement())
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  registrationNumber String
+  chassisNumber      String
+  carName            String
+
+  // ★ 追加：車検・点検・任意日付
+  shakenDate         DateTime? // 車検日
+  inspectionDate     DateTime? // 点検日
+  customReminderDate DateTime? // 任意の日付
+  customDaysBefore   Int? // 任意日付の何日前に通知するか
+
+  messageLogs MessageLog[]
+  bookings    Booking[]
+
+  @@unique([chassisNumber], map: "car_chassis_unique")
+}
+
+enum MessageType {
+  // 手動送信用
+  MANUAL_CUSTOMER
+  MANUAL_CAR
+
+  // 自動リマインド用
+  REMINDER_BIRTHDAY
+  REMINDER_SHAKEN_2M
+  REMINDER_SHAKEN_1W
+  REMINDER_INSPECTION_1M
+  REMINDER_CUSTOM
+}
+
+enum BookingStatus {
+  PENDING // 予約申請あり（未確認）
+  CONFIRMED // 管理者が承認
+  CANCELED // キャンセル（顧客または管理者）
+}
+
+model MessageLog {
+  id Int @id @default(autoincrement())
+
+  // ★ テナントとのリレーション
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // ★ 顧客とのリレーション（任意）
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // ★ 車両とのリレーション（任意）
+  carId Int?
+  car   Car? @relation(fields: [carId], references: [id])
+
+  lineUid     String?
+  messageType MessageType
+  content     String
+
+  createdAt DateTime @default(now())
+}
+
+model Booking {
+  id Int @id @default(autoincrement())
+
+  // マルチテナント
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // 顧客・車両と紐づく
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  carId Int
+  car   Car @relation(fields: [carId], references: [id])
+
+  // 予約日（日時）
+  // 最初は「日だけ」で運用してもOKだし、あとで時間も足せる
+  bookingDate DateTime // 実際に入庫してほしい日
+  timeSlot    String? // 例: "AM", "PM", "10:00-11:00" など自由形式
+
+  status BookingStatus @default(PENDING)
+
+  // どこから来た予約か（LINEフォーム or 管理画面など）
+  source String? // "LINE_PUBLIC_FORM" / "ADMIN" など文字で運用
+
+  // 管理用メモ
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LineSettings {
+  id       Int    @id @default(autoincrement())
+  tenantId Int    @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // LINE公式アカウントの基本情報
+  channelId     String? // チャネルID
+  channelSecret String? // チャネルシークレット
+  accessToken   String? // 長期アクセストークン
+
+  // 運用用の設定（必要に応じて増やす）
+  webhookUrl String? // 現在LINEに登録しているWebhook URL（表示用）
+  isActive   Boolean @default(false) // このテナントでLINE連携を有効にするか
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

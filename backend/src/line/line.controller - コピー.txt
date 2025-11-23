@@ -1,0 +1,65 @@
+// src/line/line.controller.ts
+import { Body, Controller, Post, Logger } from '@nestjs/common';
+import { LineService } from './line.service';
+
+type LineWebhookEvent = {
+  type: string;
+  replyToken?: string;
+  source?: {
+    type: string;
+    userId?: string;
+  };
+};
+
+type LineWebhookRequestBody = {
+  destination?: string;
+  events: LineWebhookEvent[];
+};
+
+@Controller('line')
+export class LineController {
+  private readonly logger = new Logger(LineController.name);
+
+  constructor(private readonly lineService: LineService) {}
+
+  @Post('webhook')
+  async handleWebhook(@Body() body: LineWebhookRequestBody) {
+    const tenantId = 10; // まずはテスト用固定
+
+    this.logger.log(`Webhook受信 本文: ${JSON.stringify(body)}`);
+
+    try {
+      for (const event of body.events ?? []) {
+        const lineUid = event.source?.userId;
+        if (!lineUid) {
+          this.logger.warn(
+            `userId が見つかりません: ${JSON.stringify(event)}`,
+          );
+          continue;
+        }
+
+        this.logger.log(
+          `Webhook受信: type=${event.type}, userId=${lineUid}`,
+        );
+
+        if (event.type === 'follow' || event.type === 'message') {
+          await this.lineService.sendRegisterFormLink(tenantId, lineUid);
+        }
+      }
+
+      // 正常終了
+      return { ok: true };
+    } catch (e: any) {
+      // ここで 500 の原因を丸出しにする
+      this.logger.error('handleWebhook 内でエラー', e);
+
+      return {
+        ok: false,
+        error: e?.message ?? String(e),
+        name: e?.name ?? undefined,
+        // stack は長いので一応付ける（必要なら見る）
+        stack: e?.stack ?? undefined,
+      };
+    }
+  }
+}
