@@ -102,7 +102,7 @@ export default function RemindersPage() {
 
     setToken(savedToken);
 
-    const fetchMe = fetch('http://localhost:4000/auth/me', {
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {
@@ -114,7 +114,7 @@ export default function RemindersPage() {
       });
 
     const fetchPreview = fetch(
-      `http://localhost:4000/reminders/preview?date=${encodeURIComponent(
+      `${process.env.NEXT_PUBLIC_API_URL}/reminders/preview?date=${encodeURIComponent(
         dateStr,
       )}`,
       {
@@ -144,7 +144,7 @@ export default function RemindersPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:4000/reminders/preview?date=${encodeURIComponent(
+        `${process.env.NEXT_PUBLIC_API_URL}/reminders/preview?date=${encodeURIComponent(
           dateStr,
         )}`,
         {
@@ -169,7 +169,7 @@ export default function RemindersPage() {
     if (!token) throw new Error('トークンがありません。再ログインしてください。');
 
     const res = await fetch(
-      'http://localhost:4000/messages/send-to-customers',
+      `${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-customers`,
       {
         method: 'POST',
         headers: {
@@ -193,7 +193,7 @@ export default function RemindersPage() {
   const postToCars = async (carIds: number[], message: string) => {
     if (!token) throw new Error('トークンがありません。再ログインしてください。');
 
-    const res = await fetch('http://localhost:4000/messages/send-to-cars', {
+    const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-cars', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

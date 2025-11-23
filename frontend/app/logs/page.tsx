@@ -57,7 +57,7 @@ export default function LogsPage() {
 
     setToken(savedToken);
 
-    const fetchMe = fetch('http://localhost:4000/auth/me', {
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {
@@ -68,7 +68,7 @@ export default function LogsPage() {
         setMe(data);
       });
 
-    const fetchLogs = fetch('http://localhost:4000/messages/logs', {
+    const fetchLogs = fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/logs`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {

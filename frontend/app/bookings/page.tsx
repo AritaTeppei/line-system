@@ -113,7 +113,7 @@ export default function BookingsPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    const fetchMe = fetch('http://localhost:4000/auth/me', {
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
       headers,
     })
       .then((res) => {
@@ -124,7 +124,7 @@ export default function BookingsPage() {
         setMe(data);
       });
 
-    const fetchBookings = fetch('http://localhost:4000/bookings', {
+    const fetchBookings = fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
       headers,
     })
       .then((res) => {
@@ -135,7 +135,7 @@ export default function BookingsPage() {
         setBookings(data);
       });
 
-    const fetchCustomers = fetch('http://localhost:4000/customers', {
+    const fetchCustomers = fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers`, {
       headers,
     })
       .then((res) => {
@@ -146,7 +146,7 @@ export default function BookingsPage() {
         setCustomers(data);
       });
 
-    const fetchCars = fetch('http://localhost:4000/cars', {
+    const fetchCars = fetch(`${process.env.NEXT_PUBLIC_API_URL}/cars`, {
       headers,
     })
       .then((res) => {
@@ -170,7 +170,7 @@ export default function BookingsPage() {
     setPageError(null);
 
     try {
-      const res = await fetch('http://localhost:4000/bookings', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('bookings api error');
@@ -194,7 +194,7 @@ export default function BookingsPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:4000/bookings/${bookingId}/status`,
+        `${process.env.NEXT_PUBLIC_API_URL}/bookings/${bookingId}/status`,
         {
           method: 'PATCH',
           headers: {
@@ -285,7 +285,7 @@ export default function BookingsPage() {
 
       if (editingBookingId == null) {
         // 新規作成
-        const res = await fetch('http://localhost:4000/bookings', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -309,7 +309,7 @@ export default function BookingsPage() {
       } else {
         // 編集更新
         const res = await fetch(
-          `http://localhost:4000/bookings/${editingBookingId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/bookings/${editingBookingId}`,
           {
             method: 'PATCH',
             headers: {
@@ -388,7 +388,7 @@ export default function BookingsPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`http://localhost:4000/bookings/${bookingId}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/${bookingId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

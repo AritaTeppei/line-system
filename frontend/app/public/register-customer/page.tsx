@@ -35,7 +35,7 @@ function PublicRegisterCustomerInner() {
       return;
     }
 
-    fetch(`http://localhost:4000/public/customer-register/${token}`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/customer-register/${token}`)
       .then((res) => {
         if (!res.ok) throw res;
         return res.json();
@@ -75,7 +75,7 @@ function PublicRegisterCustomerInner() {
     setSubmitting(true);
     try {
       const res = await fetch(
-        `http://localhost:4000/public/customer-register/${token}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/public/customer-register/${token}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

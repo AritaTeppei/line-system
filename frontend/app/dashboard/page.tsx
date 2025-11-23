@@ -62,7 +62,7 @@ export default function DashboardPage() {
         };
 
         // ★ ここを追加：まず /auth/me でテナント有効チェックを通す
-        const meRes = await fetch("http://localhost:4000/auth/me", {
+        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
           headers,
         });
 
@@ -79,12 +79,12 @@ export default function DashboardPage() {
 
         const [remindersRes, bookingsRes] = await Promise.all([
           fetch(
-            `http://localhost:4000/reminders/preview?date=${encodeURIComponent(
+            `${process.env.NEXT_PUBLIC_API_URL}/reminders/preview?date=${encodeURIComponent(
               today,
             )}`,
             { headers },
           ),
-          fetch("http://localhost:4000/bookings", { headers }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, { headers }),
         ]);
 
         if (!remindersRes.ok) {

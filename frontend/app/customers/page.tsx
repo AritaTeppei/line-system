@@ -77,7 +77,7 @@ export default function CustomersPage() {
 
       try {
         // ① まず /auth/me でテナント有効チェック
-        const meRes = await fetch("http://localhost:4000/auth/me", { headers });
+        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers });
 
         if (!meRes.ok) {
           const data = await meRes.json().catch(() => null);
@@ -97,7 +97,7 @@ export default function CustomersPage() {
         setMe(meData);
 
         // ② テナントが有効な場合だけ顧客一覧を取得
-        const customersRes = await fetch("http://localhost:4000/customers", {
+        const customersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers`, {
           headers,
         });
 
@@ -175,7 +175,7 @@ export default function CustomersPage() {
     try {
       // ★ editingCustomerId が null → 新規作成（POST）
       if (editingCustomerId == null) {
-        const res = await fetch("http://localhost:4000/customers", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -202,7 +202,7 @@ export default function CustomersPage() {
       } else {
         // ★ editingCustomerId がある → 更新（PATCH）
         const res = await fetch(
-          `http://localhost:4000/customers/${editingCustomerId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/customers/${editingCustomerId}`,
           {
             method: "PATCH",
             headers: {
@@ -287,7 +287,7 @@ export default function CustomersPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`http://localhost:4000/customers/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -344,7 +344,7 @@ export default function CustomersPage() {
     setBroadcasting(true);
     try {
       const res = await fetch(
-        "http://localhost:4000/messages/send-to-customers",
+        `${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-customers`,
         {
           method: "POST",
           headers: {

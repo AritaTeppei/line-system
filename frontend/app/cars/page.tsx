@@ -101,7 +101,7 @@ export default function CarsPage() {
 
     setToken(savedToken);
 
-    const fetchMe = fetch('http://localhost:4000/auth/me', {
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {
@@ -112,7 +112,7 @@ export default function CarsPage() {
         setMe(data);
       });
 
-    const fetchCustomers = fetch('http://localhost:4000/customers', {
+    const fetchCustomers = fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {
@@ -123,7 +123,7 @@ export default function CarsPage() {
         setCustomers(data);
       });
 
-    const fetchCars = fetch('http://localhost:4000/cars', {
+    const fetchCars = fetch(`${process.env.NEXT_PUBLIC_API_URL}/cars`, {
       headers: { Authorization: `Bearer ${savedToken}` },
     })
       .then((res) => {
@@ -173,7 +173,7 @@ export default function CarsPage() {
 
       if (editingCarId == null) {
         // 新規登録
-        const res = await fetch('http://localhost:4000/cars', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/cars`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -198,7 +198,7 @@ export default function CarsPage() {
       } else {
         // 編集更新
         const res = await fetch(
-          `http://localhost:4000/cars/${editingCarId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/cars/${editingCarId}`,
           {
             method: 'PATCH',
             headers: {
@@ -277,7 +277,7 @@ export default function CarsPage() {
     if (!ok) return;
 
     try {
-      const res = await fetch(`http://localhost:4000/cars/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/cars/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -329,7 +329,7 @@ export default function CarsPage() {
     setBroadcasting(true);
     try {
       const res = await fetch(
-        'http://localhost:4000/messages/send-to-cars',
+        `${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-cars`,
         {
           method: 'POST',
           headers: {
