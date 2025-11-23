@@ -24,15 +24,6 @@ type TenantOverview = {
   customersCount: number;
   carsCount: number;
   bookingsCount: number;
-
-    // ★ 追加
-  companyName: string | null;
-  companyAddress1: string | null;
-  companyAddress2: string | null;
-  representativeName: string | null;
-  contactPhone: string | null;
-  contactMobile: string | null;
-
 };
 
 export default function AdminTenantEditPage() {
@@ -53,14 +44,6 @@ export default function AdminTenantEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [companyName, setCompanyName] = useState("");
-  const [companyAddress1, setCompanyAddress1] = useState("");
-  const [companyAddress2, setCompanyAddress2] = useState("");
-  const [representativeName, setRepresentativeName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactMobile, setContactMobile] = useState("");
-
 
   useEffect(() => {
     if (!tenantIdParam || Number.isNaN(tenantId)) {
@@ -108,14 +91,6 @@ export default function AdminTenantEditPage() {
         setEmail(data.email ?? "");
         setPlan(data.plan ?? "");
         setIsActive(data.isActive);
-
-        // ★ 契約者情報も state に詰める
-        setCompanyName(data.companyName ?? "");
-        setCompanyAddress1(data.companyAddress1 ?? "");
-        setCompanyAddress2(data.companyAddress2 ?? "");
-        setRepresentativeName(data.representativeName ?? "");
-        setContactPhone(data.contactPhone ?? "");
-        setContactMobile(data.contactMobile ?? "");
 
         // validUntil を yyyy-MM-dd に変換（input[type=date] 用）
         if (data.validUntil) {
@@ -182,14 +157,6 @@ export default function AdminTenantEditPage() {
             plan,
             isActive,
             validUntil: validUntil || null, // 空なら null クリア
-
-              // ★ 契約者情報
-            companyName: companyName || null,
-            companyAddress1: companyAddress1 || null,
-            companyAddress2: companyAddress2 || null,
-            representativeName: representativeName || null,
-            contactPhone: contactPhone || null,
-            contactMobile: contactMobile || null,
           }),
         },
       );
@@ -304,78 +271,6 @@ export default function AdminTenantEditPage() {
 
       {/* 編集フォーム */}
       <form onSubmit={handleSubmit} className="max-w-lg space-y-3">
-      {/* 契約者情報 */}
-      <div className="mt-6 border-t pt-4">
-        <h2 className="font-semibold mb-2 text-sm">契約者情報（会社情報）</h2>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">会社名</label>
-          <input
-            type="text"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">住所1</label>
-          <input
-            type="text"
-            value={companyAddress1}
-            onChange={(e) => setCompanyAddress1(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 福岡市博多区◯◯1-2-3"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">住所2</label>
-          <input
-            type="text"
-            value={companyAddress2}
-            onChange={(e) => setCompanyAddress2(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="ビル名・号室など"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">代表者名</label>
-          <input
-            type="text"
-            value={representativeName}
-            onChange={(e) => setRepresentativeName(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">連絡先（代表）</label>
-          <input
-            type="tel"
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 0921234567"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">
-            連絡先（携帯・担当者など）
-          </label>
-          <input
-            type="tel"
-            value={contactMobile}
-            onChange={(e) => setContactMobile(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 09012345678"
-          />
-        </div>
-      </div>
-
-
         <div>
           <label className="block text-sm font-medium mb-1">
             テナント名 <span className="text-red-600">*</span>
