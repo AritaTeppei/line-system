@@ -1,5 +1,5 @@
 // src/reminders/reminders.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
@@ -13,17 +13,15 @@ type ReminderKind =
 
 @Injectable()
 export class RemindersService {
-  private readonly logger = new Logger(RemindersService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly lineService: LineService,
+    private readonly lineService: LineService, // ★ ここを追加
   ) {}
 
   /**
    * テナントIDの決定ロジック
-   * - DEVELOPER: tenantIdFromQuery が必須
-   * - MANAGER / CLIENT: user.tenantId をそのまま使用
+   * - DEVELOPER: tenantIdFromQuery が必須（どのテナントを見るか指定）
+   * - MANAGER/CLIENT: 自分の tenantId 固定
    */
   private ensureTenant(user: AuthPayload, tenantIdFromQuery?: number): number {
     if (user.role === 'DEVELOPER') {
@@ -38,12 +36,12 @@ export class RemindersService {
     if (!user.tenantId) {
       throw new Error('テナントが特定できません');
     }
-
     return user.tenantId;
   }
 
   /**
-   * base→event の日数差分（event - base）を日単位で計算
+   * 日付差分（日数）を計算（時刻は無視して日単位で比較）
+   * diff = (eventDate - baseDate) [日]
    */
   private diffInDays(base: Date, event: Date): number {
     const utcBase = Date.UTC(
@@ -62,6 +60,7 @@ export class RemindersService {
 
   /**
    * 公開予約フォームのURLを組み立てる
+   * （LINE リマインドから予約フォームへ飛ばすため）
    */
   private buildBookingUrl(args: {
     tenantId: number;
@@ -110,6 +109,7 @@ export class RemindersService {
       daysBefore,
     } = params;
 
+    // 日付の表示用（YYYY-MM-DD → YYYY/MM/DD）
     const dateForDisplay =
       mainDate && /^\d{4}-\d{2}-\d{2}$/.test(mainDate)
         ? mainDate.replace(/-/g, '/')
@@ -202,6 +202,7 @@ export class RemindersService {
           .join('\n');
 
       default:
+        // 万が一のフォールバック
         return [
           '【お知らせ】',
           `${customerName} 様`,
@@ -216,7 +217,8 @@ export class RemindersService {
   }
 
   /**
-   * 指定日のリマインド対象を抽出して preview 用のデータを返す
+   * 指定日付の「だれが対象か」を洗い出すメイン処理
+   * baseDateStr: ISO文字列 or "YYYY-MM-DD"
    */
   async previewForDate(
     user: AuthPayload,
@@ -230,6 +232,7 @@ export class RemindersService {
       throw new Error('date の形式が不正です');
     }
 
+    // targetDate は「その日の 00:00 UTC」として扱う（純粋に日だけ比較）
     const targetDate = new Date(
       Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
     );
@@ -242,7 +245,7 @@ export class RemindersService {
       },
     });
 
-    // 車検日・点検日・任意日付を持っている車
+    // 何かしら日付を持っている車両
     const cars = await this.prisma.car.findMany({
       where: {
         tenantId,
@@ -302,7 +305,7 @@ export class RemindersService {
         lineUid: customer.lineUid ?? null,
       };
 
-      // 車検日
+      // 車検日：2ヶ月前 / 1週間前
       if (car.shakenDate) {
         const shakenDate = car.shakenDate as Date;
         const diff = this.diffInDays(targetDate, shakenDate);
@@ -428,13 +431,6 @@ export class RemindersService {
       }
     }
 
-    this.logger.log(
-      `previewForDate: tenantId=${tenantId}, date=${targetDate.toISOString().slice(
-        0,
-        10,
-      )}, birthday=${birthdayTargets.length}, shaken2m=${shakenTwoMonths.length}, shaken1w=${shakenOneWeek.length}, inspection1m=${inspectionOneMonth.length}, custom=${custom.length}`,
-    );
-
     return {
       date: targetDate.toISOString().slice(0, 10),
       tenantId,
@@ -447,8 +443,7 @@ export class RemindersService {
   }
 
   /**
-   * 実際に送信まで行う
-   * /reminders/run から呼ばれる想定
+   * 実際に「送るつもりで」対象を洗い出して LINE 送信する処理。
    */
   async sendForDate(
     user: AuthPayload,
@@ -456,11 +451,6 @@ export class RemindersService {
     tenantIdFromQuery?: number,
   ) {
     const tenantId = this.ensureTenant(user, tenantIdFromQuery);
-
-    this.logger.log(
-      `sendForDate: user.role=${user.role}, tenantId=${tenantId}, baseDate=${baseDateStr}`,
-    );
-
     const preview = await this.previewForDate(
       user,
       baseDateStr,
@@ -474,57 +464,12 @@ export class RemindersService {
       preview.inspectionOneMonth.length +
       preview.custom.length;
 
-    this.logger.log(
-      `sendForDate: totalCount=${totalCount} (birthday=${preview.birthdayTargets.length}, shaken2m=${preview.shakenTwoMonths.length}, shaken1w=${preview.shakenOneWeek.length}, inspection1m=${preview.inspectionOneMonth.length}, custom=${preview.custom.length})`,
-    );
-
-    // ★ DEVELOPER からはプレビューのみ（送信しない仕様にしたいならここで止める）
-    //   送信もできてほしいなら、この if ブロックを削除してOK
-    if (user.role === 'DEVELOPER') {
-      this.logger.log('sendForDate: DEVELOPER ロールなので送信はスキップ');
-      return {
-        ...preview,
-        totalCount,
-        sent: false,
-      };
-    }
-
-    // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
-    const allTargets = [
-      ...preview.birthdayTargets,
-      ...preview.shakenTwoMonths,
-      ...preview.shakenOneWeek,
-      ...preview.inspectionOneMonth,
-      ...preview.custom,
-    ];
-
-    for (const t of allTargets) {
-      const lineUid: string | null =
-        t.lineUid ?? t.lineUserId ?? t.uid ?? null;
-      const message: string | undefined = t.messageText;
-
-      if (!lineUid || !message) {
-        continue;
-      }
-
-      try {
-        await this.lineService.sendText(lineUid, message);
-      } catch (e: any) {
-        this.logger.error(
-          `sendForDate: LINE送信失敗 lineUid=${lineUid}, error=${e?.message ?? e}`,
-        );
-        // 必要ならここで throw してフロントに「失敗」を返しても良い
-      }
-    }
-
-    this.logger.log(
-      `sendForDate: LINE送信処理完了 tenantId=${tenantId}, totalTargets=${allTargets.length}`,
-    );
+    // ★ 実際に LINE 送信
+    await this.lineService.sendRemindersForTenant(tenantId, preview);
 
     return {
       ...preview,
       totalCount,
-      sent: true,
     };
   }
 }

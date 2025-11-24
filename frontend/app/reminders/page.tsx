@@ -193,7 +193,7 @@ export default function RemindersPage() {
   const postToCars = async (carIds: number[], message: string) => {
     if (!token) throw new Error('トークンがありません。再ログインしてください。');
 
-    const res = await fetch('${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-cars', {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/send-to-cars`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
