@@ -46,7 +46,7 @@ export default function AdminTenantsPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    const fetchMe = fetch("http://localhost:4000/auth/me", { headers })
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
   .then(async (res) => {
     if (!res.ok) {
       let msg = "auth me error";
@@ -72,7 +72,7 @@ export default function AdminTenantsPage() {
   });
 
     const fetchTenants = fetch(
-      "http://localhost:4000/admin/tenants/overview",
+      `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/overview`,
       { headers },
     )
       .then((res) => {
@@ -131,7 +131,7 @@ export default function AdminTenantsPage() {
     }
 
     try {
-      const res = await fetch(`http://localhost:4000/admin/tenants/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${savedToken}`,
