@@ -19,8 +19,6 @@ type LineSettings = {
   channelSecret: string | null;
   accessToken: string | null;
   webhookUrl: string | null;
-  // ★ 追加：destination（BotユーザーID）
-  destination: string | null;
   isActive: boolean;
 };
 
@@ -36,8 +34,6 @@ export default function TenantLineSettingsPage() {
     channelSecret: "",
     accessToken: "",
     webhookUrl: "",
-    // ★ 追加
-    destination: "",
     isActive: false,
   });
 
@@ -66,9 +62,7 @@ export default function TenantLineSettingsPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-      headers,
-    })
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error("auth me error");
         return res.json() as Promise<Me>;
@@ -94,8 +88,6 @@ export default function TenantLineSettingsPage() {
           channelSecret: data.channelSecret ?? "",
           accessToken: data.accessToken ?? "",
           webhookUrl: data.webhookUrl ?? "",
-          // ★ ここで destination を反映
-          destination: data.destination ?? "",
           isActive: data.isActive ?? false,
         });
       });
@@ -105,19 +97,26 @@ export default function TenantLineSettingsPage() {
         console.error(err);
         setPageError(
           err?.message ??
-            "ページの読み込みに失敗しました。ログイン状態や権限を確認してください。",
+            "LINE設定の取得に失敗しました。権限やテナントを確認してください。",
         );
       })
       .finally(() => setLoading(false));
   }, [tenantId]);
 
-  const handleChange = (
-    key: keyof typeof form,
-    value: string | boolean,
-  ) => {
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("auth_token");
+      document.cookie = "Authentication=; Max-Age=0; path=/";
+      document.cookie = "access_token=; Max-Age=0; path=/";
+    }
+    router.replace("/");
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
     setForm((prev) => ({
       ...prev,
-      [key]: key === "isActive" ? Boolean(value) : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -193,125 +192,130 @@ export default function TenantLineSettingsPage() {
     return <div className="p-4">読み込み中...</div>;
   }
 
+  // 🔴 ログインしてない／権限なし／API自体が死んでる時だけ、別画面
   if (pageError) {
     return (
-      <div className="p-4 text-red-600">
-        <p>{pageError}</p>
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-xl font-bold">
+            テナント {tenantId} の LINE 設定（開発者専用）
+          </h1>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+          >
+            ログアウト
+          </button>
+        </div>
+        <p className="text-red-600 text-sm whitespace-pre-wrap">
+          {pageError}
+        </p>
         <button
-          className="mt-4 px-3 py-1 text-sm border rounded"
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/admin/tenants")}
+          className="mt-3 px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
         >
-          トップへ戻る
+          テナント一覧に戻る
         </button>
       </div>
     );
   }
 
+  // 🟢 通常ケース：フォームを表示したまま、上にメッセージを出す
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <h1 className="text-xl font-bold mb-2">
-        テナントID: {tenantId} の LINE 設定
-      </h1>
+    <div className="p-4 max-w-xl">
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-bold">
+          テナント {tenantId} の LINE 設定（開発者専用）
+        </h1>
+        <button
+          onClick={handleLogout}
+          className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+        >
+          ログアウト
+        </button>
+      </div>
 
-      {formError && (
-        <div className="border border-red-400 bg-red-50 text-red-700 px-3 py-2 text-sm rounded">
-          {formError}
+      {me && (
+        <div className="mb-4 text-sm text-gray-700">
+          ログイン中: {me.email}（role: {me.role}）
         </div>
       )}
 
+      {/* 成功メッセージ */}
       {message && (
-        <div className="border border-green-400 bg-green-50 text-green-700 px-3 py-2 text-sm rounded">
-          {message}
-        </div>
+        <div className="mb-3 text-sm text-green-600">{message}</div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4 border p-4 rounded">
+      {/* 入力ミス or 保存時エラー */}
+      {formError && (
+        <div className="mb-3 text-sm text-red-600">{formError}</div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">
-            チャネルID (channelId)
+            チャネルID
           </label>
           <input
-            type="text"
+            name="channelId"
             value={form.channelId}
-            onChange={(e) => handleChange("channelId", e.target.value)}
-            className="w-full border px-3 py-2 rounded text-sm"
+            onChange={handleChange}
+            className="border rounded w-full px-2 py-1"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            チャネルシークレット (channelSecret)
+            チャネルシークレット
           </label>
           <input
-            type="text"
+            name="channelSecret"
+            type="password"
             value={form.channelSecret}
-            onChange={(e) => handleChange("channelSecret", e.target.value)}
-            className="w-full border px-3 py-2 rounded text-sm"
+            onChange={handleChange}
+            className="border rounded w-full px-2 py-1"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            アクセストークン (accessToken)
-          </label>
-          <textarea
-            value={form.accessToken}
-            onChange={(e) => handleChange("accessToken", e.target.value)}
-            className="w-full border px-3 py-2 rounded text-sm"
-            rows={3}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            Webhook URL
+            アクセストークン
           </label>
           <input
-            type="text"
+            name="accessToken"
+            type="password"
+            value={form.accessToken}
+            onChange={handleChange}
+            className="border rounded w-full px-2 py-1"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            長期チャネルアクセストークンをそのまま貼り付け
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Webhook URL（表示用）
+          </label>
+          <input
+            name="webhookUrl"
             value={form.webhookUrl}
-            onChange={(e) => handleChange("webhookUrl", e.target.value)}
-            className="w-full border px-3 py-2 rounded text-sm"
+            onChange={handleChange}
+            className="border rounded w-full px-2 py-1"
             placeholder="https://example.com/line/webhook"
           />
-          <p className="mt-1 text-xs text-gray-500">
-            Render 側の LINE webhook URL を設定してください。
-          </p>
-        </div>
-
-        {/* ★ 追加：destination 入力欄 */}
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            LINE Bot ユーザーID（destination）
-          </label>
-          <input
-            type="text"
-            value={form.destination}
-            onChange={(e) => handleChange("destination", e.target.value)}
-            className="w-full border px-3 py-2 rounded text-sm"
-            placeholder="例: U7caf95752a4384246601f6e782973b8c"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            LINEのWebhookイベントに含まれる
-            <code className="px-1 bg-gray-100 rounded text-[11px]">
-              destination
-            </code>
-            の値です。
-            <br />
-            ここに設定したIDと受信した destination を突き合わせて、
-            「どのテナントのLINE公式アカウントか」を判定します。
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
           <input
             id="isActive"
+            name="isActive"
             type="checkbox"
             checked={form.isActive}
-            onChange={(e) => handleChange("isActive", e.target.checked)}
-            className="h-4 w-4"
+            onChange={handleChange}
           />
           <label htmlFor="isActive" className="text-sm">
-            LINE 連携を有効にする
+            このテナントで LINE 連携を有効にする
           </label>
         </div>
 
@@ -319,14 +323,14 @@ export default function TenantLineSettingsPage() {
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-2 text-sm rounded bg-blue-600 text-white disabled:opacity-60"
+            className="px-4 py-2 rounded bg-blue-600 text-white text-sm disabled:opacity-50"
           >
             {saving ? "保存中..." : "保存する"}
           </button>
           <button
             type="button"
             onClick={() => router.push("/admin/tenants")}
-            className="px-4 py-2 text-sm rounded border"
+            className="px-4 py-2 rounded bg-gray-200 text-sm"
           >
             テナント一覧に戻る
           </button>

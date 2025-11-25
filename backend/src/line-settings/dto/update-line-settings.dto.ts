@@ -16,6 +16,11 @@ export class UpdateLineSettingsDto {
   @IsOptional()
   @IsUrl({}, { message: 'webhookUrl は有効なURLを指定してください' })
   webhookUrl?: string;
+  
+    // ★ ここを追加：destination（LINE webhook の destination/BotユーザーID）
+  @IsOptional()
+  @IsString()
+  destination?: string;
 
   @IsOptional()
   @IsBoolean()
