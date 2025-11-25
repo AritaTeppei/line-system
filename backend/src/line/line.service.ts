@@ -429,24 +429,21 @@ export class LineService {
    * - destination: LINE 側のボットユーザーID（チャネルごとに固有）
    * - LineSettings 側に channelId として保存されている想定
    */
-  async resolveTenantIdFromDestination(
-    destination?: string | null,
-  ): Promise<number | null> {
-    if (!destination) {
-      this.logger.warn(
-        'resolveTenantIdFromDestination: destination が空です',
-      );
-      return null;
-    }
+  async resolveTenantIdFromDestination(destination: string): Promise<number | null> {
+  this.logger.log(
+    `resolveTenantIdFromDestination: destination=${destination}`,
+  );
 
-    const settings = await this.prisma.lineSettings.findFirst({
-      where: {
-        channelId: destination,
-      },
-      select: {
-        tenantId: true,
-      },
-    });
+  const settings = await this.prisma.lineSettings.findFirst({
+    where: {
+      destination,
+      isActive: true,    // ← これだけで十分
+      // tenant: { isActive: true } ← 削除（これが原因）
+    },
+    select: {
+      tenantId: true,
+    },
+  });
 
     if (!settings?.tenantId) {
       this.logger.error(
