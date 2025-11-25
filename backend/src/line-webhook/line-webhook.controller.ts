@@ -1,24 +1,29 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 
-@Controller('line')
+@Controller('debug-line')
 export class LineWebhookController {
-  @Post('webhook')
+  @Post('webhook-test')
   @HttpCode(200)
   handleWebhook(@Body() body: any) {
     const events = body?.events ?? [];
+    const destination = body?.destination;
 
-    // ★ UIDログ（ここが本命）
-    console.log('=== LINE Webhook Received ===');
+    console.log('=== DEBUG LINE Webhook Received ===');
+    console.log('destination:', destination);
     console.log(JSON.stringify(body, null, 2));
 
     for (const event of events) {
       const userId = event?.source?.userId;
+      const type = event?.type;
       if (userId) {
-        console.log('### LINE USER ID:', userId);
+        console.log(
+          `### DEBUG LINE EVENT: type=${type}, userId=${userId}, destination=${destination}`,
+        );
+      } else {
+        console.log(`### DEBUG LINE EVENT: type=${type}, userId=(なし), destination=${destination}`);
       }
     }
 
-    // 必要ならここでDB保存や分岐処理を追加していける
-    return 'OK';
+    return 'DEBUG-OK';
   }
 }
