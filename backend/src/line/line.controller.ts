@@ -23,53 +23,49 @@ export class LineController {
   constructor(private readonly lineService: LineService) {}
 
   @Post('webhook')
-async handleWebhook(@Body() body: LineWebhookRequestBody) {
-
-  // ★ 修正ポイント（ここだけ変更）
-  const tenantId = await this.lineService.resolveTenantIdFromDestination(
-    body.destination ?? null,
-  );
-
-  if (!tenantId) {
-    this.logger.error(`tenantId を特定できません: destination=${body.destination}`);
-    return { ok: false };
-  }
-  // ★ ここまで
-
-  this.logger.log(`Webhook受信 本文: ${JSON.stringify(body)}`);
-
+  async handleWebhook(@Body() body: LineWebhookRequestBody) {
     try {
-      for (const event of body.events ?? []) {
-        const lineUid = event.source?.userId;
-        if (!lineUid) {
-          this.logger.warn(
-            `userId が見つかりません: ${JSON.stringify(event)}`,
-          );
-          continue;
-        }
+      this.logger.log('=== /line/webhook を受信 ===');
+      this.logger.log(JSON.stringify(body, null, 2));
 
-        this.logger.log(
-          `Webhook受信: type=${event.type}, userId=${lineUid}`,
+      const destination = body?.destination;
+
+      // destination の事前チェック
+      if (!destination) {
+        this.logger.error(
+          '[LineController] destination が無いため処理を中断します。',
         );
-
-        if (event.type === 'follow' || event.type === 'message') {
-          await this.lineService.sendRegisterFormLink(tenantId, lineUid);
-        }
+        return { ok: false, reason: 'missing_destination' };
       }
 
-      // 正常終了
+      // tenant の特定（string 確定済み）
+      const tenantId =
+        await this.lineService.resolveTenantIdFromDestination(destination);
+
+      if (!tenantId) {
+        this.logger.error(
+          `[LineController] tenantId を特定できません: destination=${destination}`,
+        );
+        return { ok: false, reason: 'tenant_not_found' };
+      }
+
+      // 本来の既存処理に戻す（handleEvent → handleWebhookEvent）
+      for (const event of body.events) {
+        await this.lineService.handleWebhookEvent(tenantId, event);
+      }
+
       return { ok: true };
+
     } catch (e: any) {
-      // ここで 500 の原因を丸出しにする
       this.logger.error('handleWebhook 内でエラー', e);
 
       return {
         ok: false,
         error: e?.message ?? String(e),
         name: e?.name ?? undefined,
-        // stack は長いので一応付ける（必要なら見る）
         stack: e?.stack ?? undefined,
       };
     }
-  }
-}
+  }  // ← メソッド閉じ
+
+}  // ← class の閉じ（これが無かった）

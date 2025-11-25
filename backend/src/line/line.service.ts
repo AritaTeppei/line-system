@@ -424,6 +424,25 @@ export class LineService {
     });
   }
 
+
+    /**
+   * LINE Webhook の各イベントを処理する
+   * ひとまずはログを出すだけの安全な実装にしておく
+   */
+  async handleWebhookEvent(tenantId: number, event: any): Promise<void> {
+    const userId = event?.source?.userId;
+    const type = event?.type;
+
+    this.logger.log(
+      `[LineService] handleWebhookEvent: tenantId=${tenantId}, type=${type}, userId=${userId}`,
+    );
+
+    // TODO: 今後ここに follow / message / postback ごとの処理を実装していく
+    // 例:
+    // if (type === 'follow') { ... }
+    // if (type === 'message') { ... }
+  }
+
   /**
    * LINE Webhook の destination から tenantId を特定する
    * - destination: LINE 側のボットユーザーID（チャネルごとに固有）
