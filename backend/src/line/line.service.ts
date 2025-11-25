@@ -36,7 +36,7 @@ export class LineService {
   // 末尾のスラッシュを消してからパスを足す（// を防ぐ）
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
-  return `${normalizedBaseUrl}/public/customer-register/${token}`;
+  return `${process.env.NEXT_PUBLIC_API_URL}/public/customer-register/${token}`;
 }
 
   /**
