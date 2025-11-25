@@ -51,7 +51,7 @@ export default function NewTenantPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    fetch("http://localhost:4000/auth/me", { headers })
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error("auth me error");
         return res.json() as Promise<Me>;
@@ -111,7 +111,7 @@ export default function NewTenantPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("http://localhost:4000/admin/tenants", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/tenants`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

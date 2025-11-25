@@ -70,7 +70,7 @@ export default function AdminTenantUsersPage() {
 
       try {
         // /auth/me で開発者チェック
-        const meRes = await fetch("http://localhost:4000/auth/me", { headers });
+        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers });
         if (!meRes.ok) {
           const data = await meRes.json().catch(() => null);
           let msg = "auth me error";
@@ -87,7 +87,7 @@ export default function AdminTenantUsersPage() {
 
         // テナント配下ユーザー一覧
         const usersRes = await fetch(
-          `http://localhost:4000/admin/tenants/${tenantId}/users`,
+          `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users`,
           { headers },
         );
         if (!usersRes.ok) {
@@ -148,7 +148,7 @@ export default function AdminTenantUsersPage() {
     setCreating(true);
     try {
       const res = await fetch(
-        `http://localhost:4000/admin/tenants/${tenantId}/users`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users`,
         {
           method: "POST",
           headers: {
@@ -217,7 +217,7 @@ export default function AdminTenantUsersPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:4000/admin/tenants/${tenantId}/users/${resettingUserId}/reset-password`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users/${resettingUserId}/reset-password`,
         {
           method: "PATCH",
           headers: {

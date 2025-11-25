@@ -62,7 +62,7 @@ export default function TenantLineSettingsPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    const fetchMe = fetch("http://localhost:4000/auth/me", { headers })
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error("auth me error");
         return res.json() as Promise<Me>;
@@ -75,7 +75,7 @@ export default function TenantLineSettingsPage() {
       });
 
     const fetchLineSettings = fetch(
-      `http://localhost:4000/tenants/${tenantId}/line-settings`,
+      `${process.env.NEXT_PUBLIC_API_URL}/tenants/${tenantId}/line-settings`,
       { headers },
     )
       .then((res) => {
@@ -161,7 +161,7 @@ export default function TenantLineSettingsPage() {
       }
 
       const res = await fetch(
-        `http://localhost:4000/tenants/${tenantId}/line-settings`,
+        `${process.env.NEXT_PUBLIC_API_URL}/tenants/${tenantId}/line-settings`,
         {
           method: "PUT",
           headers: {

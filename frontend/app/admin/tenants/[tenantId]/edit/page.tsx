@@ -82,7 +82,7 @@ export default function AdminTenantEditPage() {
 
     const headers = { Authorization: `Bearer ${savedToken}` };
 
-    const fetchMe = fetch("http://localhost:4000/auth/me", { headers })
+    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error("auth me error");
         return res.json() as Promise<Me>;
@@ -95,7 +95,7 @@ export default function AdminTenantEditPage() {
       });
 
     const fetchTenant = fetch(
-      `http://localhost:4000/admin/tenants/${tenantId}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}`,
       { headers },
     )
       .then((res) => {
@@ -169,7 +169,7 @@ export default function AdminTenantEditPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:4000/admin/tenants/${tenant.id}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenant.id}`,
         {
           method: "PATCH",
           headers: {
