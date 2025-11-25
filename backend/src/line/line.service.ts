@@ -27,9 +27,17 @@ export class LineService {
   /**
    * パブリックな登録用 URL を生成
    */
-  generatePublicRegisterUrl(token: string): string {
-    return `${this.frontendBaseUrl}/public/customer-register/${token}`;
-  }
+  private generatePublicRegisterUrl(token: string): string {
+  // 環境変数からフロントエンドのベースURLを読む
+  // 例: https://line-system.vercel.app
+  const baseUrl =
+    process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+
+  // 末尾のスラッシュを消してからパスを足す（// を防ぐ）
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+
+  return `${normalizedBaseUrl}/public/customer-register/${token}`;
+}
 
   /**
    * 顧客を LINE UID で検索する
