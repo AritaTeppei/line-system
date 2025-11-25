@@ -429,6 +429,10 @@ export class LineService {
    * LINE Webhook の各イベントを処理する
    * ひとまずはログを出すだけの安全な実装にしておく
    */
+    /**
+   * LINE Webhook の各イベントを処理する
+   * - ここで follow / message / unfollow などを振り分ける
+   */
   async handleWebhookEvent(tenantId: number, event: any): Promise<void> {
     const userId = event?.source?.userId;
     const type = event?.type;
@@ -437,10 +441,39 @@ export class LineService {
       `[LineService] handleWebhookEvent: tenantId=${tenantId}, type=${type}, userId=${userId}`,
     );
 
-    // TODO: 今後ここに follow / message / postback ごとの処理を実装していく
-    // 例:
-    // if (type === 'follow') { ... }
-    // if (type === 'message') { ... }
+    // userId が無いイベント（グループ系など）は今回は無視
+    if (!userId) {
+      this.logger.warn(
+        `[LineService] handleWebhookEvent: userId が無いためスキップ (tenantId=${tenantId}, type=${type})`,
+      );
+      return;
+    }
+
+    // 1) 友だち登録（follow）のときに「顧客登録URL」を送る
+    if (type === 'follow') {
+      // まず、この UID がすでに既存顧客に紐づいているか確認
+      const existingCustomer = await this.findCustomerByLineUid(
+        tenantId,
+        userId,
+      );
+
+      if (existingCustomer) {
+        this.logger.log(
+          `[LineService] handleWebhookEvent: lineUid=${userId} は既存顧客(id=${existingCustomer.id})に紐づいているため、登録URLは送信しません`,
+        );
+        return;
+      }
+
+      // まだ誰にも紐づいていない UID なら、登録用URLを送る
+      await this.sendRegisterFormLink(tenantId, userId);
+      return;
+    }
+
+    // 2) それ以外のイベントはとりあえずログだけ
+    //    必要になったらここに message / postback などの処理を追加していく
+    this.logger.log(
+      `[LineService] handleWebhookEvent: type=${type} は今のところ特別な処理をしていません`,
+    );
   }
 
   /**
