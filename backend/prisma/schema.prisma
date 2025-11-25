@@ -204,9 +204,8 @@ model LineSettings {
   channelId     String? // チャネルID
   channelSecret String? // チャネルシークレット
   accessToken   String? // 長期アクセストークン
-
-  // 運用用の設定（必要に応じて増やす）
   webhookUrl String? // 現在LINEに登録しているWebhook URL（表示用）
+  destination   String?
   isActive   Boolean @default(false) // このテナントでLINE連携を有効にするか
 
   createdAt DateTime @default(now())
