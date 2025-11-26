@@ -33,10 +33,12 @@ export class LineService {
   const baseUrl =
     process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
 
+    this.logger.log(`[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`);
+
   // 末尾のスラッシュを消してからパスを足す（// を防ぐ）
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
-  return `${process.env.NEXT_PUBLIC_API_URL}/public/customer-register/${token}`;
+  return `${normalizedBaseUrl}/public/customer-register/${token}`;
 }
 
   /**
