@@ -149,7 +149,8 @@ function PublicRegisterCustomerInner() {
                 姓 <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full border rounded px-2 py-1 text-sm"
+                className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="山田"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
               />
@@ -159,7 +160,8 @@ function PublicRegisterCustomerInner() {
                 名 <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full border rounded px-2 py-1 text-sm"
+                className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="太郎"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
               />
@@ -169,7 +171,8 @@ function PublicRegisterCustomerInner() {
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">郵便番号</label>
             <input
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="ハイフン無し"
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
             />
@@ -180,7 +183,8 @@ function PublicRegisterCustomerInner() {
               携帯番号 <span className="text-red-500">*</span>
             </label>
             <input
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="ハイフン無し"
               value={mobilePhone}
               onChange={(e) => setMobilePhone(e.target.value)}
             />
@@ -191,7 +195,8 @@ function PublicRegisterCustomerInner() {
               住所1（市区町村〜番地）
             </label>
             <input
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="〇〇県〇〇市〇〇町1-1"
               value={address1}
               onChange={(e) => setAddress1(e.target.value)}
             />
@@ -200,7 +205,8 @@ function PublicRegisterCustomerInner() {
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">住所2（建物名など）</label>
             <input
-              className="w-full border rounded px-2 py-1 text-sm"
+              className="w-full border rounded-md px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        placeholder="〇〇ビル1F"
               value={address2}
               onChange={(e) => setAddress2(e.target.value)}
             />
