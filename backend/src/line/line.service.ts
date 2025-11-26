@@ -13,14 +13,13 @@ export class LineService {
     private readonly lineSettingsService: LineSettingsService,
   ) {
     this.frontendBaseUrl =
-      process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+      process.env.FRONTEND_BASE_URL ?? 'https://line-system.vercel.app';
 
     // ★ ここを追加：本番で何を見ているかをログに出す
     this.logger.log(
       `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
     );
   }
-
 
   /**
    * URLセーフなランダムトークンを生成する
