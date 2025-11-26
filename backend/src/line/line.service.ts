@@ -9,18 +9,20 @@ export class LineService {
   private readonly frontendBaseUrl: string;
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly lineSettingsService: LineSettingsService,
-  ) {
-    this.frontendBaseUrl =
-      process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
-
-    // ★ ここを追加：本番で何を見ているかをログに出す
-    this.logger.log(
-      `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
-    );
+  private readonly prisma: PrismaService,
+  private readonly lineSettingsService: LineSettingsService,
+) {
+  // 本番は Vercel、本地は localhost にする
+  if (process.env.NODE_ENV === 'production') {
+    this.frontendBaseUrl = 'https://line-system.vercel.app';
+  } else {
+    this.frontendBaseUrl = 'http://localhost:3000';
   }
 
+  this.logger.log(
+    `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
+  );
+}
 
   /**
    * URLセーフなランダムトークンを生成する
@@ -39,7 +41,6 @@ export class LineService {
 
   return `${normalizedBaseUrl}/public/customer-register/${token}`;
 }
-
 
   /**
    * 顧客を LINE UID で検索する
