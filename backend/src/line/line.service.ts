@@ -38,11 +38,12 @@ export class LineService {
   /**
    * パブリックな登録用 URL を生成
    */
-  private generatePublicRegisterUrl(token: string): string {
+ private generatePublicRegisterUrl(token: string): string {
   // constructor で決めた frontendBaseUrl を使う
   const normalizedBaseUrl = this.frontendBaseUrl.replace(/\/$/, '');
+  const encodedToken = encodeURIComponent(token);
 
-  return `${normalizedBaseUrl}/public/customer-register/${token}`;
+  return `${normalizedBaseUrl}/public/register-customer?token=${encodedToken}`;
 }
 
 
