@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
 import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 // JWT に入れる型
 export interface AuthPayload {
@@ -34,9 +35,20 @@ export class AuthService {
       throw new UnauthorizedException('メールアドレスまたはパスワードが違います');
     }
 
-    // TODO: 本番運用では bcrypt などでハッシュ比較に変更すること
-    if (user.password !== password) {
+    // 既存（平文）と新規（ハッシュ済み）の両方に対応したパスワードチェック
+    const { ok, hashed } = await this.verifyPassword(password, user.password);
+
+    if (!ok) {
       throw new UnauthorizedException('メールアドレスまたはパスワードが違います');
+    }
+
+    // 旧データ（平文保存）の場合は、このタイミングでハッシュ化に移行する
+    if (!hashed) {
+      const newHash = await bcrypt.hash(password, 10);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: newHash },
+      });
     }
 
     return user;
@@ -77,6 +89,33 @@ export class AuthService {
     return this.verifyToken(token);
   }
 
+  /**
+   * 既存（平文）パスワードと、新しいハッシュ済みパスワードの両方に対応した比較
+   */
+  private async verifyPassword(
+    plainPassword: string,
+    storedPassword: string,
+  ): Promise<{ ok: boolean; hashed: boolean }> {
+    if (!storedPassword) {
+      return { ok: false, hashed: false };
+    }
+
+    // bcrypt っぽい文字列ならハッシュとみなす
+    const looksHashed =
+      storedPassword.startsWith('$2b$') ||
+      storedPassword.startsWith('$2a$') ||
+      storedPassword.startsWith('$2y$');
+
+    if (looksHashed) {
+      const ok = await bcrypt.compare(plainPassword, storedPassword);
+      return { ok, hashed: true };
+    }
+
+    // それ以外は「昔の平文保存」とみなして、そのまま比較
+    const ok = plainPassword === storedPassword;
+    return { ok, hashed: false };
+  }
+
     /**
    * /auth/me 用：
    * - JWT を検証して payload を取り出す
@@ -85,17 +124,19 @@ export class AuthService {
    */
   async getPayloadFromRequestWithTenantCheck(req: Request): Promise<AuthPayload> {
     const payload = this.getPayloadFromRequest(req);
+
     if (!payload) {
-      throw new UnauthorizedException('認証情報がありません');
+      throw new UnauthorizedException(
+        '認証情報が無効です。再度ログインしてください。',
+      );
     }
 
-    // ここでテナント状態チェック（DEVELOPER の場合は中で素通り）
+    // テナント状態チェック（MANAGER / CLIENT のみ）
     await this.ensureTenantActive(payload);
 
-    // 問題なければそのまま返す（今までの /auth/me と同じ型）
     return payload;
   }
-  
+
     private async ensureTenantActive(payload: AuthPayload): Promise<void> {
     // 開発者はテナント状態に関係なく通す
     if (payload.role === 'DEVELOPER') {

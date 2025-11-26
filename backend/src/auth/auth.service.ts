@@ -1,5 +1,5 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
 import type { Request } from 'express';
@@ -181,4 +181,120 @@ export class AuthService {
     // すべてOKなら、これまで通りの payload を返す
     //
   }
+
+    /**
+   * 自分自身のパスワード変更
+   * - 現在のパスワードをチェック
+   * - 新パスワードと確認用の一致チェック
+   */
+  async changeOwnPassword(params: {
+    userId: number;
+    currentPassword: string;
+    newPassword: string;
+    confirmNewPassword: string;
+  }): Promise<void> {
+    const { userId, currentPassword, newPassword, confirmNewPassword } = params;
+
+    // 1) ユーザーを取得
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new BadRequestException('ユーザーが見つかりません。');
+    }
+
+    // ▼ ここ IMPORTANT ▼
+    // パスワードを保存しているカラム名が schema.prisma に合わせている必要あり
+    // 例: user.passwordHash / user.hashedPassword / user.password など
+    // 下の "user.passwordHash" の部分は、実際のカラム名に合わせて変えてね。
+    const password = (user as any).password;
+
+    // 2) 現在のパスワードチェック
+    const isMatch = await bcrypt.compare(currentPassword, password);
+    if (!isMatch) {
+      throw new BadRequestException('現在のパスワードが正しくありません。');
+    }
+
+    // 3) 新しいパスワードの一致チェック
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException(
+        '新しいパスワードと確認用パスワードが一致しません。',
+      );
+    }
+
+    // 4) 新しいパスワードをハッシュ化して保存
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        // ここもカラム名を schema.prisma に合わせて変更
+        password: newHash,
+      },
+    });
+  }
+
+    /**
+   * MANAGER が CLIENT のパスワードを強制変更する
+   * - manager.role が MANAGER 以外なら Forbidden
+   * - manager.tenantId 配下の CLIENT 以外は対象外
+   */
+  async managerResetClientPassword(
+    manager: { id: number; role: UserRole | string; tenantId: number | null },
+    params: {
+      clientUserId: number;
+      newPassword: string;
+      confirmNewPassword: string;
+    },
+  ): Promise<void> {
+    const { clientUserId, newPassword, confirmNewPassword } = params;
+
+    // MANAGER 以外は使えないようにする（DEVELOPER や CLIENT からは呼ばせない）
+    const roleValue =
+      typeof manager.role === 'string' ? manager.role : UserRole[manager.role];
+
+    if (roleValue !== 'MANAGER') {
+      throw new ForbiddenException('MANAGER のみが利用できる操作です。');
+    }
+
+    if (!manager.tenantId) {
+      throw new ForbiddenException('テナント情報がありません。');
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException(
+        '新しいパスワードと確認用パスワードが一致しません。',
+      );
+    }
+
+    // 対象 CLIENT ユーザーを特定
+    const clientUser = await this.prisma.user.findFirst({
+      where: {
+        id: clientUserId,
+        tenantId: manager.tenantId,
+        role: UserRole.CLIENT,
+      },
+    });
+
+    if (!clientUser) {
+      throw new BadRequestException(
+        '指定された CLIENT ユーザーが見つかりません。',
+      );
+    }
+
+    // パスワードをハッシュ化して上書き
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: clientUser.id },
+      data: {
+        // ⚠️ ここも実際のカラム名に合わせて変更してね
+        // 例: passwordHash / hashedPassword / password など
+        password: newHash,
+      },
+    });
+  }
+
+
 }

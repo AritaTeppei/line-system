@@ -9,6 +9,7 @@ import { PublicModule } from './public/public.module';
 import { AdminModule } from './admin/admin.module';
 import { LineSettingsModule } from './line-settings/line-settings.module';
 import { LineWebhookModule } from './line-webhook/line-webhook.module';
+import { TenantsModule } from './tenants/tenants.module';  // ★ 追加
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { LineWebhookModule } from './line-webhook/line-webhook.module';
     PublicModule,
     LineSettingsModule,
     LineWebhookModule,
+    TenantsModule,
 
     // ★ これが無いから /admin/tenants が 404 になってた
     AdminModule,

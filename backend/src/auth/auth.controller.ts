@@ -54,6 +54,76 @@ export class AuthController {
   }
 
   /**
+   * 自分のパスワード変更
+   * POST /auth/change-password
+   *
+   * - MANAGER / DEVELOPER は利用可能
+   * - CLIENT は禁止
+   */
+  @Post('change-password')
+  async changePassword(
+    @Req() req: Request,
+    @Body()
+    body: {
+      currentPassword: string;
+      newPassword: string;
+      confirmNewPassword: string;
+    },
+  ) {
+    // まずJWTからログイン中のユーザー情報を取り出す（今の /auth/me と同じやり方）
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
+
+    // CLIENT は自身でパスワード変更させない仕様
+    if (payload.role === 'CLIENT') {
+      throw new UnauthorizedException(
+        'CLIENT は自身のパスワードを変更できません。管理者にお問い合わせください。',
+      );
+    }
+
+    await this.auth.changeOwnPassword({
+      userId: payload.id,
+      currentPassword: body.currentPassword,
+      newPassword: body.newPassword,
+      confirmNewPassword: body.confirmNewPassword,
+    });
+
+    return { ok: true };
+  }
+
+    /**
+   * MANAGER が CLIENT のパスワードを強制変更する
+   * POST /auth/manager/reset-client-password
+   */
+  @Post('manager/reset-client-password')
+  async managerResetClientPassword(
+    @Req() req: Request,
+    @Body()
+    body: {
+      clientUserId: number;
+      newPassword: string;
+      confirmNewPassword: string;
+    },
+  ) {
+    // JWT からログイン中ユーザー情報を取得（/auth/me と同じスタイル）
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
+
+    // MANAGER 以外は弾く（仕様どおり）
+    if (payload.role !== 'MANAGER') {
+      throw new UnauthorizedException(
+        'MANAGER のみが CLIENT のパスワードを変更できます。',
+      );
+    }
+
+    await this.auth.managerResetClientPassword(payload, {
+      clientUserId: body.clientUserId,
+      newPassword: body.newPassword,
+      confirmNewPassword: body.confirmNewPassword,
+    });
+
+    return { ok: true };
+  }
+
+  /**
    * 誰がログインしているか（JWTから復元）
    * GET /auth/me
    */

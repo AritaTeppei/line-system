@@ -17,4 +17,14 @@ export class TenantsController {
     // ★ ここを findAll() → findForUser(user) に変更
     return this.tenantsService.findForUser(user);
   }
+
+    /**
+   * MANAGER 用: 自分のテナント配下の CLIENT 一覧
+   * GET /tenants/clients
+   */
+  @Get('clients')
+  async findClients(@Req() req: Request) {
+    const user = (req as any).authUser as AuthPayload;
+    return this.tenantsService.findClientsForManager(user);
+  }
 }

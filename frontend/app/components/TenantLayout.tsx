@@ -14,6 +14,7 @@ const links = [
   { href: "/cars", label: "車両一覧" },
   { href: "/bookings", label: "予約一覧" },
   { href: "/reminders", label: "リマインド管理" },
+  { href: "/settings/change-password", label: "設定（パスワード）" }, // ← 追加
 ];
 
 export default function TenantLayout({ children }: Props) {
@@ -24,7 +25,7 @@ export default function TenantLayout({ children }: Props) {
       {/* 左サイドバー */}
       <aside className="w-44 bg-white border-r border-gray-200 flex-shrink-0">
         <div className="px-3 py-3 border-b text-xs font-bold text-gray-700">
-          LINE 車検システム
+          LINE 通知システム
         </div>
         <nav className="px-2 py-3 space-y-1 text-xs">
           {links.map((link) => {
