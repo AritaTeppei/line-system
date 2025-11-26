@@ -14,7 +14,13 @@ export class LineService {
   ) {
     this.frontendBaseUrl =
       process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+
+    // ★ ここを追加：本番で何を見ているかをログに出す
+    this.logger.log(
+      `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
+    );
   }
+
 
   /**
    * URLセーフなランダムトークンを生成する
@@ -36,7 +42,7 @@ export class LineService {
     this.logger.log(`[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`);
 
   // 末尾のスラッシュを消してからパスを足す（// を防ぐ）
-  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const normalizedBaseUrl = this.frontendBaseUrl.replace(/\/$/, '');
 
   return `${normalizedBaseUrl}/public/customer-register/${token}`;
 }
