@@ -12,10 +12,16 @@ export class LineService {
     private readonly prisma: PrismaService,
     private readonly lineSettingsService: LineSettingsService,
   ) {
-    this.frontendBaseUrl =
-      process.env.FRONTEND_BASE_URL ?? 'https://line-system.vercel.app';
+    // 本番（NODE_ENV=production）のときは Vercel のURLを固定で使う
+    if (process.env.NODE_ENV === 'production') {
+      this.frontendBaseUrl = 'https://line-system.vercel.app';
+    } else {
+      // ローカルなどでは .env の FRONTEND_BASE_URL を優先し、
+      // なければ localhost:3000 を使う
+      this.frontendBaseUrl =
+        process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+    }
 
-    // ★ ここを追加：本番で何を見ているかをログに出す
     this.logger.log(
       `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
     );
