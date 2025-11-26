@@ -132,9 +132,9 @@ function PublicRegisterCustomerInner() {
   return (
     <main className="min-h-screen flex flex-col items-center p-4">
       <div className="w-full max-w-md border rounded-md p-4 mt-6 bg-white shadow-sm">
-        <h1 className="text-xl font-bold mb-2">お客様情報のご登録</h1>
+        <h1 className="text-xl font-bold mb-2 text-gray-900">お客様情報のご登録</h1>
         {preview && (
-          <p className="text-sm text-gray-700 mb-4">
+          <p className="text-sm text-gray-800 mb-4">
             {preview.tenantName}
             の車検通知サービスにご登録いただきありがとうございます。
             <br />
@@ -142,10 +142,10 @@ function PublicRegisterCustomerInner() {
           </p>
         )}
 
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <div className="flex gap-2">
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="flex gap-3">
             <div className="flex-1">
-              <label className="block text-sm mb-1">
+              <label className="block text-sm font-medium text-gray-800 mb-1">
                 姓 <span className="text-red-500">*</span>
               </label>
               <input
@@ -155,7 +155,7 @@ function PublicRegisterCustomerInner() {
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm mb-1">
+              <label className="block text-sm font-medium text-gray-800 mb-1">
                 名 <span className="text-red-500">*</span>
               </label>
               <input
@@ -167,7 +167,7 @@ function PublicRegisterCustomerInner() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">郵便番号</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">郵便番号</label>
             <input
               className="w-full border rounded px-2 py-1 text-sm"
               value={postalCode}
@@ -176,7 +176,7 @@ function PublicRegisterCustomerInner() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">
+            <label className="block text-sm font-medium text-gray-800 mb-1">
               携帯番号 <span className="text-red-500">*</span>
             </label>
             <input
@@ -187,7 +187,7 @@ function PublicRegisterCustomerInner() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">
+            <label className="block text-sm font-medium text-gray-800 mb-1">
               住所1（市区町村〜番地）
             </label>
             <input
@@ -198,7 +198,7 @@ function PublicRegisterCustomerInner() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">住所2（建物名など）</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">住所2（建物名など）</label>
             <input
               className="w-full border rounded px-2 py-1 text-sm"
               value={address2}
@@ -216,7 +216,13 @@ function PublicRegisterCustomerInner() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 px-4 py-1 border rounded-md text-sm bg-gray-100 disabled:opacity-60"
+            className={`
+    w-full mt-4 py-2
+    rounded-md text-white text-sm font-medium
+    bg-blue-600 hover:bg-blue-700
+    disabled:bg-gray-400 disabled:cursor-not-allowed
+    transition-colors
+  `}
           >
             {submitting ? '送信中...' : '登録する'}
           </button>
