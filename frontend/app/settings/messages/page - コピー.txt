@@ -34,70 +34,43 @@ export default function MessageSettingsPage() {
 
   // 初期値読み込み（API が出来たら使う）
   useEffect(() => {
-  const run = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    const run = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const token =
-        typeof window !== 'undefined'
-          ? window.localStorage.getItem('auth_token')
-          : null;
+        const token =
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem('auth_token')
+            : null;
 
-      if (!token) return;
+        if (!token) return;
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/reminders/templates`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/reminders/templates`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
 
-      if (!res.ok) {
-        // 404 や 401 の時は「まだテンプレ無い or 権限なし」と見なしてスルー
-        return;
+        if (!res.ok) {
+          return;
+        }
+
+        const data = (await res.json()) as Partial<Templates>;
+        setTemplates((prev) => ({
+          ...prev,
+          ...data,
+        }));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const data = await res.json();
-
-      // data: [{ type: 'BIRTHDAY', body: '...' }, ...] を想定してマッピング
-      setTemplates((prev) => {
-        const next = { ...prev };
-
-        (data as Array<{ type: string; body: string }>).forEach((t) => {
-          switch (t.type) {
-            case 'BIRTHDAY':
-              next.birthday = t.body;
-              break;
-            case 'SHAKEN_TWO_MONTHS':
-              next.shakenTwoMonths = t.body;
-              break;
-            case 'SHAKEN_ONE_WEEK':
-              next.shakenOneWeek = t.body;
-              break;
-            case 'INSPECTION_ONE_MONTH':
-              next.inspectionOneMonth = t.body;
-              break;
-            case 'CUSTOM':
-              next.custom = t.body;
-              break;
-            default:
-              break;
-          }
-        });
-
-        return next;
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  run();
-}, []);
-
+    run();
+  }, []);
 
   const handleChange =
     (key: keyof Templates) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -108,79 +81,49 @@ export default function MessageSettingsPage() {
     };
 
   const handleSubmit = async (e: FormEvent) => {
-  e.preventDefault();
-  setSaving(true);
-  setError(null);
-  setSavedMessage(null);
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSavedMessage(null);
 
-  try {
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
+    try {
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('auth_token')
+          : null;
 
-    if (!token) {
-      throw new Error('ログイン情報が見つかりません。再度ログインしてください。');
-    }
+      if (!token) {
+        throw new Error('ログイン情報が見つかりません。再度ログインしてください。');
+      }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (!apiUrl) {
-      throw new Error('API URL が設定されていません。環境変数 NEXT_PUBLIC_API_URL を確認してください。');
-    }
-
-    // フロントの templates → API 用の { type, body } 配列に変換
-    const payloads = [
-      { type: 'BIRTHDAY',            body: templates.birthday },
-      { type: 'SHAKEN_TWO_MONTHS',   body: templates.shakenTwoMonths },
-      { type: 'SHAKEN_ONE_WEEK',     body: templates.shakenOneWeek },
-      { type: 'INSPECTION_ONE_MONTH', body: templates.inspectionOneMonth },
-      { type: 'CUSTOM',              body: templates.custom },
-    ];
-
-    // バリデーション（全部空なら文句言う）
-    const hasAnyBody = payloads.some(
-      (p) => p.body && p.body.trim().length > 0,
-    );
-    if (!hasAnyBody) {
-      throw new Error('少なくとも1つはメッセージ本文を入力してください。');
-    }
-
-    // 1テンプレートずつ PUT /reminders/templates に upsert
-    for (const p of payloads) {
-      // 空のものはスキップしたければここで continue してもOK
-      if (!p.body || p.body.trim().length === 0) continue;
-
-      const res = await fetch(`${apiUrl}/reminders/templates`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/reminders/templates`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(templates),
         },
-        body: JSON.stringify({
-          type: p.type,
-          body: p.body,
-          // title / note は今は使わないので undefined のまま
-        }),
-      });
+      );
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         const msg =
           (data as any)?.message ||
-          `メッセージ設定の保存に失敗しました（type: ${p.type}）。サーバーログを確認してください。`;
+          'メッセージ設定の保存に失敗しました。サーバーログを確認してください。';
         throw new Error(msg);
       }
+
+      setSavedMessage('メッセージ設定を保存しました。');
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || '保存中にエラーが発生しました。');
+    } finally {
+      setSaving(false);
     }
-
-    setSavedMessage('メッセージ設定を保存しました。');
-  } catch (err: any) {
-    console.error(err);
-    setError(err?.message || '保存中にエラーが発生しました。');
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   return (
     // ★ ここで TenantLayout で包む

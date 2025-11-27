@@ -3,6 +3,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
+import { ReminderMessageType } from '@prisma/client'; // ← ここ
+import { UpsertReminderTemplateDto } from './dto/upsert-reminder-template.dto';
 
 type ReminderKind =
   | 'BIRTHDAY'
@@ -20,6 +22,46 @@ export class RemindersService {
     private readonly lineService: LineService,
   ) {}
 
+   async upsertTemplateForTenant(tenantId: number, dto: UpsertReminderTemplateDto) {
+    return this.prisma.reminderMessageTemplate.upsert({
+      where: {
+        tenantId_type: {
+          tenantId,
+          type: dto.type,
+        },
+      },
+      update: {
+        title: dto.title,
+        body: dto.body,
+        note: dto.note,
+      },
+      create: {
+        tenantId,
+        type: dto.type,
+        title: dto.title,
+        body: dto.body,
+        note: dto.note,
+      },
+    });
+  }
+
+  async getTemplatesForTenant(tenantId: number) {
+    return this.prisma.reminderMessageTemplate.findMany({
+      where: { tenantId },
+      orderBy: { type: 'asc' },
+    });
+  }
+
+  async getTemplateForTenantByType(tenantId: number, type: ReminderMessageType) {
+    return this.prisma.reminderMessageTemplate.findUnique({
+      where: {
+        tenantId_type: {
+          tenantId,
+          type,
+        },
+      },
+    });
+  }
   /**
    * テナントIDの決定ロジック
    * - DEVELOPER: tenantIdFromQuery が必須

@@ -7,12 +7,15 @@ import {
   Req,
   UseGuards,
   Body,   // ★ 追加
+  Put,
+  BadRequestException // ★ ついでに追加（tenantId 無い場合用）
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { RemindersService } from './reminders.service';
 import { JwtAuthGuard } from '../jwt.guard';
 import { AuthService, AuthPayload } from '../auth/auth.service';
 import { PreviewMonthResponseDto } from './dto/preview-month.dto';
+import { UpsertReminderTemplateDto } from './dto/upsert-reminder-template.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('reminders')
@@ -96,6 +99,33 @@ export class RemindersController {
       body.itemIds ?? [],
       tenantId,
     );
+  }
+
+@Get('templates')
+  async getTemplates(@Req() req: Request) {
+    // AuthService を使って、今ログイン中のユーザー情報を取る
+    const user = this.getUser(req);
+
+    if (!user.tenantId) {
+      // 開発者(DEVELOPER) など tenantId が null のユーザーは弾く
+      throw new BadRequestException('テナントが選択されていません。');
+    }
+
+    return this.remindersService.getTemplatesForTenant(user.tenantId);
+  }
+
+  @Put('templates')
+  async upsertTemplate(
+    @Req() req: Request,
+    @Body() dto: UpsertReminderTemplateDto,
+  ) {
+    const user = this.getUser(req);
+
+    if (!user.tenantId) {
+      throw new BadRequestException('テナントが選択されていません。');
+    }
+
+    return this.remindersService.upsertTemplateForTenant(user.tenantId, dto);
   }
 
   /**

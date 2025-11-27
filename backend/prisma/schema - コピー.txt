@@ -132,6 +132,14 @@ enum ReminderMessageType {
   CUSTOM
 }
 
+enum ReminderTemplateType {
+  SHAKEN_2M      // 車検2ヶ月前
+  SHAKEN_1W      // 車検1週間前
+  TENKEN_1M      // 点検1ヶ月前
+  BIRTHDAY_TODAY // 誕生日当日
+  CUSTOM_DATE    // 任意日付
+}
+
 enum MessageType {
   // 手動送信用
   MANUAL_CUSTOMER
@@ -226,7 +234,7 @@ model ReminderMessageTemplate {
   tenantId Int
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  type      ReminderMessageType   // ← ここが大事
+  type    ReminderMessageType
   title     String?              // 管理画面での名称とかに使える
   body      String               // 実際に送るメッセージ本文
   note      String?              // 管理者向けメモ（任意）
