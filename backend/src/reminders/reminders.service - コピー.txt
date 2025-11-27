@@ -458,12 +458,6 @@ export class RemindersService {
    * - 内部的には 1日〜月末まで既存 previewForDate を呼び出して集計
    * - その月の中で「1件以上ヒットした日だけ」を days に含める
    */
-    /**
-   * 指定月のリマインド対象件数＋対象者一覧を返す
-   * - monthStr: "YYYY-MM"
-   * - days: 日別サマリ（今まで通り）
-   * - items: 対象者＆対象車両一覧（送信用の情報付き）
-   */
   async previewForMonth(
     user: AuthPayload,
     monthStr: string,
@@ -481,12 +475,10 @@ export class RemindersService {
       throw new Error('month の値が不正です');
     }
 
-    // その月の日数（28〜31）
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
-    // 日別サマリ
     const allDays: {
-      date: string;
+      date: string; // "YYYY-MM-DD"
       birthdayCount: number;
       shakenTwoMonthsCount: number;
       shakenOneWeekCount: number;
@@ -495,7 +487,6 @@ export class RemindersService {
       totalCount: number;
     }[] = [];
 
-    // 一覧用アイテム（送信用情報も抱えておく）
     const allItems: {
       id: number;
       date: string; // "YYYY-MM-DD"
@@ -508,13 +499,10 @@ export class RemindersService {
       customerName: string;
       carName?: string | null;
       plateNumber?: string | null;
-      lineUid: string | null;
-      messageText: string;
     }[] = [];
 
-    let nextItemId = 1;
 
-    // 1日〜月末までループして、既存 previewForDate を使って集計
+    // 1日〜月末までループして、既存 previewForDate を使って件数だけ拾う
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(Date.UTC(year, month - 1, day));
       const dateStr = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
@@ -530,6 +518,7 @@ export class RemindersService {
       const shakenOneWeekCount = preview.shakenOneWeek.length;
       const inspectionOneMonthCount = preview.inspectionOneMonth.length;
       const customCount = preview.custom.length;
+
       const totalCount =
         birthdayCount +
         shakenTwoMonthsCount +
@@ -538,7 +527,7 @@ export class RemindersService {
         customCount;
 
       allDays.push({
-        date: dateStr,
+        date: preview.date,
         birthdayCount,
         shakenTwoMonthsCount,
         shakenOneWeekCount,
@@ -547,194 +536,88 @@ export class RemindersService {
         totalCount,
       });
 
-      // ── 一覧用 items 作成（送信用の lineUid / messageText も持っておく） ──
+// --- ここから一覧用 items を作る ---
 
       // 誕生日
-      for (const t of preview.birthdayTargets as any[]) {
+      for (const t of preview.birthdayTargets) {
         allItems.push({
-          id: nextItemId++,
+          id: allItems.length + 1,
           date: dateStr,
           category: 'birthday',
           customerName: t.customerName,
           carName: null,
           plateNumber: null,
-          lineUid: t.lineUid ?? null,
-          messageText: t.messageText,
         });
       }
 
       // 車検2ヶ月前
       for (const t of preview.shakenTwoMonths as any[]) {
         allItems.push({
-          id: nextItemId++,
+          id: allItems.length + 1,
           date: dateStr,
           category: 'shakenTwoMonths',
           customerName: t.customerName,
           carName: t.carName ?? null,
+          // Car モデルでは registrationNumber がナンバー
           plateNumber: t.registrationNumber ?? null,
-          lineUid: t.lineUid ?? null,
-          messageText: t.messageText,
         });
       }
 
       // 車検1週間前
       for (const t of preview.shakenOneWeek as any[]) {
         allItems.push({
-          id: nextItemId++,
+          id: allItems.length + 1,
           date: dateStr,
           category: 'shakenOneWeek',
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-          lineUid: t.lineUid ?? null,
-          messageText: t.messageText,
         });
       }
 
       // 点検1ヶ月前
       for (const t of preview.inspectionOneMonth as any[]) {
         allItems.push({
-          id: nextItemId++,
+          id: allItems.length + 1,
           date: dateStr,
           category: 'inspectionOneMonth',
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-          lineUid: t.lineUid ?? null,
-          messageText: t.messageText,
         });
       }
 
       // 任意日付
       for (const t of preview.custom as any[]) {
         allItems.push({
-          id: nextItemId++,
+          id: allItems.length + 1,
           date: dateStr,
           category: 'custom',
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-          lineUid: t.lineUid ?? null,
-          messageText: t.messageText,
         });
       }
     }
 
+
     const tenantId = this.ensureTenant(user, tenantIdFromQuery);
 
-    // 「1件以上ヒットした日」だけ days に載せる
+    // ★ ここが重要：11月中で「1件以上ヒットした日」だけに絞り込む
     const hitDays = allDays.filter((d) => d.totalCount > 0);
+    const hitDates = new Set(hitDays.map((d) => d.date));
+
+    const hitItems = allItems.filter((item) => hitDates.has(item.date));
 
     this.logger.log(
-      `previewForMonth: tenantId=${tenantId}, month=${monthStr}, totalDays=${allDays.length}, hitDays=${hitDays.length}, totalItems=${allItems.length}`,
+      `previewForMonth: tenantId=${tenantId}, month=${monthStr}, totalDays=${allDays.length}, hitDays=${hitDays.length}, totalItems=${hitItems.length}`,
     );
 
     return {
       month: monthStr,
       tenantId,
       days: hitDays,
-      items: allItems,
-    };
-  }
-
-  /**
-   * 月別プレビューで選択された行だけまとめて送る
-   * - monthStr: "YYYY-MM"
-   * - itemIds: previewForMonth が返した items の id 配列
-   */
-  async sendBulkForMonth(
-    user: AuthPayload,
-    monthStr: string,
-    itemIds: number[],
-    tenantIdFromQuery?: number,
-  ) {
-    const tenantId = this.ensureTenant(user, tenantIdFromQuery);
-
-    if (!Array.isArray(itemIds) || itemIds.length === 0) {
-      this.logger.log(
-        `sendBulkForMonth: tenantId=${tenantId}, month=${monthStr}, itemIds が空なので何もしません`,
-      );
-      return {
-        month: monthStr,
-        tenantId,
-        totalSelected: 0,
-        sentCount: 0,
-        sent: false,
-      };
-    }
-
-    // 最新の previewForMonth から items を取り直して、その中から id で絞る
-    const monthPreview = (await this.previewForMonth(
-      user,
-      monthStr,
-      tenantIdFromQuery,
-    )) as any;
-
-    const itemMap = new Map<number, any>();
-    for (const item of monthPreview.items ?? []) {
-      itemMap.set(item.id, item);
-    }
-
-    const selectedItems: any[] = [];
-    for (const id of itemIds) {
-      const hit = itemMap.get(id);
-      if (hit) {
-        selectedItems.push(hit);
-      }
-    }
-
-    this.logger.log(
-      `sendBulkForMonth: tenantId=${tenantId}, month=${monthStr}, selected=${selectedItems.length}/${itemIds.length}`,
-    );
-
-    // DEVELOPER ロールはプレビューのみ（実送信なし）
-    if (user.role === 'DEVELOPER') {
-      this.logger.log('sendBulkForMonth: DEVELOPER ロールなので送信はスキップ');
-      return {
-        month: monthStr,
-        tenantId,
-        totalSelected: selectedItems.length,
-        sentCount: 0,
-        sent: false,
-      };
-    }
-
-    let sentCount = 0;
-
-    for (const item of selectedItems) {
-      const lineUid = item.lineUid as string | null;
-      const message = item.messageText as string;
-
-      if (!lineUid) {
-        this.logger.warn(
-          `sendBulkForMonth: lineUid が無いのでスキップ date=${item.date}, customer=${item.customerName}`,
-        );
-        continue;
-      }
-
-      try {
-        await this.lineService.sendText(lineUid, message);
-        sentCount++;
-      } catch (e: any) {
-        this.logger.error(
-          `sendBulkForMonth: LINE送信失敗 lineUid=${lineUid}, error=${
-            e?.message ?? e
-          }`,
-        );
-        // 必要なら throw してフロントに失敗を返す
-      }
-    }
-
-    this.logger.log(
-      `sendBulkForMonth: 送信完了 tenantId=${tenantId}, month=${monthStr}, sentCount=${sentCount}`,
-    );
-
-    return {
-      month: monthStr,
-      tenantId,
-      totalSelected: selectedItems.length,
-      sentCount,
-      sent: true,
+      items: hitItems,
     };
   }
 

@@ -6,7 +6,6 @@ import {
   Query,
   Req,
   UseGuards,
-  Body,   // ★ 追加
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { RemindersService } from './reminders.service';
@@ -74,29 +73,6 @@ export class RemindersController {
     );
   }
 
-  @Post('send-bulk')
-  async sendBulkForMonth(
-    @Req() req: Request,
-    @Body()
-    body: {
-      month: string;
-      itemIds: number[];
-    },
-    @Query('tenantId') tenantIdFromQuery?: string,
-  ) {
-    // preview-month と同じく AuthService からユーザー情報を取得している前提
-    const user: AuthPayload =
-      await this.authService.getPayloadFromRequestWithTenantCheck(req);
-
-    const tenantId = tenantIdFromQuery ? Number(tenantIdFromQuery) : undefined;
-
-    return this.remindersService.sendBulkForMonth(
-      user,
-      body.month,
-      body.itemIds ?? [],
-      tenantId,
-    );
-  }
 
   /**
    * POST /reminders/run
