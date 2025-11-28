@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PitLink | ログイン",
+  title: "PitLink",
   description: "自動車業向け LINE 連携プラットフォーム PitLink のログインページです。",
 };
 

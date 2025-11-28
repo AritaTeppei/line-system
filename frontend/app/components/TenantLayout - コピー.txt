@@ -1,7 +1,6 @@
 // frontend/app/components/TenantLayout.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
@@ -10,68 +9,19 @@ type Props = {
   children: React.ReactNode;
 };
 
-type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED';
-
-type Booking = {
-  id: number;
-  status: BookingStatus;
-};
-
 const links = [
   { href: '/dashboard', label: 'ダッシュボード' },
   { href: '/customers', label: '顧客一覧' },
   { href: '/cars', label: '車両一覧' },
   { href: '/bookings', label: '予約一覧' },
   { href: '/reminders/month', label: 'リマインド管理' },
+  // ★ メッセージ設定（MANAGER向け）。ルーティングは /settings/messages にしておく
   { href: '/settings/messages', label: 'メッセージ設定' },
   { href: '/settings/change-password', label: '設定（パスワード）' },
 ];
 
 export default function TenantLayout({ children }: Props) {
   const pathname = usePathname();
-
-  // ★ 未確認予約の件数（null は「まだ読み込み前 or エラー」）
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
-
-  // ★ ログイン済みなら /bookings を叩いて「未確認（PENDING）」件数を数える
-  useEffect(() => {
-    // ブラウザ側でだけ動かしたい処理なので useEffect 内でOK
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
-
-    if (!token) {
-      setPendingCount(null);
-      return;
-    }
-
-    const fetchPending = async () => {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/bookings`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        if (!res.ok) {
-          throw new Error('failed to fetch bookings');
-        }
-
-        const data: Booking[] = await res.json();
-        const pending = data.filter((b) => b.status === 'PENDING').length;
-        setPendingCount(pending);
-      } catch (e) {
-        console.error('予約一覧の取得に失敗しました', e);
-        setPendingCount(null);
-      }
-    };
-
-    fetchPending();
-  }, []);
 
   return (
     <div className="min-h-screen flex bg-[#F7FFF8]">
@@ -104,35 +54,24 @@ export default function TenantLayout({ children }: Props) {
               pathname === link.href ||
               (link.href !== '/dashboard' && pathname?.startsWith(link.href));
 
-            const isBookingsLink = link.href === '/bookings';
-            const showBadge =
-              isBookingsLink && pendingCount !== null && pendingCount > 0;
-
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 className={[
-                  'flex items-center justify-between px-3 py-2 rounded-lg transition-colors',
+                  'block px-3 py-2 rounded-lg transition-colors',
                   active
                     ? 'bg-[#00C300] text-white'
                     : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
                 ].join(' ')}
               >
-                <span>{link.label}</span>
-
-                {/* ★ 予約一覧リンクだけ、未確認件数バッジを表示 */}
-                {showBadge && (
-                  <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] min-w-[18px] px-1">
-                    {pendingCount > 99 ? '99+' : pendingCount}
-                  </span>
-                )}
+                {link.label}
               </Link>
             );
           })}
         </nav>
 
-        {/* フッター */}
+        {/* フッター（任意） */}
         <div className="px-3 py-2 border-t border-gray-100 text-[10px] text-gray-400 text-center">
           &copy; PitLink
         </div>

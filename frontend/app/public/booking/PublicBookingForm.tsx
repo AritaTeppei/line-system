@@ -27,6 +27,7 @@ export default function PublicBookingForm({
   const [note, setNote] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false); // ★ 二重送信防止用
 
   const baseError = useMemo(() => {
     if (!tenantIdParam || !customerIdParam || !carIdParam) {
@@ -38,6 +39,12 @@ export default function PublicBookingForm({
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    // すでに送信済みなら何もしない
+    if (submitted) {
+      alert('すでに予約を送信済みです。店舗からの連絡をお待ちください。');
+      return;
+    }
 
     if (baseError) {
       setErrorMsg(baseError);
@@ -102,6 +109,7 @@ export default function PublicBookingForm({
 
       alert('ご予約を送信しました。ありがとうございます。');
       setNote('');
+      setSubmitted(true); // ★ 成功したら送信済みに
     } catch (err) {
       console.error(err);
       const msg =
@@ -114,13 +122,13 @@ export default function PublicBookingForm({
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-lg">
-        <div className="bg-white shadow-md rounded-xl border border-slate-200 p-6 sm:p-8">
-          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 mb-2 text-center">
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-3 py-6 sm:px-4 sm:py-10">
+      <div className="w-full max-w-md">
+        <div className="bg-white shadow-md rounded-2xl border border-slate-200 p-5 sm:p-6">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-2 text-center">
             車検・点検のご予約
           </h1>
-          <p className="text-sm text-slate-700 mb-6 text-center">
+          <p className="text-sm text-slate-800 mb-5 text-center leading-relaxed">
             日付と時間帯をお選びいただき、必要事項をご記入のうえ送信してください。
           </p>
 
@@ -140,6 +148,7 @@ export default function PublicBookingForm({
             onSubmit={handleSubmit}
             className="space-y-5 text-slate-900"
           >
+            {/* 日付 */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご希望日 <span className="text-red-500">*</span>
@@ -148,13 +157,14 @@ export default function PublicBookingForm({
                 type="date"
                 value={bookingDate}
                 onChange={(e) => setBookingDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 text-xs text-slate-700">
                 メッセージ内の日付があらかじめ選択されています。変更も可能です。
               </p>
             </div>
 
+            {/* 時間帯 */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご希望時間帯
@@ -162,17 +172,18 @@ export default function PublicBookingForm({
               <select
                 value={timeSlot}
                 onChange={(e) => setTimeSlot(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="MORNING">午前（MORNING）</option>
                 <option value="AFTERNOON">午後（AFTERNOON）</option>
                 <option value="EVENING">夕方（EVENING）</option>
               </select>
-              <p className="mt-1 text-xs text-slate-600">
+              <p className="mt-1 text-xs text-slate-700">
                 正確な入庫時間は店舗からの折り返し連絡にてご相談させていただきます。
               </p>
             </div>
 
+            {/* メモ */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご要望・連絡事項（任意）
@@ -181,22 +192,27 @@ export default function PublicBookingForm({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={3}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                className="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
                 placeholder="例）代車希望、仕事の都合で午後からが希望 など"
               />
             </div>
 
-            <div className="pt-2">
+            {/* ボタン */}
+            <div className="pt-1">
               <button
                 type="submit"
-                disabled={loading || !!baseError}
-                className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 transition-colors px-4 py-2.5 text-sm sm:text-base font-semibold text-white shadow-sm"
+                disabled={loading || !!baseError || submitted}
+                className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 transition-colors px-4 py-2.5 text-sm font-semibold text-white shadow-sm"
               >
-                {loading ? '送信中…' : 'この内容で予約を送信する'}
+                {submitted
+                  ? 'すでに予約を送信済みです'
+                  : loading
+                    ? '送信中…'
+                    : 'この内容で予約を送信する'}
               </button>
             </div>
 
-            <p className="mt-3 text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+            <p className="mt-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
               送信後、店舗スタッフが内容を確認のうえご連絡いたします。
               送信だけではご予約はまだ確定していませんのでご注意ください。
             </p>
