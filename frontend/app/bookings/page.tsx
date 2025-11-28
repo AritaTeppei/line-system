@@ -1,7 +1,8 @@
-"use client";
+// frontend/app/bookings/page.tsx
+'use client';
 
-import { useEffect, useState } from 'react';
-import TenantLayout from "../components/TenantLayout";
+import { useEffect, useMemo, useState } from 'react';
+import TenantLayout from '../components/TenantLayout';
 
 type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
 
@@ -15,750 +16,505 @@ type Me = {
 
 type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED';
 
+type TimeSlot = 'MORNING' | 'AFTERNOON' | 'EVENING' | string;
+
 type Booking = {
   id: number;
-  bookingDate: string; // ISO文字列
-  timeSlot?: string | null;
+  bookingDate: string; // ISO文字列 "2026-01-26T00:00:00.000Z" など
+  timeSlot: TimeSlot;
   status: BookingStatus;
-  source?: string | null;
   note?: string | null;
-  customer: {
-    id: number;
+  source?: string | null;
+  customer?: {
     lastName: string;
     firstName: string;
-  };
-  car: {
-    id: number;
-    carName: string;
-    registrationNumber: string;
-  };
+  } | null;
+  car?: {
+    carName?: string | null;
+    registrationNumber?: string | null;
+  } | null;
 };
 
-type Customer = {
-  id: number;
-  lastName: string;
-  firstName: string;
-};
+const apiBase =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-// customerId 追加済み
-type Car = {
-  id: number;
-  carName: string;
-  registrationNumber: string;
-  customerId: number;
-};
+// 日付キーを "YYYY-MM-DD" にそろえるヘルパー
+function toDateKey(input: string | Date): string {
+  const d = typeof input === 'string' ? new Date(input) : input;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// 日本語の曜日
+const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function BookingsPage() {
-  const [token, setToken] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [cars, setCars] = useState<Car[]>([]);
-
   const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  // カレンダー用：現在表示している「月」の先頭日
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
-  // 新規予約／編集フォーム用 state
-  const [newCustomerId, setNewCustomerId] = useState<number | ''>('');
-  const [newCarId, setNewCarId] = useState<number | ''>('');
-  const [newDate, setNewDate] = useState<string>(''); // yyyy-mm-dd
-  const [newTime, setNewTime] = useState<string>(''); // HH:MM
-  const [newTimeSlot, setNewTimeSlot] = useState<string>(''); // "AM" など任意
-  const [newNote, setNewNote] = useState<string>('');
-  const [creating, setCreating] = useState(false);
-  const [createMessage, setCreateMessage] = useState<string | null>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // カレンダー用：選択中の日付（"YYYY-MM-DD"）
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(
+    null,
+  );
 
-  // ★ 編集中の予約ID（null のときは新規モード）
-  const [editingBookingId, setEditingBookingId] = useState<number | null>(null);
-
-  const formatDateTime = (value: string) => {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return value;
-    const date = d.toLocaleDateString('ja-JP');
-    const time = d.toLocaleTimeString('ja-JP', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    return `${date} ${time}`;
-  };
-
-  const resetBookingForm = () => {
-    setNewCustomerId('');
-    setNewCarId('');
-    setNewDate('');
-    setNewTime('');
-    setNewTimeSlot('');
-    setNewNote('');
-  };
-
-  // 初回ロード時：auth/me + bookings + customers + cars
+  // --- 初期ロード（ログインユーザー & 予約一覧） ---
   useEffect(() => {
-    const savedToken =
+    const token =
       typeof window !== 'undefined'
         ? window.localStorage.getItem('auth_token')
         : null;
 
-    if (!savedToken) {
-      setPageError('先にログインしてください（トップページからログイン）');
+    if (!token) {
       setLoading(false);
+      setErrorMsg('ログイン情報が見つかりません。再ログインしてください。');
       return;
     }
 
-    setToken(savedToken);
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${token}`,
+    };
 
-    const headers = { Authorization: `Bearer ${savedToken}` };
-
-    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-      headers,
-    })
+    // /auth/me と /bookings を並列で取りに行く
+    const fetchMe = fetch(`${apiBase}/auth/me`, { headers })
       .then((res) => {
-        if (!res.ok) throw new Error('auth me error');
+        if (!res.ok) throw new Error('auth/me api error');
         return res.json();
       })
-      .then((data: Me) => {
-        setMe(data);
-      });
+      .then((data: Me) => setMe(data));
 
-    const fetchBookings = fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
-      headers,
-    })
+    const fetchBookings = fetch(`${apiBase}/bookings`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error('bookings api error');
         return res.json();
       })
-      .then((data: Booking[]) => {
-        setBookings(data);
-      });
+      .then((data: Booking[]) => setBookings(data));
 
-    const fetchCustomers = fetch(`${process.env.NEXT_PUBLIC_API_URL}/customers`, {
-      headers,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('customers api error');
-        return res.json();
-      })
-      .then((data: Customer[]) => {
-        setCustomers(data);
-      });
-
-    const fetchCars = fetch(`${process.env.NEXT_PUBLIC_API_URL}/cars`, {
-      headers,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('cars api error');
-        return res.json();
-      })
-      .then((data: Car[]) => {
-        setCars(data);
-      });
-
-    Promise.all([fetchMe, fetchBookings, fetchCustomers, fetchCars])
+    Promise.all([fetchMe, fetchBookings])
       .catch((err) => {
         console.error(err);
-        setPageError('予約画面の初期データ取得に失敗しました');
+        setErrorMsg('予約一覧の取得に失敗しました。時間をおいて再度お試しください。');
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const reloadBookings = async () => {
-    if (!token) return;
-    setPageError(null);
+  // --- 予約を日付ごとにグルーピング ---
+  const bookingsByDate = useMemo(() => {
+    const map = new Map<string, Booking[]>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const key = toDateKey(b.bookingDate);
+      const existing = map.get(key) ?? [];
+      existing.push(b);
+      map.set(key, existing);
+    }
+    return map;
+  }, [bookings]);
 
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
-        headers: { Authorization: `Bearer ${token}` },
+  // 選択中の日の予約一覧（なければ空配列）
+  const selectedBookings: Booking[] = useMemo(() => {
+    if (!selectedDateKey) return [];
+    return bookingsByDate.get(selectedDateKey) ?? [];
+  }, [selectedDateKey, bookingsByDate]);
+
+  // 月のメタ情報（表示ヘッダー用）
+  const monthInfo = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth(); // 0-based
+    const firstDay = new Date(year, month, 1);
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstWeekday = firstDay.getDay(); // 0:日
+
+    // カレンダーセル用の配列を作る
+    const cells: {
+      key: string;
+      dayNumber: number | null;
+      dateKey: string | null;
+      totalCount: number;
+      pendingCount: number;
+    }[] = [];
+
+    // 先頭の空セル
+    for (let i = 0; i < firstWeekday; i++) {
+      cells.push({
+        key: `empty-${i}`,
+        dayNumber: null,
+        dateKey: null,
+        totalCount: 0,
+        pendingCount: 0,
       });
-      if (!res.ok) throw new Error('bookings api error');
-      const data: Booking[] = await res.json();
-      setBookings(data);
-    } catch (err) {
-      console.error(err);
-      setPageError('予約一覧の再取得に失敗しました');
     }
+
+    // 1日〜月末
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month, day);
+      const key = toDateKey(d);
+      const list = bookingsByDate.get(key) ?? [];
+      const totalCount = list.length;
+      const pendingCount = list.filter(
+        (b) => b.status === 'PENDING',
+      ).length;
+
+      cells.push({
+        key,
+        dayNumber: day,
+        dateKey: key,
+        totalCount,
+        pendingCount,
+      });
+    }
+
+    return {
+      year,
+      month, // 0-based
+      daysInMonth,
+      cells,
+    };
+  }, [currentMonth, bookingsByDate]);
+
+  const todayKey = toDateKey(new Date());
+
+  const handlePrevMonth = () => {
+    setCurrentMonth((prev) => {
+      const y = prev.getFullYear();
+      const m = prev.getMonth();
+      return new Date(y, m - 1, 1);
+    });
+    setSelectedDateKey(null);
   };
 
-  const updateStatus = async (bookingId: number, status: BookingStatus) => {
-    if (!token) {
-      setUpdateError('トークンがありません。再ログインしてください。');
-      return;
-    }
-
-    setUpdatingId(bookingId);
-    setUpdateMessage(null);
-    setUpdateError(null);
-
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/bookings/${bookingId}/status`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status }),
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
-          'ステータス変更に失敗しました';
-        throw new Error(msg);
-      }
-
-      await reloadBookings();
-      setUpdateMessage(`予約ID ${bookingId} のステータスを ${status} に更新しました。`);
-    } catch (err: any) {
-      console.error(err);
-      setUpdateError(err.message ?? 'ステータス変更中にエラーが発生しました');
-    } finally {
-      setUpdatingId(null);
-    }
+  const handleNextMonth = () => {
+    setCurrentMonth((prev) => {
+      const y = prev.getFullYear();
+      const m = prev.getMonth();
+      return new Date(y, m + 1, 1);
+    });
+    setSelectedDateKey(null);
   };
 
-  const renderStatusBadge = (status: BookingStatus) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <span className="inline-block px-2 py-0.5 text-xs rounded bg-yellow-100 text-yellow-800">
-            未確認
-          </span>
-        );
-      case 'CONFIRMED':
-        return (
-          <span className="inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-800">
-            確定
-          </span>
-        );
-      case 'CANCELED':
-        return (
-          <span className="inline-block px-2 py-0.5 text-xs rounded bg-gray-200 text-gray-700">
-            キャンセル
-          </span>
-        );
+  // テキスト表示用
+  const monthLabel = `${monthInfo.year}年 ${monthInfo.month + 1}月`;
+
+  // 一覧の並び順（時間帯の表示用）
+  const timeSlotLabel = (slot: TimeSlot) => {
+    switch (slot) {
+      case 'MORNING':
+        return '午前';
+      case 'AFTERNOON':
+        return '午後';
+      case 'EVENING':
+        return '夕方';
       default:
-        return status;
+        return String(slot || '');
     }
   };
 
-  const handleCreateOrUpdateBooking = async () => {
-    if (!token) {
-      setCreateError('トークンがありません。再ログインしてください。');
-      return;
-    }
-
-    setCreateMessage(null);
-    setCreateError(null);
-
-    if (!newCustomerId || !newCarId || !newDate) {
-      setCreateError('顧客・車両・予約日は必須です。');
-      return;
-    }
-
-    const dateTimeStr = newTime
-      ? `${newDate}T${newTime}:00`
-      : `${newDate}T00:00:00`;
-    const d = new Date(dateTimeStr);
-    if (Number.isNaN(d.getTime())) {
-      setCreateError('予約日の形式が不正です。');
-      return;
-    }
-
-    setCreating(true);
-
-    try {
-      const body = {
-        customerId: newCustomerId,
-        carId: newCarId,
-        bookingDate: d.toISOString(),
-        timeSlot: newTimeSlot || undefined,
-        note: newNote || undefined,
-      };
-
-      if (editingBookingId == null) {
-        // 新規作成
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          const msg =
-            data?.message ||
-            (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
-            '予約の作成に失敗しました';
-          throw new Error(msg);
-        }
-
-        resetBookingForm();
-        await reloadBookings();
-        setCreateMessage('予約を登録しました（ステータス: 未確認）。');
-      } else {
-        // 編集更新
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/bookings/${editingBookingId}`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
-          },
-        );
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          const msg =
-            data?.message ||
-            (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
-            '予約の更新に失敗しました';
-          throw new Error(msg);
-        }
-
-        resetBookingForm();
-        await reloadBookings();
-        setEditingBookingId(null);
-        setCreateMessage('予約内容を更新しました。');
-      }
-    } catch (err: any) {
-      console.error(err);
-      setCreateError(err.message ?? '予約処理中にエラーが発生しました');
-    } finally {
-      setCreating(false);
+  const statusLabel = (s: BookingStatus) => {
+    switch (s) {
+      case 'PENDING':
+        return '未確認';
+      case 'CONFIRMED':
+        return '確定';
+      case 'CANCELED':
+        return 'キャンセル';
     }
   };
 
-  // 編集開始：選択した予約の内容をフォームに流し込む
-  const handleEditBookingClick = (b: Booking) => {
-    setEditingBookingId(b.id);
-    setCreateError(null);
-    setCreateMessage(null);
-
-    setNewCustomerId(b.customer.id);
-    setNewCarId(b.car.id);
-
-    const d = new Date(b.bookingDate);
-    if (!Number.isNaN(d.getTime())) {
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      setNewDate(`${yyyy}-${mm}-${dd}`);
-
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mi = String(d.getMinutes()).padStart(2, '0');
-      // 00:00 のときは空にしてもいいが、とりあえず入れておく
-      setNewTime(hh + ':' + mi);
-    } else {
-      setNewDate('');
-      setNewTime('');
+  const statusBadgeClass = (s: BookingStatus) => {
+    switch (s) {
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'CONFIRMED':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'CANCELED':
+        return 'bg-gray-100 text-gray-500 border-gray-300';
     }
-
-    setNewTimeSlot(b.timeSlot ?? '');
-    setNewNote(b.note ?? '');
-  };
-
-  const handleCancelEditBooking = () => {
-    setEditingBookingId(null);
-    resetBookingForm();
-    setCreateError(null);
-    setCreateMessage(null);
-  };
-
-  const handleDeleteBooking = async (bookingId: number) => {
-    if (!token) {
-      setUpdateError('トークンがありません。再ログインしてください。');
-      return;
-    }
-
-    const ok = window.confirm(`予約ID ${bookingId} を削除してよろしいですか？`);
-    if (!ok) return;
-
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/${bookingId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.message) ? data.message.join(', ') : null) ||
-          '予約の削除に失敗しました';
-        throw new Error(msg);
-      }
-
-      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
-      if (editingBookingId === bookingId) {
-        handleCancelEditBooking();
-      }
-      setUpdateMessage(`予約ID ${bookingId} を削除しました。`);
-    } catch (err: any) {
-      console.error(err);
-      setUpdateError(err.message ?? '予約の削除中にエラーが発生しました');
-    }
-  };
-
-  // 顧客に紐づく車だけを表示
-  const filteredCars: Car[] =
-    newCustomerId === ''
-      ? []
-      : cars.filter((car) => car.customerId === newCustomerId);
-
-  const handleChangeCustomer = (value: string) => {
-    const cid = value ? Number(value) : ('' as const);
-    setNewCustomerId(cid);
-
-    if (cid === '') {
-      setNewCarId('');
-      return;
-    }
-
-    const carForCustomer = cars.filter((car) => car.customerId === cid);
-    const currentCarStillValid =
-      newCarId && carForCustomer.some((car) => car.id === newCarId);
-
-    if (!currentCarStillValid) {
-      setNewCarId('');
-    }
-  };
-
-  const handleChangeCar = (value: string) => {
-    setNewCarId(value ? Number(value) : ('' as const));
   };
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p>読み込み中...</p>
-      </main>
+      <TenantLayout>
+        <div className="text-sm text-gray-600">読み込み中...</div>
+      </TenantLayout>
     );
   }
 
-  if (pageError) {
+  if (errorMsg) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <div className="border border-red-400 text-red-700 px-4 py-3 rounded max-w-md bg-white">
-          <p className="font-semibold mb-2">エラー</p>
-          <p className="text-sm mb-2 whitespace-pre-wrap">{pageError}</p>
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100"
-            onClick={reloadBookings}
-          >
-            再読み込み
-          </button>
+      <TenantLayout>
+        <div className="max-w-xl mx-auto mt-8">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {errorMsg}
+          </div>
         </div>
-      </main>
+      </TenantLayout>
     );
   }
 
   return (
     <TenantLayout>
-      <main className="min-h-screen flex flex-col items-center p-4 gap-6 bg-gray-50">
-        <h1 className="text-2xl font-bold mt-4">予約管理</h1>
-
-        {me && (
-          <div className="border rounded-md px-4 py-3 bg-white w-full max-w-6xl">
-            <p>
-              ログイン中: {me.name ?? me.email}（ロール: {me.role}）
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              管理者が電話・対面で受けた予約を登録し、ステータスを更新する運用を想定しています。
+      <div className="max-w-6xl mx-auto space-y-6">
+        <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
+              予約カレンダー
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              カレンダー上で予約の件数と重複状況を確認できます。日付をクリックすると、その日の予約一覧が下に表示されます。
             </p>
           </div>
-        )}
-
-        {/* 予約作成／編集フォーム */}
-        <section className="border rounded-md px-4 py-4 bg-white w-full max-w-6xl">
-          <h2 className="font-semibold mb-2">
-            {editingBookingId == null
-              ? '新規予約の登録（管理者用）'
-              : `予約の編集（ID: ${editingBookingId}）`}
-          </h2>
-          <p className="text-xs text-gray-600 mb-3">
-            電話や対面で受けた予約を、ここから手動で登録・編集できます。
-          </p>
-
-          {editingBookingId != null && (
-            <p className="text-xs text-orange-600 mb-2">
-              編集をやめて新規予約モードに戻る場合は「編集をキャンセル」を押してください。
-            </p>
+          {me && (
+            <div className="text-xs text-slate-500 text-right">
+              ログイン中:{' '}
+              <span className="font-medium text-slate-700">
+                {me.email}
+              </span>
+              <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5">
+                {me.role === 'DEVELOPER'
+                  ? '開発者'
+                  : me.role === 'MANAGER'
+                  ? '管理者'
+                  : 'スタッフ'}
+              </span>
+            </div>
           )}
+        </header>
 
-          {createMessage && (
-            <p className="text-xs text-green-700 mb-2 whitespace-pre-wrap">
-              {createMessage}
-            </p>
-          )}
-          {createError && (
-            <p className="text-xs text-red-600 mb-2 whitespace-pre-wrap">
-              {createError}
-            </p>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                顧客<span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <select
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newCustomerId}
-                onChange={(e) => handleChangeCustomer(e.target.value)}
-              >
-                <option value="">選択してください</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.lastName} {c.firstName}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                車両<span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <select
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newCarId}
-                onChange={(e) => handleChangeCar(e.target.value)}
-                disabled={newCustomerId === ''}
-              >
-                <option value="">
-                  {newCustomerId === ''
-                    ? '先に顧客を選択してください'
-                    : '選択してください'}
-                </option>
-                {filteredCars.map((car) => (
-                  <option key={car.id} value={car.id}>
-                    {car.carName}（{car.registrationNumber}）
-                  </option>
-                ))}
-              </select>
-              {newCustomerId !== '' && filteredCars.length === 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  この顧客に紐づく車両が登録されていません。
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                予約日<span className="text-red-500 ml-0.5">*</span>
-              </label>
-              <input
-                type="date"
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                予約時間（任意）
-              </label>
-              <input
-                type="time"
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                時間帯ラベル（任意）
-              </label>
-              <input
-                type="text"
-                placeholder="例: 午前 / 午後 / 第1ラウンド など"
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newTimeSlot}
-                onChange={(e) => setNewTimeSlot(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-700 mb-1">
-                メモ（任意）
-              </label>
-              <input
-                type="text"
-                className="w-full border rounded px-2 py-1 text-sm"
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              className="px-4 py-2 border rounded text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-              onClick={handleCreateOrUpdateBooking}
-              disabled={creating}
-            >
-              {creating
-                ? '処理中...'
-                : editingBookingId == null
-                  ? '予約を登録'
-                  : '予約を更新'}
-            </button>
-            {editingBookingId != null && (
+        {/* カレンダー部分 */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-2 border rounded text-sm bg-gray-100"
-                onClick={handleCancelEditBooking}
+                onClick={handlePrevMonth}
+                className="px-2 py-1 text-xs rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
               >
-                編集をキャンセル
+                ＜ 前の月
               </button>
-            )}
+              <div className="text-sm sm:text-base font-semibold text-slate-900">
+                {monthLabel}
+              </div>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="px-2 py-1 text-xs rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                次の月 ＞
+              </button>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-500">
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-full bg-blue-100 border border-blue-300" />
+                <span>本日</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-full bg-emerald-100 border border-emerald-300" />
+                <span>予約あり</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] w-4 h-4">
+                  !
+                </span>
+                <span>未確認予約あり</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 曜日ヘッダー */}
+          <div className="grid grid-cols-7 text-center text-[11px] sm:text-xs text-slate-500 mb-1">
+            {weekdayLabels.map((w) => (
+              <div key={w} className="py-1">
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* 日付セル */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-xs">
+            {monthInfo.cells.map((cell) => {
+              if (cell.dayNumber == null) {
+                return (
+                  <div
+                    key={cell.key}
+                    className="h-14 sm:h-16 rounded-lg bg-transparent"
+                  />
+                );
+              }
+
+              const isToday = cell.dateKey === todayKey;
+              const isSelected = cell.dateKey === selectedDateKey;
+              const hasBooking = cell.totalCount > 0;
+              const hasPending = cell.pendingCount > 0;
+
+              let baseClass =
+                'h-14 sm:h-16 rounded-lg border flex flex-col items-stretch justify-between px-1.5 py-1 cursor-pointer transition-colors';
+              if (isSelected) {
+                baseClass += ' border-blue-500 bg-blue-50';
+              } else if (isToday) {
+                baseClass += ' border-blue-400 bg-blue-50/60';
+              } else if (hasBooking) {
+                baseClass += ' border-emerald-300 bg-emerald-50';
+              } else {
+                baseClass +=
+                  ' border-slate-200 bg-slate-50 hover:bg-slate-100';
+              }
+
+              return (
+                <button
+                  key={cell.key}
+                  type="button"
+                  onClick={() =>
+                    cell.dateKey && setSelectedDateKey(cell.dateKey)
+                  }
+                  className={baseClass}
+                >
+                  <div className="flex items-center justify-between text-[11px] text-slate-700">
+                    <span className="font-semibold text-[11px]">
+                      {cell.dayNumber}
+                    </span>
+                    {isToday && (
+                      <span className="text-[10px] text-blue-600">
+                        今日
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col items-start justify-end gap-0.5">
+                    {hasBooking && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-600 text-white text-[10px] px-1.5">
+                        予約 {cell.totalCount}件
+                      </span>
+                    )}
+                    {hasPending && (
+                      <span className="inline-flex items-center rounded-full bg-red-500 text-white text-[10px] px-1.5">
+                        未確認 {cell.pendingCount}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 sm:mt-4 text-[11px] text-slate-500 sm:hidden">
+            日付をタップすると、その日の予約一覧が画面下部に表示されます。
           </div>
         </section>
 
-        {/* 予約一覧 */}
-        <section className="border rounded-md px-4 py-4 bg-white w-full max-w-6xl">
-          <div className="flex items-center justify-between mb-3 gap-2">
-            <div>
-              <h2 className="font-semibold">予約一覧</h2>
-              <p className="text-xs text-gray-600">
-                車検予約・点検予約などを一覧で確認し、ステータスを更新・編集・削除できます。
-              </p>
-            </div>
-            <button
-              className="px-3 py-1 border rounded text-sm bg-gray-100"
-              onClick={reloadBookings}
-            >
-              再読み込み
-            </button>
-          </div>
+        {/* 選択した日の予約一覧 */}
+        <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5">
+          <h2 className="text-sm sm:text-base font-semibold text-slate-900 mb-3">
+            {selectedDateKey
+              ? `${selectedDateKey} の予約一覧`
+              : '日付を選択すると、その日の予約が表示されます'}
+          </h2>
 
-          {updateMessage && (
-            <p className="text-xs text-green-700 mb-2 whitespace-pre-wrap">
-              {updateMessage}
-            </p>
-          )}
-          {updateError && (
-            <p className="text-xs text-red-600 mb-2 whitespace-pre-wrap">
-              {updateError}
+          {selectedDateKey && selectedBookings.length === 0 && (
+            <p className="text-xs text-slate-500">
+              この日には予約が登録されていません。
             </p>
           )}
 
-          {bookings.length === 0 ? (
-            <p className="text-sm text-gray-600">予約はまだ登録されていません。</p>
-          ) : (
+          {selectedDateKey && selectedBookings.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm border-collapse">
+              <table className="min-w-full border-collapse text-[11px] sm:text-xs">
                 <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border px-2 py-1 text-left">ID</th>
-                    <th className="border px-2 py-1 text-left">予約日時</th>
-                    <th className="border px-2 py-1 text-left">時間帯</th>
-                    <th className="border px-2 py-1 text-left">顧客</th>
-                    <th className="border px-2 py-1 text-left">車両</th>
-                    <th className="border px-2 py-1 text-left">ステータス</th>
-                    <th className="border px-2 py-1 text-left">メモ</th>
-                    <th className="border px-2 py-1 text-left">操作</th>
+                  <tr className="bg-slate-50 text-slate-600">
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      時間帯
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      顧客
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      車両
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      ステータス
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      メモ
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 text-left">
+                      受付経路
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b) => (
-                    <tr key={b.id} className="hover:bg-gray-50">
-                      <td className="border px-2 py-1">{b.id}</td>
-                      <td className="border px-2 py-1">
-                        {formatDateTime(b.bookingDate)}
-                      </td>
-                      <td className="border px-2 py-1">
-                        {b.timeSlot ?? <span className="text-gray-400">-</span>}
-                      </td>
-                      <td className="border px-2 py-1">
-                        {b.customer
-                          ? `${b.customer.lastName} ${b.customer.firstName}`
-                          : '-'}
-                      </td>
-                      <td className="border px-2 py-1">
-                        {b.car
-                          ? `${b.car.carName}（${b.car.registrationNumber}）`
-                          : '-'}
-                      </td>
-                      <td className="border px-2 py-1">
-                        {renderStatusBadge(b.status)}
-                      </td>
-                      <td className="border px-2 py-1 max-w-xs">
-                        <span className="block truncate" title={b.note ?? ''}>
-                          {b.note ?? <span className="text-gray-400">-</span>}
-                        </span>
-                      </td>
-                      <td className="border px-2 py-1">
-                        <div className="flex flex-wrap gap-1">
-                          <button
-                            className="px-2 py-0.5 border rounded text-xs bg-green-50 hover:bg-green-100 disabled:opacity-60"
-                            onClick={() => updateStatus(b.id, 'CONFIRMED')}
-                            disabled={
-                              updatingId === b.id || b.status === 'CONFIRMED'
-                            }
-                          >
-                            確定
-                          </button>
-                          <button
-                            className="px-2 py-0.5 border rounded text-xs bg-yellow-50 hover:bg-yellow-100 disabled:opacity-60"
-                            onClick={() => updateStatus(b.id, 'PENDING')}
-                            disabled={
-                              updatingId === b.id || b.status === 'PENDING'
-                            }
-                          >
-                            未確認に戻す
-                          </button>
-                          <button
-                            className="px-2 py-0.5 border rounded text-xs bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
-                            onClick={() => updateStatus(b.id, 'CANCELED')}
-                            disabled={
-                              updatingId === b.id || b.status === 'CANCELED'
-                            }
-                          >
-                            キャンセル
-                          </button>
+                  {selectedBookings
+                    .slice()
+                    .sort((a, b) =>
+                      (a.timeSlot || '').localeCompare(
+                        b.timeSlot || '',
+                      ),
+                    )
+                    .map((b) => {
+                      const customerName = b.customer
+                        ? `${b.customer.lastName ?? ''} ${
+                            b.customer.firstName ?? ''
+                          }`.trim()
+                        : '-';
 
-                          {/* 予約編集・削除 */}
-                          <button
-                            className="px-2 py-0.5 border rounded text-xs bg-blue-50 hover:bg-blue-100"
-                            type="button"
-                            onClick={() => handleEditBookingClick(b)}
-                          >
-                            編集
-                          </button>
-                          <button
-                            className="px-2 py-0.5 border rounded text-xs bg-red-50 text-red-700 hover:bg-red-100"
-                            type="button"
-                            onClick={() => handleDeleteBooking(b.id)}
-                          >
-                            削除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                      const carLabel = b.car
+                        ? `${b.car.carName ?? ''}${
+                            b.car.registrationNumber
+                              ? `（${b.car.registrationNumber}）`
+                              : ''
+                          }`
+                        : '-';
+
+                      return (
+                        <tr key={b.id} className="text-slate-800">
+                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                            {timeSlotLabel(b.timeSlot)}
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                            {customerName || '-'}
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                            {carLabel || '-'}
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
+                                b.status,
+                              )}`}
+                            >
+                              {statusLabel(b.status)}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200">
+                            {b.note || ''}
+                          </td>
+                          <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                            {b.source === 'LINE_PUBLIC_FORM'
+                              ? 'LINE予約フォーム'
+                              : b.source || ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
           )}
+
+          {!selectedDateKey && (
+            <p className="text-xs text-slate-500">
+              上のカレンダーから日付をクリックすると、その日の予約一覧と重複状況が確認できます。
+            </p>
+          )}
         </section>
-      </main>
+      </div>
     </TenantLayout>
   );
 }
