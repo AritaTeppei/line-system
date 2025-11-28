@@ -19,7 +19,7 @@ export class AuthController {
    * body: { email, password }
    * 戻り値: { token, email, tenantId, role }
    */
-  @Post('login')
+    @Post('login')
   async login(@Body() body: { email: string; password: string }) {
     const { email, password } = body;
 
@@ -27,21 +27,13 @@ export class AuthController {
       throw new UnauthorizedException('メールアドレスとパスワードが必要です');
     }
 
-    // 既存の AuthService を利用（validateUser はプロジェクト側の実装）
-    const user = await this.auth.validateUser(email, password);
-    if (!user) {
-      throw new UnauthorizedException('認証に失敗しました');
-    }
+    // ★ ユーザー検証 + テナント有効チェックをまとめて実行
+    const { user, payload } = await this.auth.validateUserWithTenantCheck(
+      email,
+      password,
+    );
 
-    // ★ AuthPayload の形に揃える
-    const payload: AuthPayload = {
-      id: user.id,
-      email: user.email,
-      tenantId: user.tenantId ?? null,
-      role: user.role,
-    } as AuthPayload;
-
-    // ★ issueToken は 1引数
+    // ★ 問題なければトークン発行
     const token = this.auth.issueToken(payload);
 
     // フロント用に token と最低限の情報を返す
@@ -50,8 +42,11 @@ export class AuthController {
       email: user.email,
       tenantId: user.tenantId ?? null,
       role: user.role,
+      // 必要なら name も返してOK
+      // name: (user as any).name ?? null,
     };
   }
+
 
   /**
    * 自分のパスワード変更

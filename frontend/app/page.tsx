@@ -156,9 +156,9 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            自動車業界向け LINE 連携プラットフォーム
-          </p>
+          <p className="text-sm text-gray-700 mt-1">
+  自動車業界向け LINE 連携プラットフォーム
+</p>
         </div>
 
         {/* ログインカード */}
@@ -199,18 +199,19 @@ export default function LoginPage() {
             </div>
 
             {/* メールアドレス記憶チェックボックス */}
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <input
-                id="remember-email"
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-[#00C300] focus:ring-[#00C300]"
-                checked={rememberEmail}
-                onChange={(e) => setRememberEmail(e.target.checked)}
-              />
-              <label htmlFor="remember-email" className="select-none">
-                メールアドレスを記憶する
-              </label>
-            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-700">
+  <input
+    id="remember-email"
+    type="checkbox"
+    className="h-4 w-4 rounded border-gray-300 text-[#00C300] focus:ring-[#00C300]"
+    checked={rememberEmail}
+    onChange={(e) => setRememberEmail(e.target.checked)}
+  />
+  <label htmlFor="remember-email" className="select-none">
+    メールアドレスを記憶する
+  </label>
+</div>
+
 
             <button
               type="submit"

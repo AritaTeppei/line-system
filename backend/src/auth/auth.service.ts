@@ -54,6 +54,35 @@ export class AuthService {
     return user;
   }
 
+    /**
+   * ログイン用:
+   * - メール＋パスワードでユーザーを検証
+   * - AuthPayload を組み立て
+   * - MANAGER / CLIENT の場合はテナントの有効状態もチェック
+   * - 問題なければ { user, payload } を返す
+   */
+  async validateUserWithTenantCheck(email: string, password: string): Promise<{
+    user: any;
+    payload: AuthPayload;
+  }> {
+    // まずは通常のユーザー検証
+    const user = await this.validateUser(email, password);
+
+    // AuthPayload を組み立て
+    const payload: AuthPayload = {
+      id: user.id,
+      email: user.email,
+      name: (user as any).name ?? null,
+      tenantId: user.tenantId ?? null,
+      role: user.role,
+    };
+
+    // テナント状態チェック（DEVELOPER は ensureTenantActive の中でスルーされる）
+    await this.ensureTenantActive(payload);
+
+    return { user, payload };
+  }
+
   /**
    * JWT を発行する
    */
