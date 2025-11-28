@@ -120,9 +120,13 @@ export class RemindersService {
   }): string {
     const { tenantId, customerId, carId, date } = args;
 
-    const baseUrl =
-      process.env.PUBLIC_BOOKING_URL || 'http://localhost:3000/public/booking';
+      // ★ FRONTEND_BASE_URL から予約ページURLを生成
+  const frontendBase = process.env.FRONTEND_BASE_URL;
+  if (!frontendBase) {
+    throw new Error('FRONTEND_BASE_URL が設定されていません');
+  }
 
+  const baseUrl = `${frontendBase.replace(/\/$/, '')}/public/booking`;
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
