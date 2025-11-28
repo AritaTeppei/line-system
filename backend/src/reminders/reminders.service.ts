@@ -112,6 +112,10 @@ export class RemindersService {
   /**
    * 公開予約フォームのURLを組み立てる
    */
+    /**
+   * 公開予約フォームのURLを組み立てる
+   * FRONTEND_BASE_URL をベースに /public/booking を付ける
+   */
   private buildBookingUrl(args: {
     tenantId: number;
     customerId: number;
@@ -120,13 +124,13 @@ export class RemindersService {
   }): string {
     const { tenantId, customerId, carId, date } = args;
 
-      // ★ FRONTEND_BASE_URL から予約ページURLを生成
-  const frontendBase = process.env.FRONTEND_BASE_URL;
-  if (!frontendBase) {
-    throw new Error('FRONTEND_BASE_URL が設定されていません');
-  }
+    // ★ ここで FRONTEND_BASE_URL を使う
+    const frontendBase =
+      process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
 
-  const baseUrl = `${frontendBase.replace(/\/$/, '')}/public/booking`;
+    // 末尾の "/" を消してから /public/booking を足す
+    const baseUrl = `${frontendBase.replace(/\/$/, '')}/public/booking`;
+
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
@@ -140,6 +144,7 @@ export class RemindersService {
 
     return `${baseUrl}?${query}`;
   }
+
 
   /**
    * テンプレートがあればそれを使ってメッセージを生成する
