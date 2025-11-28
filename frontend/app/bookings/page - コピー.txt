@@ -60,53 +60,8 @@ type Booking = {
   } | null;
 };
 
-// ★ ここから追加
-type Customer = {
-  id: number;
-  lastName: string;
-  firstName: string;
-};
-
-type Car = {
-  id: number;
-  carName?: string | null;
-  registrationNumber?: string | null;
-  customerId: number;
-};
-
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-async function createBooking(
-  payload: {
-    bookingDate: string; // "YYYY-MM-DD"
-    timeSlot: TimeSlot;
-    customerId: number;
-    carId: number;
-    note?: string;
-    source?: string;
-  },
-  token: string,
-) {
-  const res = await fetch(`${apiBase}/bookings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    const msg =
-      (data && (data.message as string)) ||
-      '予約の作成に失敗しました。';
-    throw new Error(msg);
-  }
-
-  return (await res.json().catch(() => null)) as Booking | null;
-}
 
 // 日付キーを "YYYY-MM-DD" にそろえるヘルパー
 function toDateKey(input: string | Date): string {
@@ -126,8 +81,6 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [cars, setCars] = useState<Car[]>([]);
 
   // カレンダー用：現在表示している「月」の先頭日
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -140,19 +93,8 @@ export default function BookingsPage() {
     null,
   );
 
-const [showCreateModal, setShowCreateModal] = useState(false);
-  const [modalDateKey, setModalDateKey] = useState<string | null>(null);
-  const [modalTimeSlot, setModalTimeSlot] =
-    useState<TimeSlot>('MORNING');
-  const [modalCustomerId, setModalCustomerId] =
-    useState<number | null>(null);
-  const [modalCarId, setModalCarId] = useState<number | null>(null);
-  const [modalNote, setModalNote] = useState('');
-  const [modalError, setModalError] = useState<string | null>(null);
-  const [modalSaving, setModalSaving] = useState(false);  
-
   // --- 初期ロード（ログインユーザー & 予約一覧） ---
-    useEffect(() => {
+  useEffect(() => {
     const token =
       typeof window !== 'undefined'
         ? window.localStorage.getItem('auth_token')
@@ -168,7 +110,7 @@ const [showCreateModal, setShowCreateModal] = useState(false);
       Authorization: `Bearer ${token}`,
     };
 
-    // /auth/me と /bookings /customers /cars を並列で取得
+    // /auth/me と /bookings を並列で取りに行く
     const fetchMe = fetch(`${apiBase}/auth/me`, { headers })
       .then((res) => {
         if (!res.ok) throw new Error('auth/me api error');
@@ -183,28 +125,13 @@ const [showCreateModal, setShowCreateModal] = useState(false);
       })
       .then((data: Booking[]) => setBookings(data));
 
-    const fetchCustomers = fetch(`${apiBase}/customers`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error('customers api error');
-        return res.json();
-      })
-      .then((data: Customer[]) => setCustomers(data));
-
-    const fetchCars = fetch(`${apiBase}/cars`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error('cars api error');
-        return res.json();
-      })
-      .then((data: Car[]) => setCars(data));
-
-    Promise.all([fetchMe, fetchBookings, fetchCustomers, fetchCars])
+    Promise.all([fetchMe, fetchBookings])
       .catch((err) => {
         console.error(err);
-        setErrorMsg('予約情報の取得に失敗しました。時間をおいて再度お試しください。');
+        setErrorMsg('予約一覧の取得に失敗しました。時間をおいて再度お試しください。');
       })
       .finally(() => setLoading(false));
   }, []);
-
 
   // --- 予約を日付ごとにグルーピング ---
   const bookingsByDate = useMemo(() => {
@@ -303,18 +230,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
   // テキスト表示用
   const monthLabel = `${monthInfo.year}年 ${monthInfo.month + 1}月`;
 
-    // ★ 追加：カレンダーの日付クリックでモーダルを開く
-  const openCreateModalForDate = (dateKey: string) => {
-    setSelectedDateKey(dateKey);
-    setModalDateKey(dateKey);
-    setModalTimeSlot('MORNING');
-    setModalCustomerId(null);
-    setModalCarId(null);
-    setModalNote('');
-    setModalError(null);
-    setShowCreateModal(true);
-  };
-
   // 一覧の並び順（時間帯の表示用）
   const timeSlotLabel = (slot: TimeSlot) => {
     switch (slot) {
@@ -397,65 +312,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
       setUpdatingId(null);
     }
   };
-
- // ★ ここから追加：モーダルの「この内容で登録」ボタン
-  const handleCreateBooking = async () => {
-    if (!modalDateKey) {
-      setModalError('日付が取得できませんでした。もう一度日付を選択してください。');
-      return;
-    }
-    if (!modalCustomerId) {
-      setModalError('顧客を選択してください。');
-      return;
-    }
-    if (!modalCarId) {
-      setModalError('車両を選択してください。');
-      return;
-    }
-
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
-
-    if (!token) {
-      alert('ログイン情報が見つかりません。再ログインしてください。');
-      return;
-    }
-
-    setModalSaving(true);
-    setModalError(null);
-
-    try {
-      const created = await createBooking(
-        {
-          bookingDate: modalDateKey, // "YYYY-MM-DD"
-          timeSlot: modalTimeSlot,
-          customerId: modalCustomerId,
-          carId: modalCarId,
-          note: modalNote,
-          source: 'MANUAL', // 手入力予約のマーキング
-        },
-        token,
-      );
-
-      // 返ってきた予約を state に追加
-      if (created) {
-        setBookings((prev) => [...prev, created]);
-      }
-
-      alert('予約を登録しました。');
-
-      setShowCreateModal(false);
-    } catch (e: any) {
-      console.error(e);
-      setModalError(
-        e?.message ?? '予約の登録に失敗しました。時間をおいて再度お試しください。',
-      );
-    } finally {
-      setModalSaving(false);
-    }
-  };  
 
   if (loading) {
     return (
@@ -588,14 +444,13 @@ const [showCreateModal, setShowCreateModal] = useState(false);
 
               return (
                 <button
-  key={cell.key}
-  type="button"
-  onClick={() =>
-    cell.dateKey && openCreateModalForDate(cell.dateKey)
-  }
-  className={baseClass}
->
-
+                  key={cell.key}
+                  type="button"
+                  onClick={() =>
+                    cell.dateKey && setSelectedDateKey(cell.dateKey)
+                  }
+                  className={baseClass}
+                >
                   <div className="flex items-center justify-between text-[11px] text-slate-700">
                     <span className="font-semibold text-[11px]">
                       {cell.dayNumber}
@@ -754,137 +609,6 @@ const [showCreateModal, setShowCreateModal] = useState(false);
           )}
         </section>
       </div>
- {/* ★ モーダル：カレンダーからの手入力予約 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-slate-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-slate-900 mb-2">
-              新規予約を追加
-            </h3>
-            <p className="text-xs text-slate-600 mb-3">
-              {modalDateKey
-                ? `${modalDateKey} の予約を登録します。`
-                : '日付が選択されていません。'}
-            </p>
-
-            {modalError && (
-              <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
-                {modalError}
-              </div>
-            )}
-
-            <div className="space-y-3 text-[12px] sm:text-sm">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  時間帯
-                </label>
-                <select
-                  value={modalTimeSlot}
-                  onChange={(e) =>
-                    setModalTimeSlot(e.target.value as TimeSlot)
-                  }
-                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="MORNING">午前</option>
-                  <option value="AFTERNOON">午後</option>
-                  <option value="EVENING">夕方</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  顧客
-                </label>
-                <select
-                  value={modalCustomerId ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setModalCustomerId(v ? Number(v) : null);
-                    setModalCarId(null);
-                  }}
-                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">選択してください</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {`${c.lastName ?? ''} ${c.firstName ?? ''}`.trim() ||
-                        `ID: ${c.id}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  車両
-                </label>
-                <select
-                  value={modalCarId ?? ''}
-                  onChange={(e) =>
-                    setModalCarId(
-                      e.target.value ? Number(e.target.value) : null,
-                    )
-                  }
-                  disabled={!modalCustomerId}
-                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">
-                    {modalCustomerId
-                      ? '車両を選択してください'
-                      : '先に顧客を選択してください'}
-                  </option>
-                  {cars
-                    .filter(
-                      (car) =>
-                        modalCustomerId != null &&
-                        car.customerId === modalCustomerId,
-                    )
-                    .map((car) => (
-                      <option key={car.id} value={car.id}>
-                        {car.carName ?? '車両'}{' '}
-                        {car.registrationNumber
-                          ? `（${car.registrationNumber}）`
-                          : ''}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  メモ（任意）
-                </label>
-                <textarea
-                  value={modalNote}
-                  onChange={(e) => setModalNote(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-                  placeholder="例）代車希望、午後からの入庫希望 など"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                disabled={modalSaving}
-                className="px-3 py-1.5 rounded-md border border-slate-300 text-xs sm:text-sm text-slate-700 bg-white hover:bg-slate-50"
-              >
-                閉じる
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateBooking}
-                disabled={modalSaving || !modalDateKey}
-                className="px-3 py-1.5 rounded-md bg-blue-600 text-xs sm:text-sm text-white font-semibold hover:bg-blue-700 disabled:bg-slate-300"
-              >
-                {modalSaving ? '登録中…' : 'この内容で登録'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </TenantLayout>
   );
 }
