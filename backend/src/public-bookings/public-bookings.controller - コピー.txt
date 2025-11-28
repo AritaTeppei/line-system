@@ -123,56 +123,6 @@ export class PublicBookingsController {
       );
     }
 
-        // ★ ここから重複チェックを挿入する ★
-
-    // その日の 0:00〜24:00 で同じ tenantId / customerId / carId / status≠CANCELED の予約があるか確認
-    const startOfDay = new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        0,
-        0,
-        0,
-      ),
-    );
-    const endOfDay = new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate() + 1,
-        0,
-        0,
-        0,
-      ),
-    );
-
-    const existing = await prisma.booking.findFirst({
-      where: {
-        tenantId,
-        customerId,
-        carId,
-        bookingDate: {
-          gte: startOfDay,
-          lt: endOfDay,
-        },
-        // キャンセル済みは無視する
-        status: {
-          not: 'CANCELED',
-        },
-      },
-    });
-
-    if (existing) {
-      // Nest の BadRequestException は { statusCode, message, error } を返すので
-      // フロントの `data.message` にそのまま載る
-      throw new BadRequestException(
-        '同じお客様・お車・日付の予約がすでに登録されています。店舗からの連絡をお待ちください。',
-      );
-    }
-
-    // ★ 重複チェックここまで ★
-
     // 予約レコードを作成
     const booking = await prisma.booking.create({
       data: {
