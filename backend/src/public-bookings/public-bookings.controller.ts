@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookingStatus } from '@prisma/client'; // ★ これを追加
 
 type SlotKey = 'MORNING' | 'AFTERNOON' | 'EVENING';
 
@@ -125,49 +126,33 @@ export class PublicBookingsController {
 
         // ★ ここから重複チェックを挿入する ★
 
-    // その日の 0:00〜24:00 で同じ tenantId / customerId / carId / status≠CANCELED の予約があるか確認
-    const startOfDay = new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate(),
-        0,
-        0,
-        0,
-      ),
-    );
-    const endOfDay = new Date(
-      Date.UTC(
-        date.getUTCFullYear(),
-        date.getUTCMonth(),
-        date.getUTCDate() + 1,
-        0,
-        0,
-        0,
-      ),
-    );
+    // ★ ここから「1か月以内の重複予約チェック（同じ車両）」★
 
-    const existing = await prisma.booking.findFirst({
+    // 予約日の1か月前〜1か月後
+    const oneMonthBefore = new Date(date);
+    oneMonthBefore.setMonth(oneMonthBefore.getMonth() - 1);
+
+    const oneMonthAfter = new Date(date);
+    oneMonthAfter.setMonth(oneMonthAfter.getMonth() + 1);
+
+    // 同じ車両（carId）で、1か月以内に PENDING または CONFIRMED があるか
+    const duplicate = await prisma.booking.findFirst({
       where: {
         tenantId,
-        customerId,
-        carId,
+        carId: car.id, // 「同じ車両」（車台番号1台分）を car レコード単位で判定
         bookingDate: {
-          gte: startOfDay,
-          lt: endOfDay,
+          gte: oneMonthBefore,
+          lte: oneMonthAfter,
         },
-        // キャンセル済みは無視する
         status: {
-          not: 'CANCELED',
+          in: [BookingStatus.PENDING, BookingStatus.CONFIRMED],
         },
       },
     });
 
-    if (existing) {
-      // Nest の BadRequestException は { statusCode, message, error } を返すので
-      // フロントの `data.message` にそのまま載る
+    if (duplicate) {
       throw new BadRequestException(
-        '同じお客様・お車・日付の予約がすでに登録されています。店舗からの連絡をお待ちください。',
+        '同じお車で1か月以内にすでに予約が登録されています。店舗までお問い合わせください。',
       );
     }
 

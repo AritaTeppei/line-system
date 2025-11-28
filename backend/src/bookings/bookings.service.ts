@@ -1,5 +1,5 @@
 // backend/src/bookings/bookings.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service'; // ★ 追加
@@ -17,6 +17,76 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly lineService: LineService,
   ) {}
+
+    /**
+   * 同じ車両(carId)が基準日 ±30日以内に予約されていないかチェック
+   * CANCELED 以外が 1 件でもあれば BadRequestException
+   */
+  private async ensureNoDuplicateWithin1Month(params: {
+    tenantId: number;
+    carId: number;
+    bookingDate: Date;
+  }): Promise<void> {
+    const { tenantId, carId, bookingDate } = params;
+
+    // ±30日
+    const base = new Date(bookingDate);
+    const from = new Date(base);
+    from.setDate(from.getDate() - 30);
+    const to = new Date(base);
+    to.setDate(to.getDate() + 30);
+
+    const exist = await this.prisma.booking.findFirst({
+      where: {
+        tenantId,
+        carId,
+        bookingDate: {
+          gte: from,
+          lte: to,
+        },
+        status: {
+          not: BookingStatus.CANCELED,
+        },
+      },
+    });
+
+    if (exist) {
+      throw new BadRequestException(
+        'このお車は1か月以内に既に予約が登録されています。店舗にお問い合わせください。',
+      );
+    }
+  }
+
+  // ↓ 既存の create メソッドの中から上のヘルパーを呼ぶ
+  async createBookingFromTenant(dto: {
+    tenantId: number;
+    customerId: number;
+    carId: number;
+    bookingDate: Date;
+    timeSlot: string;
+    note?: string | null;
+  }) {
+    // まず重複チェック
+    await this.ensureNoDuplicateWithin1Month({
+      tenantId: dto.tenantId,
+      carId: dto.carId,
+      bookingDate: dto.bookingDate,
+    });
+
+    // OKなら通常通り作成
+    return this.prisma.booking.create({
+      data: {
+        tenantId: dto.tenantId,
+        customerId: dto.customerId,
+        carId: dto.carId,
+        bookingDate: dto.bookingDate,
+        timeSlot: dto.timeSlot,
+        note: dto.note ?? null,
+        status: BookingStatus.PENDING,
+        source: 'TENANT_MANUAL', // 好きな区分
+      },
+    });
+  }
 
   /**
    * ログインユーザーからテナントIDを決定

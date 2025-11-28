@@ -140,6 +140,7 @@ export default function BookingsPage() {
     null,
   );
 
+
 const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalDateKey, setModalDateKey] = useState<string | null>(null);
   const [modalTimeSlot, setModalTimeSlot] =
@@ -303,17 +304,25 @@ const [showCreateModal, setShowCreateModal] = useState(false);
   // テキスト表示用
   const monthLabel = `${monthInfo.year}年 ${monthInfo.month + 1}月`;
 
+  // ★ 追加：新規予約ボタンのラベル
+const createButtonLabel = selectedDateKey
+  ? `${selectedDateKey} の新規予約登録`
+  : `${todayKey} の新規予約登録`;
+
     // ★ 追加：カレンダーの日付クリックでモーダルを開く
-  const openCreateModalForDate = (dateKey: string) => {
-    setSelectedDateKey(dateKey);
-    setModalDateKey(dateKey);
-    setModalTimeSlot('MORNING');
-    setModalCustomerId(null);
-    setModalCarId(null);
-    setModalNote('');
-    setModalError(null);
-    setShowCreateModal(true);
-  };
+  const openCreateModalForDate = (dateKey: string | null) => {
+  if (!dateKey) return;
+  setModalDateKey(dateKey);   // ← こちらを使う
+  setShowCreateModal(true);   // ← こちらを使う
+};
+
+const closeCreateModal = () => {
+  setShowCreateModal(false);
+  setModalError(null);
+  setModalNote('');
+};
+
+
 
   // 一覧の並び順（時間帯の表示用）
   const timeSlotLabel = (slot: TimeSlot) => {
@@ -481,30 +490,34 @@ const [showCreateModal, setShowCreateModal] = useState(false);
     <TenantLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
-              予約カレンダー
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-1">
-              カレンダー上で予約の件数と重複状況を確認できます。日付をクリックすると、その日の予約一覧が下に表示されます。
-            </p>
-          </div>
-          {me && (
-            <div className="text-xs text-slate-500 text-right">
-              ログイン中:{' '}
-              <span className="font-medium text-slate-700">
-                {me.email}
-              </span>
-              <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5">
-                {me.role === 'DEVELOPER'
-                  ? '開発者'
-                  : me.role === 'MANAGER'
-                  ? '管理者'
-                  : 'スタッフ'}
-              </span>
-            </div>
-          )}
-        </header>
+  <div>
+    <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
+      予約カレンダー
+    </h1>
+    <p className="text-xs sm:text-sm text-slate-600 mt-1">
+      カレンダー上で予約の件数と重複状況を確認できます。日付をクリックすると、その日の予約一覧が下に表示されます。
+    </p>
+  </div>
+
+  <div className="flex flex-col items-end gap-2">
+    {me && (
+      <div className="text-xs text-slate-500 text-right">
+        ログイン中:{' '}
+        <span className="font-medium text-slate-700">
+          {me.email}
+        </span>
+        <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5">
+          {me.role === 'DEVELOPER'
+            ? '開発者'
+            : me.role === 'MANAGER'
+            ? '管理者'
+            : 'スタッフ'}
+        </span>
+      </div>
+    )}
+  </div>
+</header>
+
 
         {/* カレンダー部分 */}
         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5">
@@ -591,8 +604,8 @@ const [showCreateModal, setShowCreateModal] = useState(false);
   key={cell.key}
   type="button"
   onClick={() =>
-    cell.dateKey && openCreateModalForDate(cell.dateKey)
-  }
+  cell.dateKey && setSelectedDateKey(cell.dateKey)
+}
   className={baseClass}
 >
 
@@ -627,6 +640,20 @@ const [showCreateModal, setShowCreateModal] = useState(false);
             日付をタップすると、その日の予約一覧が画面下部に表示されます。
           </div>
         </section>
+
+        {/* ★ 追加：カレンダーのすぐ下に「◯◯ の新規予約登録」ボタン */}
+<div className="flex justify-end mt-3 sm:mt-4">
+  <button
+    type="button"
+    onClick={() => {
+      const baseKey = selectedDateKey ?? todayKey;
+      openCreateModalForDate(baseKey);
+    }}
+    className="inline-flex items-center rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold px-3 py-1.5 shadow-sm"
+  >
+    {createButtonLabel}
+  </button>
+</div>
 
         {/* 選択した日の予約一覧 */}
         <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5">
