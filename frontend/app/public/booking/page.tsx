@@ -1,174 +1,219 @@
-"use client";
+'use client';
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { FormEvent, useState, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 
-type BookingForm = {
-  lastName: string;
-  firstName: string;
-  mobilePhone: string;
-  carNumber?: string;
-  remarks?: string;
-};
+type ApiResponse =
+  | { ok: true }
+  | { ok?: false; message?: string };
 
-function BookingInner() {
+const apiBase =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+export default function PublicBookingPage() {
   const searchParams = useSearchParams();
-  const carId = searchParams.get("carId");
 
-  const [form, setForm] = useState<BookingForm>({
-    lastName: "",
-    firstName: "",
-    mobilePhone: "",
-    carNumber: "",
-    remarks: "",
-  });
+  const tenantIdParam = searchParams.get('tenantId');
+  const customerIdParam = searchParams.get('customerId');
+  const carIdParam = searchParams.get('carId');
+  const dateParam = searchParams.get('date'); // YYYY-MM-DD 想定
 
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [bookingDate, setBookingDate] = useState<string>(
+    dateParam ?? '',
+  );
+  const [timeSlot, setTimeSlot] = useState<string>('MORNING');
+  const [note, setNote] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ID が取れているかを事前チェック
+  const baseError = useMemo(() => {
+    if (!tenantIdParam || !customerIdParam || !carIdParam) {
+      return 'リンクの情報が不足しています。お手数ですが店舗までお電話にてご連絡ください。';
+    }
+    return null;
+  }, [tenantIdParam, customerIdParam, carIdParam]);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setMessage(null);
-    setError(null);
+    setErrorMsg(null);
+
+    if (baseError) {
+      setErrorMsg(baseError);
+      return;
+    }
+
+    if (!bookingDate) {
+      setErrorMsg('ご希望の日付を選択してください。');
+      return;
+    }
+
+    if (!tenantIdParam || !customerIdParam || !carIdParam) {
+      setErrorMsg(
+        '予約に必要な情報が不足しています。店舗までお電話にてご連絡ください。',
+      );
+      return;
+    }
+
+    const tenantId = Number(tenantIdParam);
+    const customerId = Number(customerIdParam);
+    const carId = Number(carIdParam);
+
+    if (
+      Number.isNaN(tenantId) ||
+      Number.isNaN(customerId) ||
+      Number.isNaN(carId)
+    ) {
+      setErrorMsg(
+        '予約に必要な情報が正しく取得できませんでした。店舗までお電話にてご連絡ください。',
+      );
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/booking`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch(`${apiBase}/public-bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tenantId,
+          customerId,
           carId,
-          lastName: form.lastName,
-          firstName: form.firstName,
-          mobilePhone: form.mobilePhone,
-          carNumber: form.carNumber || undefined,
-          remarks: form.remarks || undefined,
+          bookingDate, // "YYYY-MM-DD"
+          timeSlot, // "MORNING" | "AFTERNOON" | "EVENING"
+          note,
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(
-          data?.message ||
-            (Array.isArray(data?.message)
-              ? data.message.join(", ")
-              : "予約の送信に失敗しました")
-        );
+      const data = (await res
+        .json()
+        .catch(() => null)) as ApiResponse | null;
+
+      if (!res.ok || (data && data.ok === false)) {
+        const msg =
+          (data && 'message' in data && data.message) ||
+          '予約の送信に失敗しました。時間をおいて再度お試しください。';
+        setErrorMsg(msg);
+        // 失敗時もアラートは出す
+        alert(msg);
+        return;
       }
 
-      setMessage("予約を送信しました。担当者からの連絡をお待ちください。");
-      setForm({
-        lastName: "",
-        firstName: "",
-        mobilePhone: "",
-        carNumber: "",
-        remarks: "",
-      });
-    } catch (err: any) {
-      setError(err.message ?? "予約の送信に失敗しました");
+      // ✅ 成功時アラート
+      alert('ご予約を送信しました。ありがとうございます。');
+
+      // 軽くフォーム初期化
+      setNote('');
+      // 日付はそのまま残しておく方が親切そうなのでそのまま
+    } catch (err) {
+      console.error(err);
+      const msg =
+        '通信エラーが発生しました。時間をおいて再度お試しください。';
+      setErrorMsg(msg);
+      alert(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">予約フォーム</h1>
+    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-lg">
+        <div className="bg-white shadow-md rounded-xl border border-slate-200 p-6 sm:p-8">
+          {/* タイトル */}
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 mb-2 text-center">
+            車検・点検のご予約
+          </h1>
+          <p className="text-sm text-slate-700 mb-6 text-center">
+            日付と時間帯をお選びいただき、必要事項をご記入のうえ送信してください。
+          </p>
 
-      {carId && (
-        <p className="text-sm text-gray-600 mb-3">
-          対象車両 ID: <span className="font-semibold">{carId}</span>
-        </p>
-      )}
+          {/* リンク情報がおかしい場合 */}
+          {baseError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+              {baseError}
+            </div>
+          )}
 
-      {message && (
-        <div className="border border-green-400 bg-green-50 p-3 rounded mb-4 text-green-700">
-          {message}
+          {/* エラー表示 */}
+          {errorMsg && !baseError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
+              {errorMsg}
+            </div>
+          )}
+
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5 text-slate-900"
+          >
+            {/* ご希望日 */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                ご希望日 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={bookingDate}
+                onChange={(e) => setBookingDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p className="mt-1 text-xs text-slate-600">
+                メッセージ内の日付があらかじめ選択されています。変更も可能です。
+              </p>
+            </div>
+
+            {/* ご希望時間帯 */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                ご希望時間帯
+              </label>
+              <select
+                value={timeSlot}
+                onChange={(e) => setTimeSlot(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="MORNING">午前（MORNING）</option>
+                <option value="AFTERNOON">午後（AFTERNOON）</option>
+                <option value="EVENING">夕方（EVENING）</option>
+              </select>
+              <p className="mt-1 text-xs text-slate-600">
+                正確な入庫時間は店舗からの折り返し連絡にてご相談させていただきます。
+              </p>
+            </div>
+
+            {/* 備考 */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                ご要望・連絡事項（任意）
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm sm:text-base outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                placeholder="例）代車希望、仕事の都合で午後からが希望 など"
+              />
+            </div>
+
+            {/* 送信ボタン */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading || !!baseError}
+                className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 transition-colors px-4 py-2.5 text-sm sm:text-base font-semibold text-white shadow-sm"
+              >
+                {loading ? '送信中…' : 'この内容で予約を送信する'}
+              </button>
+            </div>
+
+            <p className="mt-3 text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+              送信後、店舗スタッフが内容を確認のうえご連絡いたします。
+              送信だけではご予約はまだ確定していませんのでご注意ください。
+            </p>
+          </form>
         </div>
-      )}
-      {error && (
-        <div className="border border-red-400 bg-red-50 p-3 rounded mb-4 text-red-700">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium">姓</label>
-          <input
-            type="text"
-            value={form.lastName}
-            onChange={(e) =>
-              setForm({ ...form, lastName: e.target.value })
-            }
-            required
-            className="border rounded w-full p-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">名</label>
-          <input
-            type="text"
-            value={form.firstName}
-            onChange={(e) =>
-              setForm({ ...form, firstName: e.target.value })
-            }
-            required
-            className="border rounded w-full p-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">携帯番号</label>
-          <input
-            type="text"
-            value={form.mobilePhone}
-            onChange={(e) =>
-              setForm({ ...form, mobilePhone: e.target.value })
-            }
-            required
-            className="border rounded w-full p-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">車両番号（任意）</label>
-          <input
-            type="text"
-            value={form.carNumber}
-            onChange={(e) =>
-              setForm({ ...form, carNumber: e.target.value })
-            }
-            className="border rounded w-full p-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">備考（任意）</label>
-          <textarea
-            value={form.remarks}
-            onChange={(e) =>
-              setForm({ ...form, remarks: e.target.value })
-            }
-            className="border rounded w-full p-2"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          送信
-        </button>
-      </form>
+      </div>
     </main>
-  );
-}
-
-// ここが Vercel ビルド対応ポイント（useSearchParams を包むだけ）
-export default function BookingPage() {
-  return (
-    <Suspense fallback={<div className="p-6">読み込み中...</div>}>
-      <BookingInner />
-    </Suspense>
   );
 }
