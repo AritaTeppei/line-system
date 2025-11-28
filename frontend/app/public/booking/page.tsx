@@ -26,7 +26,6 @@ export default function PublicBookingPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ID が取れているかを事前チェック
   const baseError = useMemo(() => {
     if (!tenantIdParam || !customerIdParam || !carIdParam) {
       return 'リンクの情報が不足しています。お手数ですが店舗までお電話にてご連絡ください。';
@@ -95,17 +94,12 @@ export default function PublicBookingPage() {
           (data && 'message' in data && data.message) ||
           '予約の送信に失敗しました。時間をおいて再度お試しください。';
         setErrorMsg(msg);
-        // 失敗時もアラートは出す
         alert(msg);
         return;
       }
 
-      // ✅ 成功時アラート
       alert('ご予約を送信しました。ありがとうございます。');
-
-      // 軽くフォーム初期化
       setNote('');
-      // 日付はそのまま残しておく方が親切そうなのでそのまま
     } catch (err) {
       console.error(err);
       const msg =
@@ -121,7 +115,6 @@ export default function PublicBookingPage() {
     <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
         <div className="bg-white shadow-md rounded-xl border border-slate-200 p-6 sm:p-8">
-          {/* タイトル */}
           <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 mb-2 text-center">
             車検・点検のご予約
           </h1>
@@ -129,14 +122,12 @@ export default function PublicBookingPage() {
             日付と時間帯をお選びいただき、必要事項をご記入のうえ送信してください。
           </p>
 
-          {/* リンク情報がおかしい場合 */}
           {baseError && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
               {baseError}
             </div>
           )}
 
-          {/* エラー表示 */}
           {errorMsg && !baseError && (
             <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-800">
               {errorMsg}
@@ -147,7 +138,6 @@ export default function PublicBookingPage() {
             onSubmit={handleSubmit}
             className="space-y-5 text-slate-900"
           >
-            {/* ご希望日 */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご希望日 <span className="text-red-500">*</span>
@@ -163,7 +153,6 @@ export default function PublicBookingPage() {
               </p>
             </div>
 
-            {/* ご希望時間帯 */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご希望時間帯
@@ -182,7 +171,6 @@ export default function PublicBookingPage() {
               </p>
             </div>
 
-            {/* 備考 */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 ご要望・連絡事項（任意）
@@ -196,7 +184,6 @@ export default function PublicBookingPage() {
               />
             </div>
 
-            {/* 送信ボタン */}
             <div className="pt-2">
               <button
                 type="submit"
