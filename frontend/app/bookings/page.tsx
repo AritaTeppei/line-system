@@ -16,6 +16,31 @@ type Me = {
 
 type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED';
 
+async function updateBookingStatus(
+  id: number,
+  status: BookingStatus,
+  token: string,
+) {
+  const res = await fetch(`${apiBase}/bookings/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const msg =
+      (data && (data.message as string)) ||
+      '予約ステータスの更新に失敗しました。';
+    throw new Error(msg);
+  }
+
+  return (await res.json().catch(() => null)) ?? null;
+}
+
 type TimeSlot = 'MORNING' | 'AFTERNOON' | 'EVENING' | string;
 
 type Booking = {
@@ -55,6 +80,7 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   // カレンダー用：現在表示している「月」の先頭日
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -237,6 +263,53 @@ export default function BookingsPage() {
         return 'bg-green-100 text-green-800 border-green-300';
       case 'CANCELED':
         return 'bg-gray-100 text-gray-500 border-gray-300';
+    }
+  };
+
+  // ★ ここから追加：ステータス変更ハンドラ
+  const handleChangeStatus = async (
+    bookingId: number,
+    nextStatus: BookingStatus,
+  ) => {
+    // ログイン情報（JWT）を localStorage から取得
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('auth_token')
+        : null;
+
+    if (!token) {
+      alert('ログイン情報が見つかりません。再ログインしてください。');
+      return;
+    }
+
+    try {
+      setUpdatingId(bookingId);
+
+      // バックエンドに PATCH /bookings/:id/status を送る
+      await updateBookingStatus(bookingId, nextStatus, token);
+
+      // 成功したらフロント側の state を更新
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId ? { ...b, status: nextStatus } : b,
+        ),
+      );
+
+      // 確定のときだけ文言を変える（バックエンドでLINE送信済み前提）
+      if (nextStatus === 'CONFIRMED') {
+        alert(
+          '予約を「確定」に更新しました。お客様へご予約確定メッセージを送信しました。',
+        );
+      } else {
+        alert('予約ステータスを更新しました。');
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(
+        e?.message ?? '予約ステータスの更新に失敗しました。時間をおいて再度お試しください。',
+      );
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -484,14 +557,35 @@ export default function BookingsPage() {
                             {carLabel || '-'}
                           </td>
                           <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
-                                b.status,
-                              )}`}
-                            >
-                              {statusLabel(b.status)}
-                            </span>
-                          </td>
+  <div className="flex flex-col items-start gap-1">
+    {/* 現在ステータスのバッジ表示（見た目はほぼそのまま） */}
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
+        b.status,
+      )}`}
+    >
+      {statusLabel(b.status)}
+    </span>
+
+    {/* ステータス変更用セレクト（スマホでも押しやすいよう幅広め） */}
+    <select
+      value={b.status}
+      onChange={(e) =>
+        handleChangeStatus(
+          b.id,
+          e.target.value as BookingStatus,
+        )
+      }
+      disabled={updatingId === b.id}
+      className="mt-0.5 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] sm:text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+    >
+      <option value="PENDING">未確認</option>
+      <option value="CONFIRMED">確定</option>
+      <option value="CANCELED">キャンセル</option>
+    </select>
+  </div>
+</td>
+
                           <td className="px-2 py-1 border border-slate-200">
                             {b.note || ''}
                           </td>

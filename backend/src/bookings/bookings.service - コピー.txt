@@ -2,7 +2,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
-import { LineService } from '../line/line.service'; // ★ 追加
 
 // Prisma 側の enum BookingStatus と文字列だけ合わせたローカル定義
 export enum BookingStatus {
@@ -13,10 +12,7 @@ export enum BookingStatus {
 
 @Injectable()
 export class BookingsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly lineService: LineService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * ログインユーザーからテナントIDを決定
@@ -100,85 +96,22 @@ export class BookingsService {
     bookingId: number,
     status: BookingStatus,
   ) {
-    // まず対象予約を取得（テナントチェック込み）
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        customer: true,
-        car: true,
-      },
-    });
+    const tenantId = this.ensureTenant(user);
+    const prisma = this.prisma as any;
 
+    // 自テナントの予約かチェック
+    const booking = await prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+    });
     if (!booking) {
-      throw new Error('予約が見つかりません。');
+      throw new Error('予約が見つからないか、他テナントのデータです');
     }
 
-    // DEVELOPER 以外は自分のテナント以外を触れないようにする
-    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
-      throw new Error('他テナントの予約は操作できません。');
-    }
-
-    // ステータスを更新
-    const updated = await this.prisma.booking.update({
+    return prisma.booking.update({
       where: { id: bookingId },
-      data: { status },
-      include: {
-        customer: true,
-        car: true,
+      data: {
+        status,
       },
     });
-
-    // ステータスが「確定」になったときだけ LINE 通知
-    if (status === BookingStatus.CONFIRMED) {
-      const lineUid = updated.customer.lineUid;
-
-      if (lineUid) {
-        const customerName = `${updated.customer.lastName} ${updated.customer.firstName}`;
-
-        const dateStr = updated.bookingDate
-          ? updated.bookingDate.toISOString().slice(0, 10).replace(/-/g, '/')
-          : '';
-
-        const carName = updated.car?.carName ?? '';
-        const plate = updated.car?.registrationNumber ?? '';
-
-        const carLine =
-          carName && plate
-            ? `対象のお車：${carName}（${plate}）`
-            : carName
-            ? `対象のお車：${carName}`
-            : '';
-
-        const timeLine = updated.timeSlot
-          ? `ご希望時間帯：${updated.timeSlot}`
-          : '';
-
-        const messageLines = [
-          `${customerName} 様`,
-          '',
-          'このたびはご予約ありがとうございます。',
-          '以下の内容でご予約を承りました。',
-          '',
-          dateStr ? `ご予約日：${dateStr}` : '',
-          timeLine,
-          carLine,
-          '',
-          '内容に変更がある場合は、お手数ですが店舗までご連絡ください。',
-        ].filter(Boolean);
-
-        try {
-          await this.lineService.sendText(lineUid, messageLines.join('\n'));
-        } catch (e: any) {
-          // ここでエラーにしてもいいけど、とりあえずサーバーは落とさないようにしておく
-          console.error(
-            `updateStatus: LINE 予約確定メッセージ送信失敗 bookingId=${bookingId}, error=${
-              e?.message ?? e
-            }`,
-          );
-        }
-      }
-    }
-
-    return updated;
   }
 }
