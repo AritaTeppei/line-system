@@ -293,41 +293,50 @@ export default function CarsPage() {
   };
 
   const handleDeleteClick = async (id: number) => {
-    if (!token) {
-      setFormError("トークンがありません。再ログインしてください。");
-      return;
+  if (!token) {
+    setFormError("トークンがありません。再ログインしてください。");
+    return;
+  }
+
+  const ok = window.confirm(
+    "この車両を削除します。\n\n" +
+      "※今日以降に「確定」ステータスの予約がある場合は削除できません。\n" +
+      "　その場合は対象の予約を変更または削除してから、再度お試しください。\n\n" +
+      "本当に削除してよろしいですか？",
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`${apiBase}/cars/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      const msg =
+        data?.message ||
+        (Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : null) ||
+        "車両の削除に失敗しました";
+
+      // ★ バックエンドからの注意メッセージを直接表示
+      alert(msg);
+      throw new Error(msg);
     }
 
-    const ok = window.confirm("この車両を削除してもよろしいですか？");
-    if (!ok) return;
-
-    try {
-      const res = await fetch(`${apiBase}/cars/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.message)
-            ? data.message.join(", ")
-            : null) ||
-          "車両の削除に失敗しました";
-        throw new Error(msg);
-      }
-
-      setCars((prev) => prev.filter((c) => c.id !== id));
-      if (editingCarId === id) {
-        closeCarModal();
-      }
-      setFormSuccess("車両を削除しました");
-    } catch (err: any) {
-      console.error(err);
-      setFormError(err.message ?? "車両の削除に失敗しました");
+    setCars((prev) => prev.filter((c) => c.id !== id));
+    if (editingCarId === id) {
+      closeCarModal();
     }
-  };
+    setFormSuccess("車両を削除しました");
+  } catch (err: any) {
+    console.error(err);
+    setFormError(err.message ?? "車両の削除に失敗しました");
+  }
+};
+
 
   // チェックボックス ON/OFF
   const toggleCarSelection = (id: number) => {

@@ -26,6 +26,15 @@ type MonthReminderItem = {
   customerName: string;
   carName?: string | null;
   plateNumber?: string | null;
+
+  // 顧客情報
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+
+  // ★ 追加：車検日・点検日
+  shakenDate?: string | null;
+  inspectionDate?: string | null;
+
   sent?: boolean; // 送信済み
 };
 
@@ -65,6 +74,24 @@ const categoryOptions: {
   { value: 'inspectionOneMonth', label: '点検 1ヶ月前' },
   { value: 'custom', label: '任意日付' },
 ];
+
+// 日付ラベルを YYYY/MM/DD で表示
+function formatDateLabel(value?: string | null): string {
+  if (!value) return '-';
+
+  // "YYYY-MM-DD" だけならそのまま変換
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value.replace(/-/g, '/');
+  }
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}/${m}/${day}`;
+}
 
 export default function RemindersMonthPage() {
   const [month, setMonth] = useState<string>('');
@@ -121,7 +148,7 @@ export default function RemindersMonthPage() {
       });
   }, []);
 
-  // month が変わるたびに /reminders/preview-month を叩く（元の挙動そのまま）
+  // month が変わるたびに /reminders/preview-month を叩く
   useEffect(() => {
     const run = async () => {
       if (!month) return;
@@ -328,7 +355,7 @@ export default function RemindersMonthPage() {
   return (
     <TenantLayout>
       <div className="max-w-6xl mx-auto space-y-6 py-4">
-        {/* ヘッダー：ダッシュボード系と同じトーン */}
+        {/* ヘッダー */}
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-2">
           <div>
             <h1
@@ -376,7 +403,7 @@ export default function RemindersMonthPage() {
           </div>
         )}
 
-        {/* サマリカード（今月の総件数 & 選択件数） */}
+        {/* サマリカード */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
             <div className="text-[11px] font-semibold text-gray-500">
@@ -430,7 +457,7 @@ export default function RemindersMonthPage() {
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover:bg-gray-100"
+              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover/bg-gray-100"
             >
               ← 前の月
             </button>
@@ -543,7 +570,7 @@ export default function RemindersMonthPage() {
           </section>
         )}
 
-        {/* 対象者＋対象車両 一覧 ＋ チェックボックス・送信ボタン */}
+        {/* 対象者＋対象車両 一覧 */}
         {data && (
           <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
             <div className="px-4 py-2 border-b flex flex-wrap items-center gap-3">
@@ -749,7 +776,27 @@ export default function RemindersMonthPage() {
                 </div>
               </div>
 
+              {/* 住所 */}
               <div>
+                <div className="text-[11px] font-medium text-gray-500">
+                  住所
+                </div>
+                <div className="text-gray-900 whitespace-pre-line">
+                  {detailItem.customerAddress || '-'}
+                </div>
+              </div>
+
+              {/* 連絡先（電話） */}
+              <div>
+                <div className="text-[11px] font-medium text-gray-500">
+                  連絡先（電話）
+                </div>
+                <div className="text-gray-900">
+                  {detailItem.customerPhone || '-'}
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 pt-2">
                 <div className="text-[11px] font-medium text-gray-500">
                   車両名
                 </div>
@@ -764,6 +811,26 @@ export default function RemindersMonthPage() {
                 </div>
                 <div className="text-gray-900">
                   {detailItem.plateNumber || '-'}
+                </div>
+              </div>
+
+              {/* ★ 車検日 */}
+              <div>
+                <div className="text-[11px] font-medium text-gray-500">
+                  車検日
+                </div>
+                <div className="text-gray-900">
+                  {formatDateLabel(detailItem.shakenDate)}
+                </div>
+              </div>
+
+              {/* ★ 点検日 */}
+              <div>
+                <div className="text-[11px] font-medium text-gray-500">
+                  点検日
+                </div>
+                <div className="text-gray-900">
+                  {formatDateLabel(detailItem.inspectionDate)}
                 </div>
               </div>
 

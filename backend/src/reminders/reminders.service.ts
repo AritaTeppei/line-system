@@ -109,6 +109,36 @@ export class RemindersService {
     return Math.round(diffMs / (1000 * 60 * 60 * 24));
   }
 
+    /**
+   * 顧客の住所をまとめて1本の文字列にする
+   * ※カラム名は Customer モデルに合わせて調整
+   */
+  private buildCustomerAddress(customer: any): string | null {
+    if (!customer) return null;
+
+    const parts: string[] = [];
+
+    // ↓ ここは実際のカラム名に合わせて変えてOK
+    if (customer.zipCode) {
+      parts.push(`〒${customer.zipCode}`);
+    }
+    if (customer.prefecture) {
+      parts.push(customer.prefecture);
+    }
+    if (customer.address1) {
+      parts.push(customer.address1);
+    }
+    if (customer.address2) {
+      parts.push(customer.address2);
+    }
+    if (customer.address3) {
+      parts.push(customer.address3);
+    }
+
+    if (parts.length === 0) return null;
+    return parts.join(' ');
+  }
+
   /**
    * 公開予約フォームのURLを組み立てる
    */
@@ -354,38 +384,39 @@ export class RemindersService {
   /**
    * 指定日のリマインド対象を抽出して preview 用のデータを返す
    */
+    /**
+   * 指定日のリマインド対象を抽出して preview 用のデータを返す
+   */
   async previewForDate(
-  user: AuthPayload,
-  baseDateStr: string,
-  tenantIdFromQuery?: number,
-) {
-  const tenantId = this.ensureTenant(user, tenantIdFromQuery);
+    user: AuthPayload,
+    baseDateStr: string,
+    tenantIdFromQuery?: number,
+  ) {
+    const tenantId = this.ensureTenant(user, tenantIdFromQuery);
 
-  // ★ テンプレとテナント名をまとめて取得
-  const [templates, tenant] = await Promise.all([
-    this.getTemplatesForTenant(tenantId),
-    this.prisma.tenant.findUnique({ where: { id: tenantId } }),
-  ]);
+    // ★ テンプレとテナント名をまとめて取得
+    const [templates, tenant] = await Promise.all([
+      this.getTemplatesForTenant(tenantId),
+      this.prisma.tenant.findUnique({ where: { id: tenantId } }),
+    ]);
 
-  const templateMap = new Map<ReminderMessageType, string>();
-  for (const t of templates) {
-    if (t.body) {
-      templateMap.set(t.type, t.body);
+    const templateMap = new Map<ReminderMessageType, string>();
+    for (const t of templates) {
+      if (t.body) {
+        templateMap.set(t.type, t.body);
+      }
     }
-  }
 
-  const shopName = tenant?.name ?? '';
+    const shopName = tenant?.name ?? '';
 
-  const date = new Date(baseDateStr);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error('date の形式が不正です');
-  }
+    const date = new Date(baseDateStr);
+    if (Number.isNaN(date.getTime())) {
+      throw new Error('date の形式が不正です');
+    }
 
-  const targetDate = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
-  );
-
-  // ↓ ここから下はそのまま（customers / cars の findMany 以降）
+    const targetDate = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
 
     // 誕生日を持っている顧客
     const customers = await this.prisma.customer.findMany({
@@ -393,6 +424,7 @@ export class RemindersService {
         tenantId,
         birthday: { not: null },
       },
+      // 必要なら select で絞ってもOK
     });
 
     // 車検日・点検日・任意日付を持っている車
@@ -420,23 +452,22 @@ export class RemindersService {
           b.getUTCDate() === targetDate.getUTCDate()
         );
       })
-            .map((c) => {
+      .map((c) => {
         const customerName = `${c.lastName} ${c.firstName}`;
 
         const messageText =
-  this.renderTemplateIfExists(
-    templateMap,
-    {
-      kind: 'BIRTHDAY',
-      customerName,
-    },
-    shopName,
-  ) ??
-  this.buildReminderMessage({
-    kind: 'BIRTHDAY',
-    customerName,
-  });
-
+          this.renderTemplateIfExists(
+            templateMap,
+            {
+              kind: 'BIRTHDAY',
+              customerName,
+            },
+            shopName,
+          ) ??
+          this.buildReminderMessage({
+            kind: 'BIRTHDAY',
+            customerName,
+          });
 
         return {
           kind: 'BIRTHDAY' as const,
@@ -444,9 +475,12 @@ export class RemindersService {
           customerName,
           lineUid: (c as any).lineUid ?? null,
           messageText,
+
+          // ★ 追加：フロントの詳細モーダル用
+          customerPhone: (c as any).mobilePhone ?? null, // カラム名に合わせる
+          customerAddress: this.buildCustomerAddress(c),
         };
       });
-
 
     // --- 車両ターゲット ---
     const shakenTwoMonths: any[] = [];
@@ -465,6 +499,10 @@ export class RemindersService {
         customerId: customer.id,
         customerName: `${customer.lastName} ${customer.firstName}`,
         lineUid: customer.lineUid ?? null,
+
+        // ★ 追加：各種リマインド共通で持たせる
+        customerPhone: (customer as any).mobilePhone ?? null,
+        customerAddress: this.buildCustomerAddress(customer),
       };
 
       // 車検日
@@ -474,7 +512,7 @@ export class RemindersService {
         const shakenDateStr = shakenDate.toISOString().slice(0, 10);
 
         // 2ヶ月前（≒60日）
-                if (diff === 60) {
+        if (diff === 60) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
             customerId: customer.id,
@@ -483,29 +521,28 @@ export class RemindersService {
           });
 
           const messageText =
-  this.renderTemplateIfExists(
-    templateMap,
-    {
-      kind: 'SHAKEN_2M',
-      customerName: baseInfo.customerName,
-      carName: baseInfo.carName,
-      registrationNumber: baseInfo.registrationNumber,
-      mainDate: shakenDateStr,
-      bookingUrl,
-      daysBefore: null,
-    },
-    shopName,
-  ) ??
-  this.buildReminderMessage({
-    kind: 'SHAKEN_2M',
-    customerName: baseInfo.customerName,
-    carName: baseInfo.carName,
-    registrationNumber: baseInfo.registrationNumber,
-    mainDate: shakenDateStr,
-    bookingUrl,
-    daysBefore: null,
-  });
-
+            this.renderTemplateIfExists(
+              templateMap,
+              {
+                kind: 'SHAKEN_2M',
+                customerName: baseInfo.customerName,
+                carName: baseInfo.carName,
+                registrationNumber: baseInfo.registrationNumber,
+                mainDate: shakenDateStr,
+                bookingUrl,
+                daysBefore: null,
+              },
+              shopName,
+            ) ??
+            this.buildReminderMessage({
+              kind: 'SHAKEN_2M',
+              customerName: baseInfo.customerName,
+              carName: baseInfo.carName,
+              registrationNumber: baseInfo.registrationNumber,
+              mainDate: shakenDateStr,
+              bookingUrl,
+              daysBefore: null,
+            });
 
           shakenTwoMonths.push({
             ...baseInfo,
@@ -517,7 +554,7 @@ export class RemindersService {
         }
 
         // 1週間前
-                if (diff === 7) {
+        if (diff === 7) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
             customerId: customer.id,
@@ -526,32 +563,30 @@ export class RemindersService {
           });
 
           const messageText =
-  this.renderTemplateIfExists(
-    templateMap,
-    {
-      kind: 'SHAKEN_1W',
-      customerName: baseInfo.customerName,
-      carName: baseInfo.carName,
-      registrationNumber: baseInfo.registrationNumber,
-      mainDate: shakenDateStr,
-      bookingUrl,
-      daysBefore: null,
-    },
-    shopName,
-  ) ??
-  this.buildReminderMessage({
-    kind: 'SHAKEN_1W',
-    customerName: baseInfo.customerName,
-    carName: baseInfo.carName,
-    registrationNumber: baseInfo.registrationNumber,
-    mainDate: shakenDateStr,
-    bookingUrl,
-    daysBefore: null,
-  });
-
+            this.renderTemplateIfExists(
+              templateMap,
+              {
+                kind: 'SHAKEN_1W',
+                customerName: baseInfo.customerName,
+                carName: baseInfo.carName,
+                registrationNumber: baseInfo.registrationNumber,
+                mainDate: shakenDateStr,
+                bookingUrl,
+                daysBefore: null,
+              },
+              shopName,
+            ) ??
+            this.buildReminderMessage({
+              kind: 'SHAKEN_1W',
+              customerName: baseInfo.customerName,
+              carName: baseInfo.carName,
+              registrationNumber: baseInfo.registrationNumber,
+              mainDate: shakenDateStr,
+              bookingUrl,
+              daysBefore: null,
+            });
 
           shakenOneWeek.push({
-
             ...baseInfo,
             kind: 'SHAKEN_1W' as const,
             shakenDate: shakenDateStr,
@@ -565,9 +600,11 @@ export class RemindersService {
       if (car.inspectionDate) {
         const inspectionDate = car.inspectionDate as Date;
         const diff = this.diffInDays(targetDate, inspectionDate);
-        const inspectionDateStr = inspectionDate.toISOString().slice(0, 10);
+        const inspectionDateStr = inspectionDate
+          .toISOString()
+          .slice(0, 10);
 
-                if (diff === 30) {
+        if (diff === 30) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
             customerId: customer.id,
@@ -576,32 +613,30 @@ export class RemindersService {
           });
 
           const messageText =
-  this.renderTemplateIfExists(
-    templateMap,
-    {
-      kind: 'INSPECTION_1M',
-      customerName: baseInfo.customerName,
-      carName: baseInfo.carName,
-      registrationNumber: baseInfo.registrationNumber,
-      mainDate: inspectionDateStr,
-      bookingUrl,
-      daysBefore: null,
-    },
-    shopName,
-  ) ??
-  this.buildReminderMessage({
-    kind: 'INSPECTION_1M',
-    customerName: baseInfo.customerName,
-    carName: baseInfo.carName,
-    registrationNumber: baseInfo.registrationNumber,
-    mainDate: inspectionDateStr,
-    bookingUrl,
-    daysBefore: null,
-  });
-
+            this.renderTemplateIfExists(
+              templateMap,
+              {
+                kind: 'INSPECTION_1M',
+                customerName: baseInfo.customerName,
+                carName: baseInfo.carName,
+                registrationNumber: baseInfo.registrationNumber,
+                mainDate: inspectionDateStr,
+                bookingUrl,
+                daysBefore: null,
+              },
+              shopName,
+            ) ??
+            this.buildReminderMessage({
+              kind: 'INSPECTION_1M',
+              customerName: baseInfo.customerName,
+              carName: baseInfo.carName,
+              registrationNumber: baseInfo.registrationNumber,
+              mainDate: inspectionDateStr,
+              bookingUrl,
+              daysBefore: null,
+            });
 
           inspectionOneMonth.push({
-
             ...baseInfo,
             kind: 'INSPECTION_1M' as const,
             inspectionDate: inspectionDateStr,
@@ -617,7 +652,7 @@ export class RemindersService {
         const diff = this.diffInDays(targetDate, customDate);
         const customDateStr = customDate.toISOString().slice(0, 10);
 
-                if (diff === car.customDaysBefore) {
+        if (diff === car.customDaysBefore) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
             customerId: customer.id,
@@ -626,32 +661,30 @@ export class RemindersService {
           });
 
           const messageText =
-  this.renderTemplateIfExists(
-    templateMap,
-    {
-      kind: 'CUSTOM',
-      customerName: baseInfo.customerName,
-      carName: baseInfo.carName,
-      registrationNumber: baseInfo.registrationNumber,
-      mainDate: customDateStr,
-      bookingUrl,
-      daysBefore: car.customDaysBefore,
-    },
-    shopName,
-  ) ??
-  this.buildReminderMessage({
-    kind: 'CUSTOM',
-    customerName: baseInfo.customerName,
-    carName: baseInfo.carName,
-    registrationNumber: baseInfo.registrationNumber,
-    mainDate: customDateStr,
-    bookingUrl,
-    daysBefore: car.customDaysBefore,
-  });
-
+            this.renderTemplateIfExists(
+              templateMap,
+              {
+                kind: 'CUSTOM',
+                customerName: baseInfo.customerName,
+                carName: baseInfo.carName,
+                registrationNumber: baseInfo.registrationNumber,
+                mainDate: customDateStr,
+                bookingUrl,
+                daysBefore: car.customDaysBefore,
+              },
+              shopName,
+            ) ??
+            this.buildReminderMessage({
+              kind: 'CUSTOM',
+              customerName: baseInfo.customerName,
+              carName: baseInfo.carName,
+              registrationNumber: baseInfo.registrationNumber,
+              mainDate: customDateStr,
+              bookingUrl,
+              daysBefore: car.customDaysBefore,
+            });
 
           custom.push({
-
             ...baseInfo,
             kind: 'CUSTOM' as const,
             customDate: customDateStr,
@@ -664,10 +697,12 @@ export class RemindersService {
     }
 
     this.logger.log(
-      `previewForDate: tenantId=${tenantId}, date=${targetDate.toISOString().slice(
-        0,
-        10,
-      )}, birthday=${birthdayTargets.length}, shaken2m=${shakenTwoMonths.length}, shaken1w=${shakenOneWeek.length}, inspection1m=${inspectionOneMonth.length}, custom=${custom.length}`,
+      `previewForDate: tenantId=${tenantId}, date=${targetDate
+        .toISOString()
+        .slice(
+          0,
+          10,
+        )}, birthday=${birthdayTargets.length}, shaken2m=${shakenTwoMonths.length}, shaken1w=${shakenOneWeek.length}, inspection1m=${inspectionOneMonth.length}, custom=${custom.length}`,
     );
 
     return {
@@ -680,11 +715,18 @@ export class RemindersService {
       custom,
     };
   }
+
    /**
    * 指定月のリマインド対象件数を、日付ごとにまとめて返す
    * - month: "YYYY-MM" 形式（例: "2025-11"）
    * - 内部的には 1日〜月末まで既存 previewForDate を呼び出して集計
    * - その月の中で「1件以上ヒットした日だけ」を days に含める
+   */
+    /**
+   * 指定月のリマインド対象件数＋対象者一覧を返す
+   * - monthStr: "YYYY-MM"
+   * - days: 日別サマリ（今まで通り）
+   * - items: 対象者＆対象車両一覧（送信用の情報付き）
    */
     /**
    * 指定月のリマインド対象件数＋対象者一覧を返す
@@ -736,6 +778,13 @@ export class RemindersService {
       customerName: string;
       carName?: string | null;
       plateNumber?: string | null;
+
+      // ★ 追加：フロント詳細モーダル用
+      customerPhone?: string | null;
+      customerAddress?: string | null;
+      shakenDate?: string | null;
+      inspectionDate?: string | null;
+
       lineUid: string | null;
       messageText: string;
     }[] = [];
@@ -786,6 +835,12 @@ export class RemindersService {
           customerName: t.customerName,
           carName: null,
           plateNumber: null,
+
+          customerPhone: t.customerPhone ?? null,
+          customerAddress: t.customerAddress ?? null,
+          shakenDate: null,
+          inspectionDate: null,
+
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
         });
@@ -800,6 +855,12 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
+
+          customerPhone: t.customerPhone ?? null,
+          customerAddress: t.customerAddress ?? null,
+          shakenDate: t.shakenDate ?? null,
+          inspectionDate: t.inspectionDate ?? null,
+
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
         });
@@ -814,6 +875,12 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
+
+          customerPhone: t.customerPhone ?? null,
+          customerAddress: t.customerAddress ?? null,
+          shakenDate: t.shakenDate ?? null,
+          inspectionDate: t.inspectionDate ?? null,
+
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
         });
@@ -828,6 +895,12 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
+
+          customerPhone: t.customerPhone ?? null,
+          customerAddress: t.customerAddress ?? null,
+          shakenDate: t.shakenDate ?? null,
+          inspectionDate: t.inspectionDate ?? null,
+
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
         });
@@ -842,6 +915,12 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
+
+          customerPhone: t.customerPhone ?? null,
+          customerAddress: t.customerAddress ?? null,
+          shakenDate: t.shakenDate ?? null,
+          inspectionDate: t.inspectionDate ?? null,
+
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
         });
@@ -864,6 +943,7 @@ export class RemindersService {
       items: allItems,
     };
   }
+
 
   /**
    * 月別プレビューで選択された行だけまとめて送る

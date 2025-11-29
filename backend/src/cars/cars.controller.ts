@@ -1,5 +1,5 @@
 // src/cars/cars.controller.ts
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Delete, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { CarsService } from './cars.service';
 import { JwtAuthGuard } from '../jwt.guard';
@@ -25,4 +25,13 @@ create(@Req() req: Request, @Body() dto: CreateCarDto) {
     customerId: Number(dto.customerId),
   });
 }
+
+@Delete(':id')
+  async remove(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const user = (req as any).authUser as AuthPayload;
+    return this.carsService.removeForUser(user, id);
+  }
 }

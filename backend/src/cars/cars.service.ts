@@ -182,9 +182,14 @@ export class CarsService {
   /**
    * 車両削除
    */
+    /**
+   * 車両削除
+   * - 今日以降に「確定」ステータスの予約がある場合は削除NG
+   */
   async removeForUser(user: AuthPayload, id: number) {
     const tenantId = this.ensureTenant(user);
 
+    // 1. 対象車両が自テナントに存在するか確認
     const existing = await this.prisma.car.findFirst({
       where: { id, tenantId },
     });
@@ -193,6 +198,30 @@ export class CarsService {
       throw new NotFoundException('車両が見つかりません');
     }
 
+    // 2. 今日以降の「確定」予約をチェック
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 「今日から先」
+
+    const futureConfirmedBookings = await this.prisma.booking.findMany({
+      where: {
+        tenantId,
+        carId: id,
+        status: 'CONFIRMED',
+        bookingDate: {
+          gte: today,
+        },
+      },
+    });
+
+    if (futureConfirmedBookings.length > 0) {
+      const count = futureConfirmedBookings.length;
+      throw new BadRequestException(
+        `この車両には今日以降の確定予約が ${count} 件あります。\n` +
+          '該当する予約を変更または削除してから、車両を削除してください。',
+      );
+    }
+
+    // 3. 問題なければ削除
     return this.prisma.car.delete({
       where: { id },
     });
