@@ -13,7 +13,6 @@ export interface AuthPayload {
   name: string | null;
   tenantId: number | null;  // 開発者は null
   role: UserRole;           // 'DEVELOPER' | 'MANAGER' | 'CLIENT'
-  
 }
 
 @Injectable()
