@@ -2,9 +2,9 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
-import { LineService } from '../line/line.service'; // ★ 追加
+import { LineService } from '../line/line.service';
+import { NotFoundException } from '@nestjs/common';
 
-// Prisma 側の enum BookingStatus と文字列だけ合わせたローカル定義
 export enum BookingStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -18,7 +18,7 @@ export class BookingsService {
     private readonly lineService: LineService,
   ) {}
 
-    /**
+  /**
    * 同じ車両(carId)が基準日 ±30日以内に予約されていないかチェック
    * CANCELED 以外が 1 件でもあれば BadRequestException
    */
@@ -29,7 +29,6 @@ export class BookingsService {
   }): Promise<void> {
     const { tenantId, carId, bookingDate } = params;
 
-    // ±30日
     const base = new Date(bookingDate);
     const from = new Date(base);
     from.setDate(from.getDate() - 30);
@@ -52,40 +51,9 @@ export class BookingsService {
 
     if (exist) {
       throw new BadRequestException(
-        'このお車は1か月以内に既に予約が登録されています。店舗にお問い合わせください。',
+        'このお車は1か月以内に既に予約が登録されています。',
       );
     }
-  }
-
-  // ↓ 既存の create メソッドの中から上のヘルパーを呼ぶ
-  async createBookingFromTenant(dto: {
-    tenantId: number;
-    customerId: number;
-    carId: number;
-    bookingDate: Date;
-    timeSlot: string;
-    note?: string | null;
-  }) {
-    // まず重複チェック
-    await this.ensureNoDuplicateWithin1Month({
-      tenantId: dto.tenantId,
-      carId: dto.carId,
-      bookingDate: dto.bookingDate,
-    });
-
-    // OKなら通常通り作成
-    return this.prisma.booking.create({
-      data: {
-        tenantId: dto.tenantId,
-        customerId: dto.customerId,
-        carId: dto.carId,
-        bookingDate: dto.bookingDate,
-        timeSlot: dto.timeSlot,
-        note: dto.note ?? null,
-        status: BookingStatus.PENDING,
-        source: 'TENANT_MANUAL', // 好きな区分
-      },
-    });
   }
 
   /**
@@ -103,8 +71,6 @@ export class BookingsService {
    */
   async listBookings(user: AuthPayload) {
     const tenantId = this.ensureTenant(user);
-
-    // PrismaService の型が古くて booking を知らないので any キャストで逃がす
     const prisma = this.prisma as any;
 
     return prisma.booking.findMany({
@@ -133,20 +99,32 @@ export class BookingsService {
     const tenantId = this.ensureTenant(user);
     const prisma = this.prisma as any;
 
-    // 念のため、顧客と車両が自テナントのものかチェック
+    // 顧客チェック
     const customer = await prisma.customer.findFirst({
       where: { id: params.customerId, tenantId },
     });
     if (!customer) {
-      throw new Error('指定された顧客が見つからないか、他テナントのデータです');
+      throw new Error(
+        '指定された顧客が見つからないか、他テナントのデータです',
+      );
     }
 
+    // 車両チェック
     const car = await prisma.car.findFirst({
       where: { id: params.carId, tenantId },
     });
     if (!car) {
-      throw new Error('指定された車両が見つからないか、他テナントのデータです');
+      throw new Error(
+        '指定された車両が見つからないか、他テナントのデータです',
+      );
     }
+
+    // ★ 1か月以内の重複予約チェック
+    await this.ensureNoDuplicateWithin1Month({
+      tenantId,
+      carId: car.id,
+      bookingDate: params.bookingDate,
+    });
 
     return prisma.booking.create({
       data: {
@@ -156,22 +134,24 @@ export class BookingsService {
         bookingDate: params.bookingDate,
         timeSlot: params.timeSlot,
         note: params.note,
-        status: BookingStatus.PENDING, // ← ここはローカル enum
-        source: 'ADMIN',
+        status: BookingStatus.PENDING,
+        source: 'TENANT_MANUAL',
       },
     });
   }
 
   /**
    * 予約ステータスの変更（CONFIRMED / CANCELED など）
+   * ※ここでは「ステータス変更のみ」。LINE送信は sendConfirmationLine で行う。
    */
   async updateStatus(
     user: AuthPayload,
     bookingId: number,
     status: BookingStatus,
   ) {
-    // まず対象予約を取得（テナントチェック込み）
-    const booking = await this.prisma.booking.findUnique({
+    const prisma = this.prisma as any;
+
+    const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
         customer: true,
@@ -183,72 +163,258 @@ export class BookingsService {
       throw new Error('予約が見つかりません。');
     }
 
-    // DEVELOPER 以外は自分のテナント以外を触れないようにする
     if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
       throw new Error('他テナントの予約は操作できません。');
     }
 
-    // ステータスを更新
-    const updated = await this.prisma.booking.update({
+    const updated = await prisma.booking.update({
       where: { id: bookingId },
-      data: { status },
+      data: {
+        status,
+      },
       include: {
         customer: true,
         car: true,
       },
     });
 
-    // ステータスが「確定」になったときだけ LINE 通知
-    if (status === BookingStatus.CONFIRMED) {
-      const lineUid = updated.customer.lineUid;
+    return updated;
+  }
 
-      if (lineUid) {
-        const customerName = `${updated.customer.lastName} ${updated.customer.firstName}`;
+    /**
+   * 予約の日程（日時）を変更する
+   * - ADMIN / TENANT_MANUAL 由来の予約だけ変更可
+   */
+  async updateBooking(
+    user: AuthPayload,
+    bookingId: number,
+    params: {
+      bookingDate?: string; // "YYYY-MM-DD"
+      timeSlot?: string;
+      note?: string;
+    },
+  ) {
+    const prisma = this.prisma as any;
 
-        const dateStr = updated.bookingDate
-          ? updated.bookingDate.toISOString().slice(0, 10).replace(/-/g, '/')
-          : '';
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        customer: true,
+        car: true,
+      },
+    });
 
-        const carName = updated.car?.carName ?? '';
-        const plate = updated.car?.registrationNumber ?? '';
-
-        const carLine =
-          carName && plate
-            ? `対象のお車：${carName}（${plate}）`
-            : carName
-            ? `対象のお車：${carName}`
-            : '';
-
-        const timeLine = updated.timeSlot
-          ? `ご希望時間帯：${updated.timeSlot}`
-          : '';
-
-        const messageLines = [
-          `${customerName} 様`,
-          '',
-          'このたびはご予約ありがとうございます。',
-          '以下の内容でご予約を承りました。',
-          '',
-          dateStr ? `ご予約日：${dateStr}` : '',
-          timeLine,
-          carLine,
-          '',
-          '内容に変更がある場合は、お手数ですが店舗までご連絡ください。',
-        ].filter(Boolean);
-
-        try {
-          await this.lineService.sendText(lineUid, messageLines.join('\n'));
-        } catch (e: any) {
-          // ここでエラーにしてもいいけど、とりあえずサーバーは落とさないようにしておく
-          console.error(
-            `updateStatus: LINE 予約確定メッセージ送信失敗 bookingId=${bookingId}, error=${
-              e?.message ?? e
-            }`,
-          );
-        }
-      }
+    if (!booking) {
+      throw new BadRequestException('予約が見つかりません。');
     }
+
+    if (
+      user.role !== 'DEVELOPER' &&
+      booking.tenantId !== user.tenantId
+    ) {
+      throw new BadRequestException(
+        '他テナントの予約は変更できません。',
+      );
+    }
+
+    // 受付経路チェック（ADMIN / TENANT_MANUAL だけ許可）
+    if (
+      booking.source !== 'ADMIN' &&
+      booking.source !== 'TENANT_MANUAL'
+    ) {
+      throw new BadRequestException(
+        'この予約の日時は変更できない種別です。',
+      );
+    }
+
+    const data: any = {};
+
+    if (params.bookingDate) {
+      const d = new Date(params.bookingDate);
+      if (Number.isNaN(d.getTime())) {
+        throw new BadRequestException('bookingDate の形式が不正です。');
+      }
+      data.bookingDate = d;
+    }
+
+    if (params.timeSlot) {
+      data.timeSlot = params.timeSlot;
+    }
+
+    if (typeof params.note === 'string') {
+      data.note = params.note;
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data,
+      include: {
+        customer: true,
+        car: true,
+      },
+    });
 
     return updated;
   }
+
+  /**
+   * デフォルトの「ご予約確定」メッセージを組み立てる
+   */
+  private buildDefaultConfirmationMessage(booking: any): string {
+    const customerName = `${booking.customer?.lastName ?? ''} ${
+      booking.customer?.firstName ?? ''
+    }`.trim();
+
+    const dateStr = booking.bookingDate
+      ? booking.bookingDate.toISOString().slice(0, 10).replace(/-/g, '/')
+      : '';
+
+    const carName = booking.car?.carName ?? '';
+    const plate = booking.car?.registrationNumber ?? '';
+
+    const carLine =
+      carName && plate
+        ? `対象のお車：${carName}（${plate}）`
+        : carName
+        ? `対象のお車：${carName}`
+        : '';
+
+    let timeLabel = '';
+    switch ((booking.timeSlot ?? '').toUpperCase()) {
+      case 'MORNING':
+        timeLabel = '午前';
+        break;
+      case 'AFTERNOON':
+        timeLabel = '午後';
+        break;
+      case 'EVENING':
+        timeLabel = '夕方';
+        break;
+    }
+
+    const timeLine = timeLabel
+      ? `ご希望時間帯：${timeLabel}（${booking.timeSlot}）`
+      : booking.timeSlot
+      ? `ご希望時間帯：${booking.timeSlot}`
+      : '';
+
+    const lines = [
+      customerName ? `${customerName} 様` : '',
+      '',
+      'このたびはご予約ありがとうございます。',
+      '以下の内容でご予約を承りました。',
+      '',
+      dateStr ? `ご予約日：${dateStr}` : '',
+      timeLine,
+      carLine,
+      '',
+      '内容に変更がある場合は、お手数ですが店舗までご連絡ください。',
+    ].filter(Boolean);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * 「確定LINEを送る」専用メソッド
+   * - 予約ステータスが CONFIRMED のときだけ送信
+   * - 任意メッセージがあればそれを使う
+   * - 送信日時＆本文を booking に保存
+   */
+  async sendConfirmationLine(
+    user: AuthPayload,
+    bookingId: number,
+    customMessage?: string,
+  ) {
+    // ★ Prisma 型を any にして、追加フィールドを許容
+    const prisma = this.prisma as any;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        customer: true,
+        car: true,
+      },
+    });
+
+    if (!booking) {
+      throw new BadRequestException('予約が見つかりません。');
+    }
+
+    if (
+      user.role !== 'DEVELOPER' &&
+      booking.tenantId !== user.tenantId
+    ) {
+      throw new BadRequestException(
+        '他テナントの予約には確定メッセージを送信できません。',
+      );
+    }
+
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new BadRequestException(
+        'ステータスが「確定」の予約にのみメッセージを送信できます。',
+      );
+    }
+
+    const lineUid = booking.customer?.lineUid;
+    if (!lineUid) {
+      throw new BadRequestException(
+        'この予約にはLINE IDが登録されていません。',
+      );
+    }
+
+    const message =
+      customMessage && customMessage.trim().length > 0
+        ? customMessage.trim()
+        : this.buildDefaultConfirmationMessage(booking);
+
+    try {
+      await this.lineService.sendText(lineUid, message);
+    } catch (e: any) {
+      console.error(
+        `sendConfirmationLine: LINE送信失敗 bookingId=${bookingId}, error=${
+          e?.message ?? e
+        }`,
+      );
+      throw new BadRequestException(
+        'LINEメッセージの送信に失敗しました。時間をおいて再度お試しください。',
+      );
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        confirmationLineSentAt: new Date(),
+        confirmationLineMessage: message,
+      },
+      include: {
+        customer: true,
+        car: true,
+      },
+    });
+
+    return updated;
+  }
+
+  async deleteBooking(me: AuthPayload, bookingId: number) {
+  const tenantId = this.ensureTenant(me);
+
+  // 自分のテナントの予約のみ削除OK
+  const existing = await this.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      tenantId,
+    },
+  });
+
+  if (!existing) {
+    throw new NotFoundException('予約が見つかりません');
+  }
+
+  await this.prisma.booking.delete({
+    where: { id: bookingId },
+  });
+
+  return { success: true };
+}
+
 }

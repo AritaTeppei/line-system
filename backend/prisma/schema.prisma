@@ -200,6 +200,10 @@ model Booking {
   // 管理用メモ
   note String?
 
+    // ★ 追加：確定LINE送信の履歴
+  confirmationLineSentAt DateTime?
+  confirmationLineMessage String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
