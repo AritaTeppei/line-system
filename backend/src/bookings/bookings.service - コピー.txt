@@ -1,8 +1,9 @@
 // backend/src/bookings/bookings.service.ts
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
+import { NotFoundException } from '@nestjs/common';
 
 export enum BookingStatus {
   PENDING = 'PENDING',
@@ -24,7 +25,7 @@ export class BookingsService {
   private async ensureNoDuplicateWithin1Month(params: {
     tenantId: number;
     carId: number;
-    bookingDate: Date; // ★ ここは「ちゃんと Date にしたもの」が渡ってくる前提
+    bookingDate: Date;
   }): Promise<void> {
     const { tenantId, carId, bookingDate } = params;
 
@@ -84,32 +85,19 @@ export class BookingsService {
 
   /**
    * 管理画面から新規予約を作成（PENDING）
-   * フロントからは bookingDate: "YYYY-MM-DD" が送られてくる想定
    */
   async createBooking(
     user: AuthPayload,
     params: {
       customerId: number;
       carId: number;
-      bookingDate: string | Date; // ★ string でも Date でもOKにする
+      bookingDate: Date;
       timeSlot?: string;
       note?: string;
     },
   ) {
     const tenantId = this.ensureTenant(user);
     const prisma = this.prisma as any;
-
-    // まず bookingDate を Date 型に変換しておく（string / Date 両対応）
-const raw = params.bookingDate;
-const bookingDate =
-  raw instanceof Date ? raw : new Date(raw);
-
-if (Number.isNaN(bookingDate.getTime())) {
-  throw new BadRequestException(
-    'bookingDate の形式が不正です。（YYYY-MM-DD 形式で送信してください）',
-  );
-}
-
 
     // 顧客チェック
     const customer = await prisma.customer.findFirst({
@@ -135,7 +123,7 @@ if (Number.isNaN(bookingDate.getTime())) {
     await this.ensureNoDuplicateWithin1Month({
       tenantId,
       carId: car.id,
-      bookingDate, // ここで Date 渡す
+      bookingDate: params.bookingDate,
     });
 
     return prisma.booking.create({
@@ -143,7 +131,7 @@ if (Number.isNaN(bookingDate.getTime())) {
         tenantId,
         customerId: customer.id,
         carId: car.id,
-        bookingDate, // Prisma 的には DateTime として保存される
+        bookingDate: params.bookingDate,
         timeSlot: params.timeSlot,
         note: params.note,
         status: BookingStatus.PENDING,
@@ -193,7 +181,7 @@ if (Number.isNaN(bookingDate.getTime())) {
     return updated;
   }
 
-  /**
+    /**
    * 予約の日程（日時）を変更する
    * - ADMIN / TENANT_MANUAL 由来の予約だけ変更可
    */
@@ -337,6 +325,7 @@ if (Number.isNaN(bookingDate.getTime())) {
     bookingId: number,
     customMessage?: string,
   ) {
+    // ★ Prisma 型を any にして、追加フィールドを許容
     const prisma = this.prisma as any;
 
     const booking = await prisma.booking.findUnique({
@@ -407,24 +396,25 @@ if (Number.isNaN(bookingDate.getTime())) {
   }
 
   async deleteBooking(me: AuthPayload, bookingId: number) {
-    const tenantId = this.ensureTenant(me);
+  const tenantId = this.ensureTenant(me);
 
-    // 自分のテナントの予約のみ削除OK
-    const existing = await this.prisma.booking.findFirst({
-      where: {
-        id: bookingId,
-        tenantId,
-      },
-    });
+  // 自分のテナントの予約のみ削除OK
+  const existing = await this.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      tenantId,
+    },
+  });
 
-    if (!existing) {
-      throw new NotFoundException('予約が見つかりません');
-    }
-
-    await this.prisma.booking.delete({
-      where: { id: bookingId },
-    });
-
-    return { success: true };
+  if (!existing) {
+    throw new NotFoundException('予約が見つかりません');
   }
+
+  await this.prisma.booking.delete({
+    where: { id: bookingId },
+  });
+
+  return { success: true };
+}
+
 }

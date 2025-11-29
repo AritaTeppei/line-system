@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import TenantLayout from '../components/TenantLayout';
+import { useSearchParams } from 'next/navigation';  // ★追加
 
 type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
 
@@ -219,6 +220,8 @@ export default function BookingsPage() {
     null,
   );
 
+  const searchParams = useSearchParams();   // ★ここで取得
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalDateKey, setModalDateKey] =
     useState<string | null>(null);
@@ -285,6 +288,24 @@ export default function BookingsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+    // ★ ダッシュボードなどから `/bookings?date=YYYY-MM-DD` で来たとき、
+  //   該当日の月を開いて、その日を選択状態にする
+  useEffect(() => {
+    const dateParam = searchParams?.get('date');
+    if (!dateParam) return;
+
+    const d = new Date(dateParam);
+    if (Number.isNaN(d.getTime())) return;
+
+    const key = toDateKey(d);
+
+    // カレンダーの表示月をその月に
+    setCurrentMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    // その日付を選択
+    setSelectedDateKey(key);
+  }, [searchParams]);
+
 
   const bookingsByDate = useMemo(() => {
     const map = new Map<string, Booking[]>();
