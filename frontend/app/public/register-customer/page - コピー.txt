@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useEffect, useState, Suspense } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 type PreviewResponse = {
@@ -41,8 +42,9 @@ function PublicRegisterCustomerInner() {
 
   // 住所検索用
   const [addressSearching, setAddressSearching] = useState(false);
-  const [addressSearchError, setAddressSearchError] =
-    useState<string | null>(null);
+  const [addressSearchError, setAddressSearchError] = useState<string | null>(
+    null,
+  );
   const [addressCandidates, setAddressCandidates] = useState<string[]>([]);
   const [showAddressModal, setShowAddressModal] = useState(false);
 
@@ -122,7 +124,7 @@ function PublicRegisterCustomerInner() {
         throw new Error(msg);
       }
 
-      await res.json(); // 戻り値は一応捨ててOK
+      await res.json(); // customer が返ってくるが、今は使わない
       const msg =
         'ご登録ありがとうございました。これでLINE連携が完了しました。';
       setSubmitSuccess(msg);
@@ -166,9 +168,7 @@ function PublicRegisterCustomerInner() {
         setShowAddressModal(true);
       }
     } catch (e) {
-      setAddressSearchError(
-        '住所検索に失敗しました。時間をおいてお試しください。',
-      );
+      setAddressSearchError('住所検索に失敗しました。時間をおいてお試しください。');
     } finally {
       setAddressSearching(false);
     }
@@ -177,6 +177,15 @@ function PublicRegisterCustomerInner() {
   const handleSelectCandidate = (candidate: string) => {
     setAddress1(candidate);
     setShowAddressModal(false);
+  };
+
+  const handleCloseCompleted = () => {
+    if (typeof window !== 'undefined') {
+      // LINEアプリ内ブラウザなどでは close できる場合あり
+      window.close();
+    }
+    // window.close() が効かなくても、この画面だけ表示されていれば
+    // 「フォームを閉じた」状態としてはOK
   };
 
   if (loading) {
@@ -198,7 +207,7 @@ function PublicRegisterCustomerInner() {
     );
   }
 
-  // ★ 登録完了後の画面（OKボタンなし）
+  // ★ 登録完了後の画面（フォームを閉じるイメージ）
   if (completed) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -209,17 +218,23 @@ function PublicRegisterCustomerInner() {
           <h1 className="text-lg font-bold text-gray-900 mb-2 text-center">
             ご登録ありがとうございました
           </h1>
-          <p className="text-xs text-gray-700 text-center leading-relaxed mb-2">
+          <p className="text-xs text-gray-700 text-center leading-relaxed mb-4">
             {preview?.tenantName ?? '店舗'} の車検・点検通知サービスへのご登録が完了しました。
-          </p>
-          <p className="text-[11px] text-gray-600 text-center leading-relaxed mb-2">
-            今後、こちらのLINEアカウント宛に車検・点検のご案内やお知らせをお届けします。
+            <br />
+            今後、こちらのLINEアカウント宛にご案内をお届けします。
           </p>
           {submitSuccess && (
-            <p className="text-[11px] text-emerald-700 text-center whitespace-pre-line">
+            <p className="text-[11px] text-emerald-700 text-center mb-4 whitespace-pre-line">
               {submitSuccess}
             </p>
           )}
+          <button
+            type="button"
+            onClick={handleCloseCompleted}
+            className="w-full py-2 rounded-full bg-emerald-600 text-white text-sm font-semibold shadow-sm active:scale-[0.99] transition-transform"
+          >
+            OK
+          </button>
         </div>
       </main>
     );
@@ -301,6 +316,21 @@ function PublicRegisterCustomerInner() {
             )}
           </div>
 
+          {/* 携帯番号 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-800 mb-1">
+              携帯番号 <span className="text-red-500">*</span>
+            </label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="ハイフン無し 例）09012345678"
+              value={mobilePhone}
+              onChange={(e) => setMobilePhone(e.target.value)}
+              inputMode="tel"
+              autoComplete="tel-national"
+            />
+          </div>
+
           {/* 住所1 */}
           <div>
             <label className="block text-xs font-medium text-gray-800 mb-1">
@@ -325,21 +355,6 @@ function PublicRegisterCustomerInner() {
               placeholder="例）〇〇ビル1F"
               value={address2}
               onChange={(e) => setAddress2(e.target.value)}
-            />
-          </div>
-
-          {/* 携帯番号 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-800 mb-1">
-              携帯番号 <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              placeholder="ハイフン無し 例）09012345678"
-              value={mobilePhone}
-              onChange={(e) => setMobilePhone(e.target.value)}
-              inputMode="tel"
-              autoComplete="tel-national"
             />
           </div>
 

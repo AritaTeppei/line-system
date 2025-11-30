@@ -18,7 +18,7 @@ model Tenant {
   lineSecret      String?
   lineAccessToken String?
 
-  lineSettings             LineSettings?
+  lineSettings LineSettings?
   reminderMessageTemplates ReminderMessageTemplate[]
 
   users                  User[]
@@ -28,14 +28,12 @@ model Tenant {
   messageLogs            MessageLog[]
   bookings               Booking[]
 
-  companyName        String? // 会社名
-  companyAddress1    String? // 住所1
-  companyAddress2    String? // 住所2
-  representativeName String? // 代表者名
-  contactPhone       String? // 代表電話
-  contactMobile      String? // 担当者携帯など
-
-  broadcastLogs BroadcastLog[]
+  companyName         String?  // 会社名
+  companyAddress1     String?  // 住所1
+  companyAddress2     String?  // 住所2
+  representativeName  String?  // 代表者名
+  contactPhone        String?  // 代表電話
+  contactMobile       String?  // 担当者携帯など
 
   // subscriptions   Subscription[] //
 }
@@ -83,8 +81,6 @@ model Customer {
   cars        Car[]
   messageLogs MessageLog[]
   bookings    Booking[]
-
-  broadcastLogCustomers BroadcastLogCustomer[]
 
   @@unique([tenantId, lineUid], map: "customer_tenant_lineuid_unique")
   @@unique([tenantId, mobilePhone], map: "customer_tenant_mobile_unique")
@@ -155,11 +151,6 @@ enum BookingStatus {
   CANCELED // キャンセル（顧客または管理者）
 }
 
-enum BroadcastTarget {
-  CUSTOMER
-  CAR
-}
-
 model MessageLog {
   id Int @id @default(autoincrement())
 
@@ -209,8 +200,8 @@ model Booking {
   // 管理用メモ
   note String?
 
-  // ★ 追加：確定LINE送信の履歴
-  confirmationLineSentAt  DateTime?
+    // ★ 追加：確定LINE送信の履歴
+  confirmationLineSentAt DateTime?
   confirmationLineMessage String?
 
   createdAt DateTime @default(now())
@@ -226,9 +217,9 @@ model LineSettings {
   channelId     String? // チャネルID
   channelSecret String? // チャネルシークレット
   accessToken   String? // 長期アクセストークン
-  webhookUrl    String? // 現在LINEに登録しているWebhook URL（表示用）
+  webhookUrl String? // 現在LINEに登録しているWebhook URL（表示用）
   destination   String?
-  isActive      Boolean @default(false) // このテナントでLINE連携を有効にするか
+  isActive   Boolean @default(false) // このテナントでLINE連携を有効にするか
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -239,37 +230,13 @@ model ReminderMessageTemplate {
   tenantId Int
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  type  ReminderMessageType // ← ここが大事
-  title String? // 管理画面での名称とかに使える
-  body  String // 実際に送るメッセージ本文
-  note  String? // 管理者向けメモ（任意）
+  type      ReminderMessageType   // ← ここが大事
+  title     String?              // 管理画面での名称とかに使える
+  body      String               // 実際に送るメッセージ本文
+  note      String?              // 管理者向けメモ（任意）
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([tenantId, type])
-}
-
-model BroadcastLog {
-  id          Int      @id @default(autoincrement())
-  tenantId    Int
-  message     String
-  sentCount   Int
-  targetCount Int
-  createdAt   DateTime @default(now())
-
-  tenant    Tenant                 @relation(fields: [tenantId], references: [id])
-  customers BroadcastLogCustomer[] // ★ 追加
-  target    BroadcastTarget        @default(CUSTOMER)
-
-  @@index([tenantId, createdAt])
-}
-
-model BroadcastLogCustomer {
-  id             Int          @id @default(autoincrement())
-  broadcastLogId Int
-  broadcastLog   BroadcastLog @relation(fields: [broadcastLogId], references: [id])
-
-  customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id])
 }

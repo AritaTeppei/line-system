@@ -15,8 +15,6 @@ type Customer = {
   id: number;
   lastName: string;
   firstName: string;
-  lineUid?: string | null;
-  mobilePhone?: string | null;
 };
 
 type Car = {
@@ -36,15 +34,6 @@ type Car = {
     firstName: string;
     lineUid?: string | null;
   };
-};
-
-type BroadcastLog = {
-  id: number;
-  message: string;
-  sentCount: number;
-  targetCount: number;
-  createdAt: string; // ISO
-  customerIds?: number[];
 };
 
 const apiBase =
@@ -85,27 +74,11 @@ export default function CarsPage() {
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] =
     useState(false);
 
-  // 一括送信ログ（サーバ側 3か月分）
-  const [broadcastLogs, setBroadcastLogs] = useState<BroadcastLog[]>(
-    [],
-  );
-  const [selectedLog, setSelectedLog] = useState<BroadcastLog | null>(
-    null,
-  );
-  const [isLogDetailModalOpen, setIsLogDetailModalOpen] =
-    useState(false);
-
   const formatDate = (value?: string | null) => {
     if (!value) return "";
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return "";
     return d.toLocaleDateString("ja-JP");
-  };
-
-  const formatDateTime = (value: string) => {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleString("ja-JP");
   };
 
   const toDateInputValue = (value?: string | null) => {
@@ -126,7 +99,7 @@ export default function CarsPage() {
     setCustomDaysBefore("");
   };
 
-  // 初期ロード（auth/me, customers, cars, broadcastLogs）
+  // 初期ロード（auth/me, customers, cars）
   useEffect(() => {
     const savedToken =
       typeof window !== "undefined"
@@ -162,20 +135,7 @@ export default function CarsPage() {
         return res.json();
       })
       .then((data: Customer[]) => {
-        setCustomers(
-          data.map((c) => ({
-            ...c,
-            // 念のため mobilePhone / lineUid が無いケースにも備える
-            mobilePhone:
-              (c as any).mobilePhone !== undefined
-                ? (c as any).mobilePhone
-                : null,
-            lineUid:
-              (c as any).lineUid !== undefined
-                ? (c as any).lineUid
-                : null,
-          })),
-        );
+        setCustomers(data);
       });
 
     const fetchCars = fetch(`${apiBase}/cars`, {
@@ -189,21 +149,7 @@ export default function CarsPage() {
         setCars(data);
       });
 
-    const fetchBroadcastLogs = fetch(
-      `${apiBase}/messages/broadcast-logs?target=CAR`,
-      {
-        headers,
-      },
-    )
-      .then((res) => {
-        if (!res.ok) throw new Error("broadcast logs api error");
-        return res.json();
-      })
-      .then((data: BroadcastLog[]) => {
-        setBroadcastLogs(data);
-      });
-
-    Promise.all([fetchMe, fetchCustomers, fetchCars, fetchBroadcastLogs])
+    Promise.all([fetchMe, fetchCustomers, fetchCars])
       .catch((err) => {
         console.error(err);
         setPageError("初期データの取得に失敗しました");
@@ -347,49 +293,50 @@ export default function CarsPage() {
   };
 
   const handleDeleteClick = async (id: number) => {
-    if (!token) {
-      setFormError("トークンがありません。再ログインしてください。");
-      return;
+  if (!token) {
+    setFormError("トークンがありません。再ログインしてください。");
+    return;
+  }
+
+  const ok = window.confirm(
+    "この車両を削除します。\n\n" +
+      "※今日以降に「確定」ステータスの予約がある場合は削除できません。\n" +
+      "　その場合は対象の予約を変更または削除してから、再度お試しください。\n\n" +
+      "本当に削除してよろしいですか？",
+  );
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`${apiBase}/cars/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      const msg =
+        data?.message ||
+        (Array.isArray(data?.message)
+          ? data.message.join(", ")
+          : null) ||
+        "車両の削除に失敗しました";
+
+      // ★ バックエンドからの注意メッセージを直接表示
+      alert(msg);
+      throw new Error(msg);
     }
 
-    const ok = window.confirm(
-      "この車両を削除します。\n\n" +
-        "※今日以降に「確定」ステータスの予約がある場合は削除できません。\n" +
-        "　その場合は対象の予約を変更または削除してから、再度お試しください。\n\n" +
-        "本当に削除してよろしいですか？",
-    );
-    if (!ok) return;
-
-    try {
-      const res = await fetch(`${apiBase}/cars/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const msg =
-          data?.message ||
-          (Array.isArray(data?.message)
-            ? data.message.join(", ")
-            : null) ||
-          "車両の削除に失敗しました";
-
-        // ★ バックエンドからの注意メッセージを直接表示
-        alert(msg);
-        throw new Error(msg);
-      }
-
-      setCars((prev) => prev.filter((c) => c.id !== id));
-      if (editingCarId === id) {
-        closeCarModal();
-      }
-      setFormSuccess("車両を削除しました");
-    } catch (err: any) {
-      console.error(err);
-      setFormError(err.message ?? "車両の削除に失敗しました");
+    setCars((prev) => prev.filter((c) => c.id !== id));
+    if (editingCarId === id) {
+      closeCarModal();
     }
-  };
+    setFormSuccess("車両を削除しました");
+  } catch (err: any) {
+    console.error(err);
+    setFormError(err.message ?? "車両の削除に失敗しました");
+  }
+};
+
 
   // チェックボックス ON/OFF
   const toggleCarSelection = (id: number) => {
@@ -398,7 +345,7 @@ export default function CarsPage() {
     );
   };
 
-  // 全選択 / 全解除（customersページと同じ操作感）
+  // 全選択 / 全解除（customersページと合わせた操作）
   const handleToggleSelectAll = () => {
     setSelectedCarIds((prev) => {
       if (prev.length === cars.length) {
@@ -454,33 +401,12 @@ export default function CarsPage() {
       }
 
       const result = await res.json();
-      const sentCount =
-        result.sentCount ?? selectedCarIds.length;
-      const targetCount =
-        result.targetCount ?? selectedCarIds.length;
-
       setBroadcastSuccess(
-        `送信が完了しました（${sentCount}件 / 対象 ${targetCount}件）`,
+        `送信が完了しました（${result.sentCount}件 / 対象 ${result.targetCount}件）`,
       );
       setSelectedCarIds([]);
       setBroadcastMessage("");
       setIsBroadcastModalOpen(false);
-
-      // ★ 送信後に最新の一括送信ログを再取得（3か月用）
-      try {
-        const logsRes = await fetch(
-          `${apiBase}/messages/broadcast-logs`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        if (logsRes.ok) {
-          const logs: BroadcastLog[] = await logsRes.json();
-          setBroadcastLogs(logs);
-        }
-      } catch (e) {
-        console.error("failed to reload broadcast logs", e);
-      }
     } catch (err: any) {
       console.error(err);
       setBroadcastError(err.message ?? "メッセージの送信に失敗しました");
@@ -506,22 +432,6 @@ export default function CarsPage() {
     setBroadcastError(null);
   };
 
-  const openLogDetailModal = (log: BroadcastLog) => {
-    if (!log.customerIds || log.customerIds.length === 0) {
-      window.alert(
-        "この履歴には送信先の情報が保存されていません。\nこの機能追加以降の送信から順次記録されます。",
-      );
-      return;
-    }
-    setSelectedLog(log);
-    setIsLogDetailModalOpen(true);
-  };
-
-  const closeLogDetailModal = () => {
-    setIsLogDetailModalOpen(false);
-    setSelectedLog(null);
-  };
-
   if (loading) {
     return (
       <TenantLayout>
@@ -544,7 +454,7 @@ export default function CarsPage() {
     );
   }
 
-  // メインUI
+  // メインUI（customersページと同じレイアウト感）
   return (
     <TenantLayout>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -660,8 +570,7 @@ export default function CarsPage() {
                 onClick={handleToggleSelectAll}
                 className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px]"
               >
-                {selectedCarIds.length === cars.length &&
-                cars.length > 0
+                {selectedCarIds.length === cars.length && cars.length > 0
                   ? "すべて解除"
                   : "すべて選択"}
               </button>
@@ -743,9 +652,7 @@ export default function CarsPage() {
                           <input
                             type="checkbox"
                             checked={selected}
-                            onChange={() =>
-                              toggleCarSelection(car.id)
-                            }
+                            onChange={() => toggleCarSelection(car.id)}
                           />
                         </td>
                         <td className="border px-2 py-1 align-middle">
@@ -774,29 +681,21 @@ export default function CarsPage() {
                           {car.shakenDate ? (
                             <span>{formatDate(car.shakenDate)}</span>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
                         <td className="border px-2 py-1 align-middle whitespace-nowrap">
                           {car.inspectionDate ? (
-                            <span>
-                              {formatDate(car.inspectionDate)}
-                            </span>
+                            <span>{formatDate(car.inspectionDate)}</span>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
                         <td className="border px-2 py-1 align-middle whitespace-nowrap">
                           {car.customReminderDate ? (
                             <>
                               <span>
-                                {formatDate(
-                                  car.customReminderDate,
-                                )}
+                                {formatDate(car.customReminderDate)}
                               </span>
                               {car.customDaysBefore != null && (
                                 <span className="text-[10px] text-gray-500 ml-1">
@@ -805,9 +704,7 @@ export default function CarsPage() {
                               )}
                             </>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
                         <td className="border px-2 py-1 align-middle">
@@ -821,9 +718,7 @@ export default function CarsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                handleDeleteClick(car.id)
-                              }
+                              onClick={() => handleDeleteClick(car.id)}
                               className="px-2 py-0.5 border border-red-500 rounded-md text-[10px] text-red-700 hover:bg-red-50 bg-white"
                             >
                               削除
@@ -837,62 +732,6 @@ export default function CarsPage() {
               </table>
             </div>
           )}
-        </section>
-
-        {/* 一括メッセージ送信の履歴（直近3か月） */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-6">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-            一括メッセージ送信の履歴（直近3か月）
-          </h2>
-          {broadcastLogs.length === 0 ? (
-            <p className="text-xs text-gray-600">
-              まだ一括メッセージ送信の履歴がありません。
-            </p>
-          ) : (
-            <div className="overflow-x-auto border rounded-lg max-h-[260px]">
-              <table className="min-w-full text-[11px] sm:text-xs">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="border px-2 py-1 text-left">
-                      送信日時
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      送信件数
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      メッセージ内容（一部）
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {broadcastLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50">
-                      <td className="border px-2 py-1 whitespace-nowrap">
-                        {formatDateTime(log.createdAt)}
-                      </td>
-                      <td className="border px-2 py-1 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => openLogDetailModal(log)}
-                          className="underline text-emerald-700 hover:text-emerald-900"
-                        >
-                          {log.sentCount}件 / 対象 {log.targetCount}件
-                        </button>
-                      </td>
-                      <td className="border px-2 py-1">
-                        {log.message.length > 40
-                          ? log.message.slice(0, 40) + "…"
-                          : log.message}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="mt-2 text-[10px] text-gray-500">
-            ※ 履歴はサーバ側で3か月間保持されます（顧客管理の一括送信と共通のログです）。
-          </p>
         </section>
       </div>
 
@@ -942,9 +781,7 @@ export default function CarsPage() {
                 <input
                   className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
                   value={registrationNumber}
-                  onChange={(e) =>
-                    setRegistrationNumber(e.target.value)
-                  }
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
                 />
               </div>
 
@@ -956,9 +793,7 @@ export default function CarsPage() {
                 <input
                   className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
                   value={chassisNumber}
-                  onChange={(e) =>
-                    setChassisNumber(e.target.value)
-                  }
+                  onChange={(e) => setChassisNumber(e.target.value)}
                 />
               </div>
 
@@ -995,9 +830,7 @@ export default function CarsPage() {
                     type="date"
                     className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
                     value={inspectionDate}
-                    onChange={(e) =>
-                      setInspectionDate(e.target.value)
-                    }
+                    onChange={(e) => setInspectionDate(e.target.value)}
                   />
                 </div>
               </div>
@@ -1112,111 +945,6 @@ export default function CarsPage() {
                 className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
               >
                 {broadcasting ? "送信中..." : "この内容で送信"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 一括送信履歴の詳細モーダル（送信先の顧客一覧） */}
-      {isLogDetailModalOpen && selectedLog && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              送信先の一覧
-            </h3>
-            <p className="text-xs text-gray-600 mb-2">
-              {formatDateTime(selectedLog.createdAt)} に送信したメッセージの対象顧客です。
-            </p>
-
-            {/* メッセージ本文の一部 */}
-            <div className="mb-3 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
-              <div className="text-[11px] text-gray-500 mb-1">
-                メッセージ内容
-              </div>
-              <div className="text-[11px] text-gray-800 whitespace-pre-wrap">
-                {selectedLog.message}
-              </div>
-            </div>
-
-            {/* 送信先リスト */}
-            <div className="max-h-64 overflow-y-auto border rounded-lg">
-              <table className="min-w-full text-[11px] sm:text-xs">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="border px-2 py-1 text-left">
-                      顧客
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      携帯番号
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      LINE UID
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedLog.customerIds &&
-                    customers
-                      .filter((c) =>
-                        selectedLog.customerIds!.includes(c.id),
-                      )
-                      .map((c) => (
-                        <tr
-                          key={c.id}
-                          className="hover:bg-gray-50 text-gray-900"
-                        >
-                          <td className="border px-2 py-1 whitespace-nowrap">
-                            {c.lastName} {c.firstName}
-                          </td>
-                          <td className="border px-2 py-1 whitespace-nowrap">
-                            {c.mobilePhone ?? ""}
-                          </td>
-                          <td className="border px-2 py-1">
-                            {c.lineUid ?? ""}
-                          </td>
-                        </tr>
-                      ))}
-
-                  {/* customerIds があるのに customers とマッチしないケース（顧客削除など） */}
-                  {selectedLog.customerIds &&
-                    customers.filter((c) =>
-                      selectedLog.customerIds!.includes(c.id),
-                    ).length === 0 && (
-                      <tr>
-                        <td
-                          className="border px-2 py-2 text-center text-[11px] text-gray-500"
-                          colSpan={3}
-                        >
-                          現在の顧客一覧と一致する送信先が見つかりません。
-                          （顧客が削除された可能性があります）
-                        </td>
-                      </tr>
-                    )}
-
-                  {/* 古いログ（customerIds がない） */}
-                  {!selectedLog.customerIds && (
-                    <tr>
-                      <td
-                        className="border px-2 py-2 text-center text-[11px] text-gray-500"
-                        colSpan={3}
-                      >
-                        この履歴には送信先の詳細情報が保存されていません。
-                        この機能追加以降の送信から詳細が記録されます。
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={closeLogDetailModal}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-              >
-                閉じる
               </button>
             </div>
           </div>

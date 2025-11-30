@@ -29,11 +29,13 @@ type BroadcastLog = {
   sentCount: number;
   targetCount: number;
   createdAt: string; // ISO
-  customerIds?: number[];
 };
 
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+// 30日(だいたい)のミリ秒
+const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30;
 
 export default function CustomersPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -41,12 +43,6 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [selectedLog, setSelectedLog] = useState<BroadcastLog | null>(
-    null,
-  );
-  const [isLogDetailModalOpen, setIsLogDetailModalOpen] =
-    useState(false);
 
   // 新規登録＆編集フォーム用 state（モーダルで使う）
   const [lastName, setLastName] = useState("");
@@ -84,57 +80,12 @@ export default function CustomersPage() {
   const [isCountingDown, setIsCountingDown] = useState(false);
   const countdownTimerRef = useRef<number | null>(null);
 
-  // 一括送信履歴（★サーバ側3ヶ月保持分）
+  // 送信履歴（localStorageに保存）
   const [broadcastLogs, setBroadcastLogs] = useState<BroadcastLog[]>(
     [],
   );
 
-  // ---- ヘルパー：一括送信履歴（サーバ）取得 ----
-  const fetchBroadcastLogs = async (authToken: string) => {
-    try {
-      const res = await fetch(
-        `${apiBase}/messages/broadcast-logs`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        console.error(
-          "failed to fetch broadcast logs",
-          res.status,
-          data ?? "",
-        );
-        return;
-      }
-
-      const data: BroadcastLog[] = await res.json();
-      setBroadcastLogs(data);
-    } catch (e) {
-      console.error("failed to fetch broadcast logs", e);
-    }
-  };
-
-  const openLogDetailModal = (log: BroadcastLog) => {
-    if (!log.customerIds || log.customerIds.length === 0) {
-      window.alert(
-        "この履歴には送信先の情報が保存されていません。\n今後送信した履歴から順次記録されます。",
-      );
-      return;
-    }
-    setSelectedLog(log);
-    setIsLogDetailModalOpen(true);
-  };
-
-  const closeLogDetailModal = () => {
-    setIsLogDetailModalOpen(false);
-    setSelectedLog(null);
-  };
-
-  // ----- 初回ロード：auth/me → customers → broadcast-logs -----
+  // ----- 初回ロード：auth/me → customers -----
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -196,9 +147,6 @@ export default function CustomersPage() {
 
         const data: Customer[] = await customersRes.json();
         setCustomers(data);
-
-        // ③ 一括送信履歴（サーバ側3ヶ月分）
-        await fetchBroadcastLogs(savedToken);
       } catch (err: any) {
         console.error(err);
         setError(err?.message ?? "顧客一覧の取得に失敗しました");
@@ -210,21 +158,43 @@ export default function CustomersPage() {
     run();
   }, []);
 
-  const formatCustomerId = (c: Customer): string => {
-    // tenantId がなければ従来どおりの ID
-    if (!me?.tenantId) return String(c.id);
+  // ----- 送信履歴を localStorage から読み込む -----
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(
+        "pitlink_broadcast_logs",
+      );
+      if (!raw) return;
+      const parsed: BroadcastLog[] = JSON.parse(raw);
+      const now = Date.now();
+      // 1か月より古いものは捨てる
+      const filtered = parsed.filter(
+        (log) =>
+          now - new Date(log.createdAt).getTime() < THIRTY_DAYS_MS,
+      );
+      setBroadcastLogs(filtered);
+      window.localStorage.setItem(
+        "pitlink_broadcast_logs",
+        JSON.stringify(filtered),
+      );
+    } catch (e) {
+      console.error("Failed to load broadcast logs", e);
+    }
+  }, []);
 
-    const tenantPart = String(me.tenantId).padStart(3, "0");
-    const idPart = String(c.id).padStart(5, "0");
-    return `${tenantPart}-${idPart}`;
-  };
-
-  const formatLineUid = (uid?: string | null) => {
-    if (!uid) return "";
-    if (uid.length <= 10) return uid;
-    // 例: U12345…ABCD
-    return `${uid.slice(0, 6)}…${uid.slice(-4)}`;
-  };
+  // ----- 送信履歴の変更を localStorage へ反映 -----
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        "pitlink_broadcast_logs",
+        JSON.stringify(broadcastLogs),
+      );
+    } catch (e) {
+      console.error("Failed to save broadcast logs", e);
+    }
+  }, [broadcastLogs]);
 
   // ----- アンマウント時にタイマー掃除 -----
   useEffect(() => {
@@ -450,7 +420,7 @@ export default function CustomersPage() {
     );
   };
 
-  // ★ 一括チェック / 解除
+ // ★ 一括チェック / 解除
   const handleToggleSelectAll = () => {
     setSelectedCustomerIds((prev) => {
       if (prev.length === customers.length) {
@@ -460,7 +430,7 @@ export default function CustomersPage() {
       // まだ一部 or 0件 → 全選択
       return customers.map((c) => c.id);
     });
-  };
+  };  
 
   // 一括送信モーダルを開く
   const openBroadcastModal = () => {
@@ -533,11 +503,28 @@ export default function CustomersPage() {
 
       const result = await res.json();
       const sentCount = result.sentCount ?? selectedCustomerIds.length;
-      const targetCount =
-        result.targetCount ?? selectedCustomerIds.length;
+      const targetCount = result.targetCount ?? selectedCustomerIds.length;
 
-      // ★ サーバ側に保存された最新のまとめログを取得し直す
-      await fetchBroadcastLogs(token);
+      const nowIso = new Date().toISOString();
+      setBroadcastLogs((prev) => {
+        // 1か月より古いものを削除しつつ先頭に追加
+        const now = Date.now();
+        const kept = prev.filter(
+          (log) =>
+            now - new Date(log.createdAt).getTime() <
+            THIRTY_DAYS_MS,
+        );
+        return [
+          {
+            id: Date.now(),
+            message: broadcastMessage,
+            sentCount,
+            targetCount,
+            createdAt: nowIso,
+          },
+          ...kept,
+        ];
+      });
 
       setBroadcastSuccess(
         `送信が完了しました（${sentCount}件 / 対象 ${targetCount}件）`,
@@ -727,11 +714,12 @@ export default function CustomersPage() {
               <span className="font-semibold text-emerald-700">
                 {selectedCustomerIds.length}件
               </span>
+
               {/* ★ 一括チェックボタン */}
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px] ml-2"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px]"
               >
                 {selectedCustomerIds.length === customers.length &&
                 customers.length > 0
@@ -820,8 +808,8 @@ export default function CustomersPage() {
                             }
                           />
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                          {formatCustomerId(c)}
+                        <td className="border px-2 py-1 align-middle">
+                          {c.id}
                         </td>
                         <td className="border px-2 py-1 align-middle whitespace-nowrap">
                           {c.lastName} {c.firstName}
@@ -833,13 +821,7 @@ export default function CustomersPage() {
                           {c.mobilePhone ?? ""}
                         </td>
                         <td className="border px-2 py-1 align-middle">
-                          {c.lineUid ? (
-                            <span title={c.lineUid}>
-                              {formatLineUid(c.lineUid)}
-                            </span>
-                          ) : (
-                            ""
-                          )}
+                          {c.lineUid ?? ""}
                         </td>
                         <td className="border px-2 py-1 align-middle whitespace-nowrap">
                           {formatDate(c.birthday)}
@@ -873,10 +855,10 @@ export default function CustomersPage() {
           )}
         </section>
 
-        {/* 一括送信履歴（直近3か月） */}
+        {/* 送信履歴（1か月分） */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-6">
           <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-            一括メッセージ送信の履歴（直近3か月）
+            一括メッセージ送信の履歴（直近1か月）
           </h2>
           {broadcastLogs.length === 0 ? (
             <p className="text-xs text-gray-600">
@@ -905,13 +887,7 @@ export default function CustomersPage() {
                         {formatDateTime(log.createdAt)}
                       </td>
                       <td className="border px-2 py-1 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => openLogDetailModal(log)}
-                          className="underline text-emerald-700 hover:text-emerald-900"
-                        >
-                          {log.sentCount}件 / 対象 {log.targetCount}件
-                        </button>
+                        {log.sentCount}件 / 対象 {log.targetCount}件
                       </td>
                       <td className="border px-2 py-1">
                         {log.message.length > 40
@@ -925,7 +901,7 @@ export default function CustomersPage() {
             </div>
           )}
           <p className="mt-2 text-[10px] text-gray-500">
-            ※ この履歴はサーバ側で3か月間保持されます（どの端末からログインしても同じ履歴が確認できます）。
+            ※ この履歴はブラウザごとに保存され、1か月を過ぎたものは自動的に削除されます（サーバ側の正式なログとは別管理です）。
           </p>
         </section>
       </div>
@@ -1132,123 +1108,6 @@ export default function CustomersPage() {
                 {isCountingDown
                   ? "カウントダウン中..."
                   : "この内容で送信（10秒後）"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 一括送信履歴の詳細モーダル（誰に送ったか） */}
-      {isLogDetailModalOpen && selectedLog && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              送信先の一覧
-            </h3>
-            <p className="text-xs text-gray-600 mb-2">
-              {formatDateTime(selectedLog.createdAt)} に送信したメッセージの対象顧客です。
-            </p>
-
-            {/* メッセージ本文の一部 */}
-            <div className="mb-3 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
-              <div className="text-[11px] text-gray-500 mb-1">
-                メッセージ内容
-              </div>
-              <div className="text-[11px] text-gray-800 whitespace-pre-wrap">
-                {selectedLog.message}
-              </div>
-            </div>
-
-            {/* 送信先リスト */}
-            <div className="max-h-64 overflow-y-auto border rounded-lg">
-              <table className="min-w-full text-[11px] sm:text-xs">
-                <thead className="bg-gray-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="border px-2 py-1 text-left w-16">
-                      顧客ID
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      名前
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      携帯番号
-                    </th>
-                    <th className="border px-2 py-1 text-left">
-                      LINE UID
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedLog.customerIds &&
-                    customers
-                      .filter((c) =>
-                        selectedLog.customerIds!.includes(c.id),
-                      )
-                      .map((c) => (
-                        <tr
-                          key={c.id}
-                          className="hover:bg-gray-50 text-gray-900"
-                        >
-                          <td className="border px-2 py-1 whitespace-nowrap">
-                            {formatCustomerId(c)}
-                          </td>
-                          <td className="border px-2 py-1 whitespace-nowrap">
-                            {c.lastName} {c.firstName}
-                          </td>
-                          <td className="border px-2 py-1 whitespace-nowrap">
-                            {c.mobilePhone ?? ""}
-                          </td>
-                          <td className="border px-2 py-1">
-                            {c.lineUid ? (
-                              <span title={c.lineUid}>
-                                {formatLineUid(c.lineUid)}
-                              </span>
-                            ) : (
-                              ""
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-
-                  {/* customerIds があるのに customers とマッチしないケース（削除された等） */}
-                  {selectedLog.customerIds &&
-                    customers.filter((c) =>
-                      selectedLog.customerIds!.includes(c.id),
-                    ).length === 0 && (
-                      <tr>
-                        <td
-                          className="border px-2 py-2 text-center text-[11px] text-gray-500"
-                          colSpan={4}
-                        >
-                          現在の顧客一覧と一致する送信先が見つかりません。
-                          （顧客が削除された可能性があります）
-                        </td>
-                      </tr>
-                    )}
-
-                  {/* 古いログ（customerIds がない） */}
-                  {!selectedLog.customerIds && (
-                    <tr>
-                      <td
-                        className="border px-2 py-2 text-center text-[11px] text-gray-500"
-                        colSpan={4}
-                      >
-                        この履歴には送信先の詳細情報が保存されていません。
-                        この機能追加以降の送信から詳細が記録されます。
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={closeLogDetailModal}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-              >
-                閉じる
               </button>
             </div>
           </div>
