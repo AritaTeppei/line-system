@@ -28,6 +28,7 @@ export default function ChangePasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [selfMessage, setSelfMessage] = useState<string | null>(null);
+  const [selfSuccessModalOpen, setSelfSuccessModalOpen] = useState(false);
 
   // CLIENT パスワード変更用
   const [clients, setClients] = useState<ClientUser[]>([]);
@@ -36,6 +37,8 @@ export default function ChangePasswordPage() {
   const [clientConfirmNewPassword, setClientConfirmNewPassword] =
     useState("");
   const [clientMessage, setClientMessage] = useState<string | null>(null);
+  const [clientSuccessModalOpen, setClientSuccessModalOpen] =
+    useState(false);
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL;
 
@@ -72,7 +75,7 @@ export default function ChangePasswordPage() {
 
         setMe(data);
 
-        // CLIENT 一覧取得（後で backend 側で実装する /tenants/clients）
+        // CLIENT 一覧取得
         const resClients = await fetch(`${apiBase}/tenants/clients`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -95,6 +98,19 @@ export default function ChangePasswordPage() {
   const handleChangeOwnPassword = async (e: FormEvent) => {
     e.preventDefault();
     setSelfMessage(null);
+
+    // ▼ ここで「同じパスワード問題」をフロントで弾く
+    if (newPassword === currentPassword) {
+      setSelfMessage(
+        "新しいパスワードが現在のパスワードと同じです。別のパスワードを入力してください。"
+      );
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setSelfMessage("新しいパスワードが確認用と一致していません。");
+      return;
+    }
 
     const token =
       typeof window !== "undefined"
@@ -131,10 +147,12 @@ export default function ChangePasswordPage() {
         return;
       }
 
-      setSelfMessage("パスワードを変更しました。");
+      // 成功時はモーダル表示に切り替え
+      setSelfMessage(null);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
+      setSelfSuccessModalOpen(true);
     } catch (e) {
       console.error(e);
       setSelfMessage("通信エラーが発生しました。");
@@ -147,6 +165,11 @@ export default function ChangePasswordPage() {
 
     if (!selectedClientId) {
       setClientMessage("対象 CLIENT を選択してください。");
+      return;
+    }
+
+    if (clientNewPassword !== clientConfirmNewPassword) {
+      setClientMessage("新しいパスワードが確認用と一致していません。");
       return;
     }
 
@@ -188,9 +211,10 @@ export default function ChangePasswordPage() {
         return;
       }
 
-      setClientMessage("CLIENT のパスワードを変更しました。");
+      setClientMessage(null);
       setClientNewPassword("");
       setClientConfirmNewPassword("");
+      setClientSuccessModalOpen(true);
     } catch (e) {
       console.error(e);
       setClientMessage("通信エラーが発生しました。");
@@ -200,7 +224,7 @@ export default function ChangePasswordPage() {
   if (loading) {
     return (
       <TenantLayout>
-        <div>読み込み中...</div>
+        <div className="text-sm text-gray-600 p-4">読み込み中...</div>
       </TenantLayout>
     );
   }
@@ -209,84 +233,95 @@ export default function ChangePasswordPage() {
 
   return (
     <TenantLayout>
-      <div className="max-w-2xl mx-auto bg-white rounded-md shadow p-6 space-y-8">
-        <h1 className="text-xl font-bold mb-2">
-          設定（パスワード管理） - {me.email}
+      <div className="max-w-3xl mx-auto mt-4 space-y-6 px-4 pb-10">
+        {/* 見出し */}
+        <h1
+          className="text-2xl font-extrabold text-green-700 tracking-wide drop-shadow-sm"
+          style={{
+            fontFamily: "'M PLUS Rounded 1c', system-ui, sans-serif",
+          }}
+        >
+          パスワード管理
         </h1>
 
-        {/* ① 自分のパスワード変更 */}
-        <section>
-          <h2 className="text-lg font-semibold mb-2">
+        <p className="text-xs text-gray-600">
+          アカウントのパスワードを安全に管理できます。
+        </p>
+
+        {/* 自分のパスワード変更 */}
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">
             自分のパスワード変更
           </h2>
+
           <form className="space-y-3" onSubmit={handleChangeOwnPassword}>
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 現在のパスワード
               </label>
               <input
                 type="password"
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 required
               />
             </div>
+
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 新しいパスワード
               </label>
               <input
                 type="password"
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
               />
             </div>
+
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 新しいパスワード（確認）
               </label>
               <input
                 type="password"
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={confirmNewPassword}
-                onChange={(e) =>
-                  setConfirmNewPassword(e.target.value)
-                }
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
                 required
               />
             </div>
 
             {selfMessage && (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              <p className="text-sm text-red-600 whitespace-pre-wrap">
                 {selfMessage}
               </p>
             )}
 
             <button
               type="submit"
-              className="w-full mt-2 py-2 bg-blue-600 text-white rounded-md text-sm font-medium"
+              className="w-full py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
             >
               自分のパスワードを変更する
             </button>
           </form>
         </section>
 
-        {/* ② CLIENT のパスワード変更 */}
-        <section>
-          <h2 className="text-lg font-semibold mb-2">
+        {/* CLIENT のパスワード変更 */}
+        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">
             CLIENT のパスワード変更
           </h2>
 
           <form className="space-y-3" onSubmit={handleResetClientPassword}>
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 対象 CLIENT
               </label>
               <select
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={selectedClientId}
                 onChange={(e) =>
                   setSelectedClientId(
@@ -304,12 +339,12 @@ export default function ChangePasswordPage() {
             </div>
 
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 新しいパスワード
               </label>
               <input
                 type="password"
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={clientNewPassword}
                 onChange={(e) =>
                   setClientNewPassword(e.target.value)
@@ -319,12 +354,12 @@ export default function ChangePasswordPage() {
             </div>
 
             <div>
-              <label className="block text-sm mb-1">
+              <label className="block text-sm text-gray-700 mb-1">
                 新しいパスワード（確認）
               </label>
               <input
                 type="password"
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-green-300 focus:border-green-500"
                 value={clientConfirmNewPassword}
                 onChange={(e) =>
                   setClientConfirmNewPassword(e.target.value)
@@ -334,20 +369,68 @@ export default function ChangePasswordPage() {
             </div>
 
             {clientMessage && (
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              <p className="text-sm text-red-600 whitespace-pre-wrap">
                 {clientMessage}
               </p>
             )}
 
             <button
               type="submit"
-              className="w-full mt-2 py-2 bg-blue-600 text-white rounded-md text-sm font-medium"
+              className="w-full py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow hover:bg-blue-700 transition"
             >
               CLIENT のパスワードを変更する
             </button>
           </form>
         </section>
       </div>
+
+      {/* 自分のパスワード変更 成功モーダル */}
+      {selfSuccessModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-lg border border-emerald-200 p-5">
+            <h3 className="text-sm sm:text-base font-semibold text-emerald-800 mb-2">
+              パスワードを変更しました
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 mb-4">
+              新しいパスワードが保存されました。
+              次回ログインからこのパスワードをご利用ください。
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelfSuccessModalOpen(false)}
+                className="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-700"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLIENT パスワード変更 成功モーダル */}
+      {clientSuccessModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white shadow-lg border border-blue-200 p-5">
+            <h3 className="text-sm sm:text-base font-semibold text-blue-800 mb-2">
+              CLIENT のパスワードを変更しました
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-700 mb-4">
+              選択した CLIENT アカウントのパスワードが更新されました。
+              新しいパスワードを対象の方にお伝えください。
+            </p>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setClientSuccessModalOpen(false)}
+                className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs sm:text-sm font-semibold hover:bg-blue-700"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </TenantLayout>
   );
 }

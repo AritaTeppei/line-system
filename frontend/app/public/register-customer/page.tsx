@@ -181,7 +181,7 @@ function PublicRegisterCustomerInner() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-emerald-50 via-white to-white">
         <p className="text-sm text-gray-700">読み込み中...</p>
       </main>
     );
@@ -189,20 +189,22 @@ function PublicRegisterCustomerInner() {
 
   if (error) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="border border-red-300 text-red-700 px-4 py-3 rounded-xl max-w-md w-full bg-white shadow-sm">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-emerald-50 via-white to-white px-4">
+        <div className="border border-red-200 text-red-700 px-4 py-4 rounded-2xl max-w-md w-full bg-white shadow-sm">
           <p className="font-semibold mb-2 text-sm">リンクエラー</p>
-          <p className="text-xs leading-relaxed whitespace-pre-line">{error}</p>
+          <p className="text-xs leading-relaxed whitespace-pre-line">
+            {error}
+          </p>
         </div>
       </main>
     );
   }
 
-  // ★ 登録完了後の画面（OKボタンなし）
+  // 登録完了後の画面
   if (completed) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-5 flex flex-col items-center">
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-emerald-50 via-white to-white px-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-5 flex flex-col items-center border border-emerald-100">
           <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mb-3">
             <span className="text-2xl">🎉</span>
           </div>
@@ -226,137 +228,175 @@ function PublicRegisterCustomerInner() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center bg-slate-50 p-3">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-md px-4 py-5 mt-4">
-        <h1 className="text-lg font-bold mb-2 text-gray-900 text-center">
-          お客様情報のご登録
-        </h1>
-        {preview && (
-          <p className="text-xs text-gray-700 mb-4 leading-relaxed text-center">
-            {preview.tenantName}
-            の車検・点検お知らせサービスにご登録いただきありがとうございます。
-            <br />
-            このフォームは、LINE ID:{' '}
-            <span className="font-mono">{preview.lineUidMasked}</span>
-            のお客様に紐づいています。
+    <main className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white px-3 py-4 flex justify-center">
+      <div className="w-full max-w-md">
+        {/* ヘッダー */}
+        <header className="mb-4">
+          <p className="text-[11px] text-emerald-700 font-semibold mb-1">
+            LINE からのご登録フォーム
           </p>
-        )}
-
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          {/* 姓・名 */}
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-800 mb-1">
-                姓 <span className="text-red-500">*</span>
-              </label>
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="山田"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                autoComplete="family-name"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-800 mb-1">
-                名 <span className="text-red-500">*</span>
-              </label>
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="太郎"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                autoComplete="given-name"
-              />
-            </div>
-          </div>
-
-          {/* 郵便番号＋住所検索 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-800 mb-1">
-              郵便番号
-            </label>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="ハイフンなし 例）8120011"
-                value={postalCode}
-                inputMode="numeric"
-                pattern="\d*"
-                onChange={(e) => setPostalCode(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={handleSearchAddress}
-                disabled={addressSearching || !postalCode}
-                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold whitespace-nowrap disabled:bg-gray-300 disabled:text-gray-600"
-              >
-                {addressSearching ? '検索中...' : '住所を検索'}
-              </button>
-            </div>
-            {addressSearchError && (
-              <p className="mt-1 text-[11px] text-red-600">
-                {addressSearchError}
-              </p>
-            )}
-          </div>
-
-          {/* 住所1 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-800 mb-1">
-              住所1（市区町村〜番地）
-            </label>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              placeholder="例）福岡県福岡市博多区博多駅前1-1-1"
-              value={address1}
-              onChange={(e) => setAddress1(e.target.value)}
-              autoComplete="street-address"
-            />
-          </div>
-
-          {/* 住所2 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-800 mb-1">
-              住所2（建物名など）
-            </label>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              placeholder="例）〇〇ビル1F"
-              value={address2}
-              onChange={(e) => setAddress2(e.target.value)}
-            />
-          </div>
-
-          {/* 携帯番号 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-800 mb-1">
-              携帯番号 <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              placeholder="ハイフン無し 例）09012345678"
-              value={mobilePhone}
-              onChange={(e) => setMobilePhone(e.target.value)}
-              inputMode="tel"
-              autoComplete="tel-national"
-            />
-          </div>
-
-          {submitError && (
-            <p className="text-xs text-red-600 whitespace-pre-line">
-              {submitError}
+          <h1
+            className="text-2xl font-extrabold text-gray-900 tracking-tight"
+            style={{
+              fontFamily: "'M PLUS Rounded 1c', system-ui, sans-serif",
+            }}
+          >
+            お客様情報のご登録
+          </h1>
+          {preview && (
+            <p className="mt-2 text-[11px] text-gray-600 leading-relaxed">
+              {preview.tenantName}
+              の車検・点検お知らせサービスにご協力いただきありがとうございます。
+              <br />
+              このフォームは、LINE ID:{' '}
+              <span className="font-mono text-gray-800">
+                {preview.lineUidMasked}
+              </span>
+              のお客様に紐づいています。
             </p>
           )}
+          {!preview && (
+            <p className="mt-2 text-[11px] text-gray-600 leading-relaxed">
+              車検・点検のお知らせのために、お客様情報のご入力をお願いいたします。
+            </p>
+          )}
+        </header>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full mt-2 py-2.5 rounded-full text-white text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm active:scale-[0.99] transition-transform"
-          >
-            {submitting ? '送信中...' : '登録する'}
-          </button>
-        </form>
+        {/* 入力フォームカード */}
+        <div className="rounded-2xl bg-white shadow-md border border-emerald-100 px-4 py-5">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* 姓・名 */}
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                  姓 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                             focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="山田"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                  名 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                             focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="太郎"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                />
+              </div>
+            </div>
+
+            {/* 郵便番号＋住所検索 */}
+            <div>
+              <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                郵便番号
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                             focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="ハイフンなし 例）8120011"
+                  value={postalCode}
+                  inputMode="numeric"
+                  pattern="\d*"
+                  onChange={(e) => setPostalCode(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={handleSearchAddress}
+                  disabled={addressSearching || !postalCode}
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold whitespace-nowrap
+                             disabled:bg-gray-300 disabled:text-gray-600"
+                >
+                  {addressSearching ? '検索中...' : '住所を検索'}
+                </button>
+              </div>
+              {addressSearchError && (
+                <p className="mt-1 text-[11px] text-red-600">
+                  {addressSearchError}
+                </p>
+              )}
+            </div>
+
+            {/* 住所1 */}
+            <div>
+              <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                住所1（市区町村〜番地）
+              </label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="例）福岡県福岡市博多区博多駅前1-1-1"
+                value={address1}
+                onChange={(e) => setAddress1(e.target.value)}
+                autoComplete="street-address"
+              />
+            </div>
+
+            {/* 住所2 */}
+            <div>
+              <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                住所2（建物名など）
+              </label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="例）〇〇ビル1F"
+                value={address2}
+                onChange={(e) => setAddress2(e.target.value)}
+              />
+            </div>
+
+            {/* 携帯番号 */}
+            <div>
+              <label className="block text-[11px] font-medium text-gray-800 mb-1">
+                携帯番号 <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400
+                           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="ハイフン無し 例）09012345678"
+                value={mobilePhone}
+                onChange={(e) => setMobilePhone(e.target.value)}
+                inputMode="tel"
+                autoComplete="tel-national"
+              />
+            </div>
+
+            {submitError && (
+              <p className="text-[11px] text-red-600 whitespace-pre-line">
+                {submitError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full mt-1 py-2.5 rounded-full text-white text-sm font-semibold
+                         bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed
+                         shadow-sm active:scale-[0.99] transition-transform"
+            >
+              {submitting ? '送信中...' : '登録する'}
+            </button>
+          </form>
+        </div>
+
+        {/* フッター説明 */}
+        <p className="mt-4 text-[10px] text-gray-500 leading-relaxed">
+          ご入力いただいた情報は、車検・点検・整備などのご案内と
+          予約管理のためにのみ利用いたします。
+          <br />
+          ご不明な点があれば、店舗までお気軽にお問い合わせください。
+        </p>
       </div>
 
       {/* 郵便番号候補のモーダル */}
@@ -385,7 +425,7 @@ function PublicRegisterCustomerInner() {
               <button
                 type="button"
                 onClick={() => setShowAddressModal(false)}
-                className="text-xs px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white"
+                className="text-[11px] px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white"
               >
                 キャンセル
               </button>
