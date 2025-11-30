@@ -268,6 +268,7 @@ model BroadcastLog {
   @@index([tenantId, createdAt])
 }
 
+
 model ReminderSentLog {
   id Int @id @default(autoincrement())
 
