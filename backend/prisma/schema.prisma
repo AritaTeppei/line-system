@@ -38,6 +38,7 @@ model Tenant {
   broadcastLogs BroadcastLog[]
 
   // subscriptions   Subscription[] //
+  reminderSentLogs ReminderSentLog[]
 }
 
 model User {
@@ -85,6 +86,7 @@ model Customer {
   bookings    Booking[]
 
   broadcastLogCustomers BroadcastLogCustomer[]
+  reminderSentLogs      ReminderSentLog[]
 
   @@unique([tenantId, lineUid], map: "customer_tenant_lineuid_unique")
   @@unique([tenantId, mobilePhone], map: "customer_tenant_mobile_unique")
@@ -122,8 +124,9 @@ model Car {
   customReminderDate DateTime? // 任意の日付
   customDaysBefore   Int? // 任意日付の何日前に通知するか
 
-  messageLogs MessageLog[]
-  bookings    Booking[]
+  messageLogs      MessageLog[]
+  bookings         Booking[]
+  reminderSentLogs ReminderSentLog[]
 
   @@unique([chassisNumber], map: "car_chassis_unique")
 }
@@ -265,6 +268,28 @@ model BroadcastLog {
   @@index([tenantId, createdAt])
 }
 
+model ReminderSentLog {
+  id Int @id @default(autoincrement())
+
+  tenantId Int
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // 送信したリマインドの対象日（「リマインド日付」）
+  date DateTime
+
+  // 種別（誕生日 / 車検2ヶ月前 / 1週間前 / 点検1ヶ月前 / 任意日付）
+  category ReminderCategory
+
+  // どの顧客・車に紐づくログか（どちらか片方だけ入るケースもあり）
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  carId Int?
+  car   Car? @relation(fields: [carId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
 model BroadcastLogCustomer {
   id             Int          @id @default(autoincrement())
   broadcastLogId Int
@@ -272,4 +297,12 @@ model BroadcastLogCustomer {
 
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+enum ReminderCategory {
+  birthday
+  shakenTwoMonths
+  shakenOneWeek
+  inspectionOneMonth
+  custom
 }

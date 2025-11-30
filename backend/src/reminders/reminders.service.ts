@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
-import { ReminderMessageType } from '@prisma/client'; // ← ここ
+import { ReminderMessageType, ReminderCategory, Prisma } from '@prisma/client';
 import { UpsertReminderTemplateDto } from './dto/upsert-reminder-template.dto';
 
 type ReminderKind =
@@ -22,7 +22,13 @@ export class RemindersService {
     private readonly lineService: LineService,
   ) {}
 
-   async upsertTemplateForTenant(tenantId: number, dto: UpsertReminderTemplateDto) {
+  // ------------------------------
+  // テンプレート CRUD
+  // ------------------------------
+  async upsertTemplateForTenant(
+    tenantId: number,
+    dto: UpsertReminderTemplateDto,
+  ) {
     return this.prisma.reminderMessageTemplate.upsert({
       where: {
         tenantId_type: {
@@ -52,7 +58,10 @@ export class RemindersService {
     });
   }
 
-  async getTemplateForTenantByType(tenantId: number, type: ReminderMessageType) {
+  async getTemplateForTenantByType(
+    tenantId: number,
+    type: ReminderMessageType,
+  ) {
     return this.prisma.reminderMessageTemplate.findUnique({
       where: {
         tenantId_type: {
@@ -62,19 +71,17 @@ export class RemindersService {
       },
     });
   }
-  /**
-   * テナントIDの決定ロジック
-   * - DEVELOPER: tenantIdFromQuery が必須
-   * - MANAGER / CLIENT: user.tenantId をそのまま使用
-   */
+
+  // ------------------------------
+  // テナント確定ロジック
+  // ------------------------------
   private ensureTenant(user: AuthPayload, tenantIdFromQuery?: number): number {
-        // ★ この3行を追加
     if (!user) {
       throw new Error(
         'ユーザー情報が取得できません。認証ガードや controller からの引数を確認してください。',
       );
     }
-    
+
     if (user.role === 'DEVELOPER') {
       if (!tenantIdFromQuery) {
         throw new Error(
@@ -91,9 +98,9 @@ export class RemindersService {
     return user.tenantId;
   }
 
-  /**
-   * base→event の日数差分（event - base）を日単位で計算
-   */
+  // ------------------------------
+  // 共通ユーティリティ
+  // ------------------------------
   private diffInDays(base: Date, event: Date): number {
     const utcBase = Date.UTC(
       base.getUTCFullYear(),
@@ -109,16 +116,11 @@ export class RemindersService {
     return Math.round(diffMs / (1000 * 60 * 60 * 24));
   }
 
-    /**
-   * 顧客の住所をまとめて1本の文字列にする
-   * ※カラム名は Customer モデルに合わせて調整
-   */
   private buildCustomerAddress(customer: any): string | null {
     if (!customer) return null;
 
     const parts: string[] = [];
 
-    // ↓ ここは実際のカラム名に合わせて変えてOK
     if (customer.zipCode) {
       parts.push(`〒${customer.zipCode}`);
     }
@@ -139,13 +141,6 @@ export class RemindersService {
     return parts.join(' ');
   }
 
-  /**
-   * 公開予約フォームのURLを組み立てる
-   */
-    /**
-   * 公開予約フォームのURLを組み立てる
-   * FRONTEND_BASE_URL をベースに /public/booking を付ける
-   */
   private buildBookingUrl(args: {
     tenantId: number;
     customerId: number;
@@ -154,11 +149,9 @@ export class RemindersService {
   }): string {
     const { tenantId, customerId, carId, date } = args;
 
-    // ★ ここで FRONTEND_BASE_URL を使う
     const frontendBase =
       process.env.FRONTEND_BASE_URL || 'http://localhost:3000';
 
-    // 末尾の "/" を消してから /public/booking を足す
     const baseUrl = `${frontendBase.replace(/\/$/, '')}/public/booking`;
 
     const y = date.getFullYear();
@@ -175,94 +168,106 @@ export class RemindersService {
     return `${baseUrl}?${query}`;
   }
 
-
   /**
-   * テンプレートがあればそれを使ってメッセージを生成する
-   * なければ null を返す（呼び出し側で既存の buildReminderMessage を使う）
+   * ReminderKind → ログ用 category 文字列
+   * Prisma の enum があるなら、ここを合わせればOK
    */
+  private toLogCategoryFromKind(kind: ReminderKind): string {
+    switch (kind) {
+      case 'BIRTHDAY':
+        return 'birthday';
+      case 'SHAKEN_2M':
+        return 'shakenTwoMonths';
+      case 'SHAKEN_1W':
+        return 'shakenOneWeek';
+      case 'INSPECTION_1M':
+        return 'inspectionOneMonth';
+      case 'CUSTOM':
+        return 'custom';
+      default:
+        return 'custom';
+    }
+  }
+
+  // ------------------------------
+  // テンプレ適用
+  // ------------------------------
   private renderTemplateIfExists(
-  templateMap: Map<ReminderMessageType, string>,
-  params: {
-    kind: ReminderKind;
-    customerName: string;
-    carName?: string;
-    registrationNumber?: string;
-    mainDate?: string; // "YYYY-MM-DD"
-    bookingUrl?: string | null;
-    daysBefore?: number | null;
-  },
-  shopName?: string | null, // ★ 追加
-): string | null {
-  const {
-    kind,
-    customerName,
-    carName,
-    registrationNumber,
-    mainDate,
-    bookingUrl,
-    daysBefore,
-  } = params;
+    templateMap: Map<ReminderMessageType, string>,
+    params: {
+      kind: ReminderKind;
+      customerName: string;
+      carName?: string;
+      registrationNumber?: string;
+      mainDate?: string;
+      bookingUrl?: string | null;
+      daysBefore?: number | null;
+    },
+    shopName?: string | null,
+  ): string | null {
+    const {
+      kind,
+      customerName,
+      carName,
+      registrationNumber,
+      mainDate,
+      bookingUrl,
+      daysBefore,
+    } = params;
 
-  // ReminderKind → ReminderMessageType の対応表
-  const kindToType: Record<ReminderKind, ReminderMessageType> = {
-    BIRTHDAY: ReminderMessageType.BIRTHDAY,
-    SHAKEN_2M: ReminderMessageType.SHAKEN_TWO_MONTHS,
-    SHAKEN_1W: ReminderMessageType.SHAKEN_ONE_WEEK,
-    INSPECTION_1M: ReminderMessageType.INSPECTION_ONE_MONTH,
-    CUSTOM: ReminderMessageType.CUSTOM,
-  };
+    const kindToType: Record<ReminderKind, ReminderMessageType> = {
+      BIRTHDAY: ReminderMessageType.BIRTHDAY,
+      SHAKEN_2M: ReminderMessageType.SHAKEN_TWO_MONTHS,
+      SHAKEN_1W: ReminderMessageType.SHAKEN_ONE_WEEK,
+      INSPECTION_1M: ReminderMessageType.INSPECTION_ONE_MONTH,
+      CUSTOM: ReminderMessageType.CUSTOM,
+    };
 
-  const type = kindToType[kind];
-  const templateBody = templateMap.get(type);
-  if (!templateBody) return null;
+    const type = kindToType[kind];
+    const templateBody = templateMap.get(type);
+    if (!templateBody) return null;
 
-  let text = templateBody;
+    let text = templateBody;
 
-  // ---- プレースホルダ置換 ----
-  // 1) {{ customerName }} / {customerName} の両方をサポート
-  text = text.replace(/{{\s*customerName\s*}}/g, customerName ?? '');
-  text = text.replace(/\{customerName\}/g, customerName ?? '');
+    text = text.replace(/{{\s*customerName\s*}}/g, customerName ?? '');
+    text = text.replace(/\{customerName\}/g, customerName ?? '');
 
-  text = text.replace(/{{\s*carName\s*}}/g, carName ?? '');
-  text = text.replace(/\{carName\}/g, carName ?? '');
+    text = text.replace(/{{\s*carName\s*}}/g, carName ?? '');
+    text = text.replace(/\{carName\}/g, carName ?? '');
 
-  text = text.replace(
-    /{{\s*registrationNumber\s*}}/g,
-    registrationNumber ?? '',
-  );
-  text = text.replace(/\{registrationNumber\}/g, registrationNumber ?? '');
+    text = text.replace(
+      /{{\s*registrationNumber\s*}}/g,
+      registrationNumber ?? '',
+    );
+    text = text.replace(/\{registrationNumber\}/g, registrationNumber ?? '');
 
-  text = text.replace(/{{\s*mainDate\s*}}/g, mainDate ?? '');
-  text = text.replace(/\{mainDate\}/g, mainDate ?? '');
+    text = text.replace(/{{\s*mainDate\s*}}/g, mainDate ?? '');
+    text = text.replace(/\{mainDate\}/g, mainDate ?? '');
 
-  text = text.replace(/{{\s*bookingUrl\s*}}/g, bookingUrl ?? '');
-  text = text.replace(/\{bookingUrl\}/g, bookingUrl ?? '');
+    text = text.replace(/{{\s*bookingUrl\s*}}/g, bookingUrl ?? '');
+    text = text.replace(/\{bookingUrl\}/g, bookingUrl ?? '');
 
-  text = text.replace(
-    /{{\s*daysBefore\s*}}/g,
-    daysBefore != null ? String(daysBefore) : '',
-  );
-  text = text.replace(
-    /\{daysBefore\}/g,
-    daysBefore != null ? String(daysBefore) : '',
-  );
+    text = text.replace(
+      /{{\s*daysBefore\s*}}/g,
+      daysBefore != null ? String(daysBefore) : '',
+    );
+    text = text.replace(
+      /\{daysBefore\}/g,
+      daysBefore != null ? String(daysBefore) : '',
+    );
 
-  // ★ 追加: 店名（テナント名）用プレースホルダ
-  text = text.replace(/{{\s*shopName\s*}}/g, shopName ?? '');
-  text = text.replace(/\{shopName\}/g, shopName ?? '');
+    text = text.replace(/{{\s*shopName\s*}}/g, shopName ?? '');
+    text = text.replace(/\{shopName\}/g, shopName ?? '');
 
-  return text;
-}
+    return text;
+  }
 
-  /**
-   * LINE に送る本文テンプレート
-   */
   private buildReminderMessage(params: {
     kind: ReminderKind;
     customerName: string;
     carName?: string;
     registrationNumber?: string;
-    mainDate?: string; // "YYYY-MM-DD"
+    mainDate?: string;
     bookingUrl?: string | null;
     daysBefore?: number | null;
   }): string {
@@ -381,12 +386,9 @@ export class RemindersService {
     }
   }
 
-  /**
-   * 指定日のリマインド対象を抽出して preview 用のデータを返す
-   */
-    /**
-   * 指定日のリマインド対象を抽出して preview 用のデータを返す
-   */
+  // ------------------------------
+  // 日別プレビュー
+  // ------------------------------
   async previewForDate(
     user: AuthPayload,
     baseDateStr: string,
@@ -394,7 +396,6 @@ export class RemindersService {
   ) {
     const tenantId = this.ensureTenant(user, tenantIdFromQuery);
 
-    // ★ テンプレとテナント名をまとめて取得
     const [templates, tenant] = await Promise.all([
       this.getTemplatesForTenant(tenantId),
       this.prisma.tenant.findUnique({ where: { id: tenantId } }),
@@ -406,7 +407,6 @@ export class RemindersService {
         templateMap.set(t.type, t.body);
       }
     }
-
     const shopName = tenant?.name ?? '';
 
     const date = new Date(baseDateStr);
@@ -418,16 +418,13 @@ export class RemindersService {
       Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
     );
 
-    // 誕生日を持っている顧客
     const customers = await this.prisma.customer.findMany({
       where: {
         tenantId,
         birthday: { not: null },
       },
-      // 必要なら select で絞ってもOK
     });
 
-    // 車検日・点検日・任意日付を持っている車
     const cars = await this.prisma.car.findMany({
       where: {
         tenantId,
@@ -442,7 +439,6 @@ export class RemindersService {
       },
     });
 
-    // --- 誕生日ターゲット ---
     const birthdayTargets = customers
       .filter((c) => {
         if (!c.birthday) return false;
@@ -475,14 +471,11 @@ export class RemindersService {
           customerName,
           lineUid: (c as any).lineUid ?? null,
           messageText,
-
-          // ★ 追加：フロントの詳細モーダル用
-          customerPhone: (c as any).mobilePhone ?? null, // カラム名に合わせる
+          customerPhone: (c as any).mobilePhone ?? null,
           customerAddress: this.buildCustomerAddress(c),
         };
       });
 
-    // --- 車両ターゲット ---
     const shakenTwoMonths: any[] = [];
     const shakenOneWeek: any[] = [];
     const inspectionOneMonth: any[] = [];
@@ -499,19 +492,15 @@ export class RemindersService {
         customerId: customer.id,
         customerName: `${customer.lastName} ${customer.firstName}`,
         lineUid: customer.lineUid ?? null,
-
-        // ★ 追加：各種リマインド共通で持たせる
         customerPhone: (customer as any).mobilePhone ?? null,
         customerAddress: this.buildCustomerAddress(customer),
       };
 
-      // 車検日
       if (car.shakenDate) {
         const shakenDate = car.shakenDate as Date;
         const diff = this.diffInDays(targetDate, shakenDate);
         const shakenDateStr = shakenDate.toISOString().slice(0, 10);
 
-        // 2ヶ月前（≒60日）
         if (diff === 60) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
@@ -553,7 +542,6 @@ export class RemindersService {
           });
         }
 
-        // 1週間前
         if (diff === 7) {
           const bookingUrl = this.buildBookingUrl({
             tenantId,
@@ -596,13 +584,10 @@ export class RemindersService {
         }
       }
 
-      // 点検日：1ヶ月前（30日）
       if (car.inspectionDate) {
         const inspectionDate = car.inspectionDate as Date;
         const diff = this.diffInDays(targetDate, inspectionDate);
-        const inspectionDateStr = inspectionDate
-          .toISOString()
-          .slice(0, 10);
+        const inspectionDateStr = inspectionDate.toISOString().slice(0, 10);
 
         if (diff === 30) {
           const bookingUrl = this.buildBookingUrl({
@@ -646,7 +631,6 @@ export class RemindersService {
         }
       }
 
-      // 任意日付：customDaysBefore 日前
       if (car.customReminderDate && car.customDaysBefore != null) {
         const customDate = car.customReminderDate as Date;
         const diff = this.diffInDays(targetDate, customDate);
@@ -716,24 +700,9 @@ export class RemindersService {
     };
   }
 
-   /**
-   * 指定月のリマインド対象件数を、日付ごとにまとめて返す
-   * - month: "YYYY-MM" 形式（例: "2025-11"）
-   * - 内部的には 1日〜月末まで既存 previewForDate を呼び出して集計
-   * - その月の中で「1件以上ヒットした日だけ」を days に含める
-   */
-    /**
-   * 指定月のリマインド対象件数＋対象者一覧を返す
-   * - monthStr: "YYYY-MM"
-   * - days: 日別サマリ（今まで通り）
-   * - items: 対象者＆対象車両一覧（送信用の情報付き）
-   */
-    /**
-   * 指定月のリマインド対象件数＋対象者一覧を返す
-   * - monthStr: "YYYY-MM"
-   * - days: 日別サマリ（今まで通り）
-   * - items: 対象者＆対象車両一覧（送信用の情報付き）
-   */
+  // ------------------------------
+  // 月別プレビュー
+  // ------------------------------
   async previewForMonth(
     user: AuthPayload,
     monthStr: string,
@@ -743,18 +712,18 @@ export class RemindersService {
       throw new Error('month は YYYY-MM 形式で指定してください');
     }
 
+    const tenantId = this.ensureTenant(user, tenantIdFromQuery);
+
     const [yStr, mStr] = monthStr.split('-');
     const year = Number(yStr);
-    const month = Number(mStr); // 1〜12
+    const month = Number(mStr);
 
     if (!year || !month || month < 1 || month > 12) {
       throw new Error('month の値が不正です');
     }
 
-    // その月の日数（28〜31）
     const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
 
-    // 日別サマリ
     const allDays: {
       date: string;
       birthdayCount: number;
@@ -765,10 +734,9 @@ export class RemindersService {
       totalCount: number;
     }[] = [];
 
-    // 一覧用アイテム（送信用情報も抱えておく）
     const allItems: {
       id: number;
-      date: string; // "YYYY-MM-DD"
+      date: string;
       category:
         | 'birthday'
         | 'shakenTwoMonths'
@@ -779,7 +747,9 @@ export class RemindersService {
       carName?: string | null;
       plateNumber?: string | null;
 
-      // ★ 追加：フロント詳細モーダル用
+      customerId?: number | null;
+      carId?: number | null;
+
       customerPhone?: string | null;
       customerAddress?: string | null;
       shakenDate?: string | null;
@@ -787,14 +757,15 @@ export class RemindersService {
 
       lineUid: string | null;
       messageText: string;
+
+      sent?: boolean;
     }[] = [];
 
     let nextItemId = 1;
 
-    // 1日〜月末までループして、既存 previewForDate を使って集計
     for (let day = 1; day <= daysInMonth; day++) {
       const d = new Date(Date.UTC(year, month - 1, day));
-      const dateStr = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const dateStr = d.toISOString().slice(0, 10);
 
       const preview = await this.previewForDate(
         user,
@@ -824,9 +795,6 @@ export class RemindersService {
         totalCount,
       });
 
-      // ── 一覧用 items 作成（送信用の lineUid / messageText も持っておく） ──
-
-      // 誕生日
       for (const t of preview.birthdayTargets as any[]) {
         allItems.push({
           id: nextItemId++,
@@ -835,18 +803,18 @@ export class RemindersService {
           customerName: t.customerName,
           carName: null,
           plateNumber: null,
-
+          customerId: t.customerId ?? null,
+          carId: null,
           customerPhone: t.customerPhone ?? null,
           customerAddress: t.customerAddress ?? null,
           shakenDate: null,
           inspectionDate: null,
-
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
+          sent: false,
         });
       }
 
-      // 車検2ヶ月前
       for (const t of preview.shakenTwoMonths as any[]) {
         allItems.push({
           id: nextItemId++,
@@ -855,18 +823,18 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-
+          customerId: t.customerId ?? null,
+          carId: t.carId ?? null,
           customerPhone: t.customerPhone ?? null,
           customerAddress: t.customerAddress ?? null,
           shakenDate: t.shakenDate ?? null,
           inspectionDate: t.inspectionDate ?? null,
-
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
+          sent: false,
         });
       }
 
-      // 車検1週間前
       for (const t of preview.shakenOneWeek as any[]) {
         allItems.push({
           id: nextItemId++,
@@ -875,18 +843,18 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-
+          customerId: t.customerId ?? null,
+          carId: t.carId ?? null,
           customerPhone: t.customerPhone ?? null,
           customerAddress: t.customerAddress ?? null,
           shakenDate: t.shakenDate ?? null,
           inspectionDate: t.inspectionDate ?? null,
-
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
+          sent: false,
         });
       }
 
-      // 点検1ヶ月前
       for (const t of preview.inspectionOneMonth as any[]) {
         allItems.push({
           id: nextItemId++,
@@ -895,18 +863,18 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-
+          customerId: t.customerId ?? null,
+          carId: t.carId ?? null,
           customerPhone: t.customerPhone ?? null,
           customerAddress: t.customerAddress ?? null,
           shakenDate: t.shakenDate ?? null,
           inspectionDate: t.inspectionDate ?? null,
-
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
+          sent: false,
         });
       }
 
-      // 任意日付
       for (const t of preview.custom as any[]) {
         allItems.push({
           id: nextItemId++,
@@ -915,21 +883,43 @@ export class RemindersService {
           customerName: t.customerName,
           carName: t.carName ?? null,
           plateNumber: t.registrationNumber ?? null,
-
+          customerId: t.customerId ?? null,
+          carId: t.carId ?? null,
           customerPhone: t.customerPhone ?? null,
           customerAddress: t.customerAddress ?? null,
           shakenDate: t.shakenDate ?? null,
           inspectionDate: t.inspectionDate ?? null,
-
           lineUid: t.lineUid ?? null,
           messageText: t.messageText,
+          sent: false,
         });
       }
     }
 
-    const tenantId = this.ensureTenant(user, tenantIdFromQuery);
+    // ▼ 送信済みログ取得（重複判定は tenantId + customerId + carId だけ）
+    const sentLogs = await this.prisma.reminderSentLog.findMany({
+      where: {
+        tenantId,
+      },
+      select: {
+        customerId: true,
+        carId: true,
+      },
+    });
 
-    // 「1件以上ヒットした日」だけ days に載せる
+    const sentKeySet = new Set<string>();
+    for (const log of sentLogs) {
+      const key = `${log.customerId ?? ''}|${log.carId ?? ''}`;
+      sentKeySet.add(key);
+    }
+
+    for (const item of allItems) {
+      const key = `${item.customerId ?? ''}|${item.carId ?? ''}`;
+      if (sentKeySet.has(key)) {
+        item.sent = true;
+      }
+    }
+
     const hitDays = allDays.filter((d) => d.totalCount > 0);
 
     this.logger.log(
@@ -944,8 +934,10 @@ export class RemindersService {
     };
   }
 
-
-  /**
+  // ------------------------------
+  // 月別一括送信
+  // ------------------------------
+    /**
    * 月別プレビューで選択された行だけまとめて送る
    * - monthStr: "YYYY-MM"
    * - itemIds: previewForMonth が返した items の id 配列
@@ -995,7 +987,7 @@ export class RemindersService {
       `sendBulkForMonth: tenantId=${tenantId}, month=${monthStr}, selected=${selectedItems.length}/${itemIds.length}`,
     );
 
-    // DEVELOPER ロールはプレビューのみ（実送信なし）
+    // DEVELOPER ロールはプレビューのみ（実送信なし & ログも残さない）
     if (user.role === 'DEVELOPER') {
       this.logger.log('sendBulkForMonth: DEVELOPER ロールなので送信はスキップ');
       return {
@@ -1009,9 +1001,46 @@ export class RemindersService {
 
     let sentCount = 0;
 
+    // ★ ここで Prisma 用の型を明示
+    const logsToCreate: Prisma.ReminderSentLogCreateManyInput[] = [];
+
     for (const item of selectedItems) {
       const lineUid = item.lineUid as string | null;
       const message = item.messageText as string;
+
+      // ログ用 category（string → enum ReminderCategory に変換）
+      let categoryEnum: ReminderCategory;
+      switch (item.category as string) {
+        case 'birthday':
+          categoryEnum = ReminderCategory.birthday;
+          break;
+        case 'shakenTwoMonths':
+          categoryEnum = ReminderCategory.shakenTwoMonths;
+          break;
+        case 'shakenOneWeek':
+          categoryEnum = ReminderCategory.shakenOneWeek;
+          break;
+        case 'inspectionOneMonth':
+          categoryEnum = ReminderCategory.inspectionOneMonth;
+          break;
+        case 'custom':
+          categoryEnum = ReminderCategory.custom;
+          break;
+        default:
+          // 想定外の値は custom 扱いに逃がす
+          categoryEnum = ReminderCategory.custom;
+          break;
+      }
+
+      // 送信ログ（重複は skipDuplicates 側で調整）
+      logsToCreate.push({
+        tenantId,
+        customerId: item.customerId ?? null,
+        carId: item.carId ?? null,
+        // Prisma 的には string("YYYY-MM-DD") でも OK
+        date: new Date(item.date),
+        category: categoryEnum,
+      });
 
       if (!lineUid) {
         this.logger.warn(
@@ -1033,6 +1062,14 @@ export class RemindersService {
       }
     }
 
+    // ★ ここでまとめてログ保存（型は Prisma.ReminderSentLogCreateManyInput[] なので OK）
+    if (logsToCreate.length > 0) {
+      await this.prisma.reminderSentLog.createMany({
+        data: logsToCreate,
+        skipDuplicates: true,
+      });
+    }
+
     this.logger.log(
       `sendBulkForMonth: 送信完了 tenantId=${tenantId}, month=${monthStr}, sentCount=${sentCount}`,
     );
@@ -1046,10 +1083,10 @@ export class RemindersService {
     };
   }
 
-  /**
-   * 実際に送信まで行う
-   * /reminders/run から呼ばれる想定
-   */
+
+  // ------------------------------
+  // 指定日一括送信 (/reminders/run)
+  // ------------------------------
   async sendForDate(
     user: AuthPayload,
     baseDateStr: string,
@@ -1078,8 +1115,6 @@ export class RemindersService {
       `sendForDate: totalCount=${totalCount} (birthday=${preview.birthdayTargets.length}, shaken2m=${preview.shakenTwoMonths.length}, shaken1w=${preview.shakenOneWeek.length}, inspection1m=${preview.inspectionOneMonth.length}, custom=${preview.custom.length})`,
     );
 
-    // ★ DEVELOPER からはプレビューのみ（送信しない仕様にしたいならここで止める）
-    //   送信もできてほしいなら、この if ブロックを削除してOK
     if (user.role === 'DEVELOPER') {
       this.logger.log('sendForDate: DEVELOPER ロールなので送信はスキップ');
       return {
@@ -1089,7 +1124,7 @@ export class RemindersService {
       };
     }
 
-    // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
+       // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
     const allTargets = [
       ...preview.birthdayTargets,
       ...preview.shakenTwoMonths,
@@ -1098,10 +1133,54 @@ export class RemindersService {
       ...preview.custom,
     ];
 
+    // ★ ログ用配列（Prisma 型を明示）
+    const logsToCreate: Prisma.ReminderSentLogCreateManyInput[] = [];
+
+    // kind → enum ReminderCategory に変換する小さいヘルパー
+    const pushLogs = (items: any[], kind: ReminderKind) => {
+      let categoryEnum: ReminderCategory;
+      switch (kind) {
+        case 'BIRTHDAY':
+          categoryEnum = ReminderCategory.birthday;
+          break;
+        case 'SHAKEN_2M':
+          categoryEnum = ReminderCategory.shakenTwoMonths;
+          break;
+        case 'SHAKEN_1W':
+          categoryEnum = ReminderCategory.shakenOneWeek;
+          break;
+        case 'INSPECTION_1M':
+          categoryEnum = ReminderCategory.inspectionOneMonth;
+          break;
+        case 'CUSTOM':
+        default:
+          categoryEnum = ReminderCategory.custom;
+          break;
+      }
+
+      for (const t of items) {
+        logsToCreate.push({
+          tenantId,
+          customerId: t.customerId ?? null,
+          carId: t.carId ?? null,
+          date: new Date(baseDateStr),
+          category: categoryEnum,
+        });
+      }
+    };
+
+    // 各グループごとにログを積む
+    pushLogs(preview.birthdayTargets as any[], 'BIRTHDAY');
+    pushLogs(preview.shakenTwoMonths as any[], 'SHAKEN_2M');
+    pushLogs(preview.shakenOneWeek as any[], 'SHAKEN_1W');
+    pushLogs(preview.inspectionOneMonth as any[], 'INSPECTION_1M');
+    pushLogs(preview.custom as any[], 'CUSTOM');
+
+    // ここから実際の LINE 送信ループ（元の挙動そのまま）
     for (const t of allTargets) {
       const lineUid: string | null =
-        t.lineUid ?? t.lineUserId ?? t.uid ?? null;
-      const message: string | undefined = t.messageText;
+        (t as any).lineUid ?? (t as any).lineUserId ?? (t as any).uid ?? null;
+      const message: string | undefined = (t as any).messageText;
 
       if (!lineUid || !message) {
         continue;
@@ -1113,18 +1192,15 @@ export class RemindersService {
         this.logger.error(
           `sendForDate: LINE送信失敗 lineUid=${lineUid}, error=${e?.message ?? e}`,
         );
-        // 必要ならここで throw してフロントに「失敗」を返しても良い
       }
     }
 
-    this.logger.log(
-      `sendForDate: LINE送信処理完了 tenantId=${tenantId}, totalTargets=${allTargets.length}`,
-    );
-
-    return {
-      ...preview,
-      totalCount,
-      sent: true,
-    };
+    // ★ 最後にまとめてログ保存
+    if (logsToCreate.length > 0) {
+      await this.prisma.reminderSentLog.createMany({
+        data: logsToCreate,
+        skipDuplicates: true,
+      });
+    }
   }
 }

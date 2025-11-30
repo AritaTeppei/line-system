@@ -35,6 +35,9 @@ type MonthReminderItem = {
   shakenDate?: string | null;
   inspectionDate?: string | null;
 
+  // ★ 追加：送信メッセージ内容（バックエンドから渡ってくる）
+  messageText?: string | null;
+
   sent?: boolean; // 送信済み
 };
 
@@ -110,6 +113,11 @@ export default function RemindersMonthPage() {
   const [detailItem, setDetailItem] = useState<MonthReminderItem | null>(
     null,
   );
+
+  // ★ 追加：送信確認モーダル＋カウントダウン用
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [countdown, setCountdown] = useState(10);
+  const [isCounting, setIsCounting] = useState(false);
 
   // 初期表示: 今月をセット
   useEffect(() => {
@@ -245,6 +253,14 @@ export default function RemindersMonthPage() {
     });
   }, [data, categoryFilter]);
 
+  // ★ 選択中のアイテム一覧（モーダル表示用）
+  const selectedItems = useMemo(() => {
+    if (!data) return [];
+    if (selectedIds.length === 0) return [];
+    const idSet = new Set(selectedIds);
+    return (data.items ?? []).filter((item) => idSet.has(item.id));
+  }, [data, selectedIds]);
+
   // 「未送信の行だけ」を選択対象にする
   const selectableItems = filteredItems.filter((item) => !item.sent);
 
@@ -279,6 +295,18 @@ export default function RemindersMonthPage() {
     }
   };
 
+  // ★ 「選択した件を送信」ボタン → モーダルを開くだけ
+  const handleOpenSendConfirm = () => {
+    if (!data) return;
+    if (selectedIds.length === 0) {
+      alert('送信対象が選択されていません。');
+      return;
+    }
+    setSendConfirmOpen(true);
+    setCountdown(10);
+    setIsCounting(false);
+  };
+
   // 選択した件を送信（/reminders/send-bulk）＋送信済みマーク更新
   const handleSendSelected = async () => {
     if (!data) return;
@@ -286,11 +314,6 @@ export default function RemindersMonthPage() {
       alert('送信対象が選択されていません。');
       return;
     }
-
-    const ok = window.confirm(
-      `選択中の ${selectedIds.length} 件にリマインドを送信します。よろしいですか？`,
-    );
-    if (!ok) return;
 
     try {
       setSending(true);
@@ -348,6 +371,28 @@ export default function RemindersMonthPage() {
       setSending(false);
     }
   };
+
+  // ★ カウントダウン処理
+  useEffect(() => {
+    if (!sendConfirmOpen || !isCounting) return;
+
+    if (countdown <= 0) {
+      // 0になったら送信実行
+      (async () => {
+        await handleSendSelected();
+        setIsCounting(false);
+        setSendConfirmOpen(false);
+        setCountdown(10);
+      })();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [sendConfirmOpen, isCounting, countdown]);
 
   const totalCountThisMonth =
     data?.days.reduce((sum, d) => sum + d.totalCount, 0) ?? 0;
@@ -457,7 +502,7 @@ export default function RemindersMonthPage() {
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover/bg-gray-100"
+              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover:bg-gray-100"
             >
               ← 前の月
             </button>
@@ -600,7 +645,7 @@ export default function RemindersMonthPage() {
               </div>
 
               <div className="ml-auto flex flex-col sm:flex-row sm:items-center gap-2 text-[11px]">
-                <div className="flex items-center gap-2">
+                <div className="flex itemscenter gap-2">
                   <span>
                     選択中:{' '}
                     <span className="font-semibold text-emerald-700">
@@ -621,7 +666,7 @@ export default function RemindersMonthPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleSendSelected}
+                  onClick={handleOpenSendConfirm}
                   disabled={sending || selectedIds.length === 0}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -738,6 +783,113 @@ export default function RemindersMonthPage() {
         )}
       </div>
 
+      {/* ★ 送信確認モーダル（件数＋メッセージ内容＋カウントダウン） */}
+      {sendConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
+            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+              選択したリマインドの送信確認
+            </h3>
+            <p className="text-xs text-gray-600 mb-3">
+              下記の件数と内容で LINE リマインドを送信します。
+              内容をご確認のうえ、10秒カウントダウン後に送信を実行します。
+            </p>
+
+            <div className="space-y-3 text-[12px] sm:text-sm">
+              <div className="flex justify-between">
+                <span className="text-[11px] font-medium text-gray-500">
+                  送信対象件数
+                </span>
+                <span className="text-gray-900 font-semibold">
+                  {selectedItems.length} 件
+                </span>
+              </div>
+
+              {/* 簡易一覧（先頭3件くらい） */}
+              <div className="border-t border-gray-200 pt-2">
+                <div className="text-[11px] font-medium text-gray-500 mb-1">
+                  対象の一部（最大3件）
+                </div>
+                <ul className="space-y-1 max-h-32 overflow-y-auto text-[11px] text-gray-800">
+                  {selectedItems.slice(0, 3).map((item) => (
+                    <li key={item.id} className="flex flex-wrap gap-x-2">
+                      <span className="text-gray-500">
+                        {item.date} /
+                        {categoryLabelMap[item.category]}
+                      </span>
+                      <span className="font-medium">
+                        {item.customerName}
+                      </span>
+                      {item.carName && (
+                        <span className="text-gray-600">
+                          （{item.carName}）
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {selectedItems.length === 0 && (
+                    <li className="text-gray-500">
+                      送信対象が選択されていません。
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              {/* メッセージ内容サンプル（1件目） */}
+              <div className="border-t border-gray-200 pt-2">
+                <div className="text-[11px] font-medium text-gray-500 mb-1">
+                  メッセージ内容（1件目のサンプル）
+                </div>
+                <pre className="text-[11px] bg-gray-50 border border-gray-200 rounded-md p-2 whitespace-pre-wrap text-gray-800 max-h-40 overflow-y-auto">
+                  {selectedItems[0]?.messageText ||
+                    'メッセージ内容を取得できませんでした。'}
+                </pre>
+              </div>
+
+              {/* カウントダウン表示 */}
+              <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
+                <div className="text-[11px] text-gray-600">
+                  カウントダウンが 0 秒になると送信を開始します。
+                </div>
+                <div className="text-lg font-bold text-emerald-700 tabular-nums">
+                  {isCounting ? `${countdown}s` : '待機中'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSendConfirmOpen(false);
+                  setIsCounting(false);
+                  setCountdown(10);
+                }}
+                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+                disabled={sending}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isCounting) {
+                    setCountdown(10);
+                    setIsCounting(true);
+                  }
+                }}
+                disabled={sending || selectedItems.length === 0}
+                className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isCounting
+                  ? `${countdown} 秒後に送信します`
+                  : '10秒カウントダウンを開始'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 顧客・車両 詳細モーダル */}
       {detailItem && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
@@ -750,7 +902,7 @@ export default function RemindersMonthPage() {
               「顧客一覧」「車両一覧」から確認できます。
             </p>
 
-            <div className="space-y-3 text-[12px] sm:text-sm">
+            <div className="space-y-3 text[12px] sm:text-sm">
               <div>
                 <div className="text-[11px] font-medium text-gray-500">
                   リマインド日付
