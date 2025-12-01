@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Patch,
+  Delete,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
@@ -189,4 +190,37 @@ const created = await this.prisma.user.create({
 
     return { success: true };
   }
+
+    // ★ テナント配下ユーザーの削除
+    // ★ テナント配下ユーザーの削除
+  @Delete(':tenantId/users/:userId')
+  async deleteUser(
+    @Param('tenantId') tenantIdParam: string,
+    @Param('userId') userIdParam: string,
+  ) {
+    const tenantId = Number(tenantIdParam);
+    const userId = Number(userIdParam);
+
+    if (Number.isNaN(tenantId) || Number.isNaN(userId)) {
+      throw new BadRequestException('tenantId / userId が不正です');
+    }
+
+    // 対象ユーザーが存在するか＆このテナント配下かをチェック
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.tenantId !== tenantId) {
+      throw new NotFoundException('ユーザーが見つかりません');
+    }
+
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    // フロントは success を見てトースト表示
+    return { success: true };
+  }
+
+
 }
