@@ -1,5 +1,5 @@
 // src/cars/cars.controller.ts
-import { Patch, Body, Controller, Get, Post, Delete, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Delete, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { CarsService } from './cars.service';
 import { JwtAuthGuard } from '../jwt.guard';
@@ -25,24 +25,6 @@ create(@Req() req: Request, @Body() dto: CreateCarDto) {
     customerId: Number(dto.customerId),
   });
 }
-
-  // ★ 追加：車両の更新
-  @Patch(':id')
-  async update(
-    @Req() req: Request,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateCarDto,
-  ) {
-    const user = (req as any).authUser as AuthPayload;
-    return this.carsService.updateForUser(user, id, {
-      ...dto,
-      // customerId は数値化。未指定なら undefined のまま渡す
-      customerId:
-        dto.customerId !== undefined && dto.customerId !== null
-          ? Number(dto.customerId)
-          : undefined,
-    });
-  }
 
 @Delete(':id')
   async remove(
