@@ -9,9 +9,14 @@ import {
   Param,
   BadRequestException,
   NotFoundException,
+  UseGuards,         // ★ 追加
+  ForbiddenException // ★ 追加
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 // 新規作成用 DTO（email / plan は Prisma 側に合わせて必須）
 type CreateTenantDto = {
@@ -309,4 +314,31 @@ export class AdminTenantsController {
       plan: tenant.plan ?? null,
     };
   }
+      // ▼コントローラ内にメソッド追加（最後あたりでOK）
+    @Patch('')
+    @Delete(':userId')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('DEVELOPER')
+    async deleteTenantUser(
+      @Param('tenantId') tenantId: number,
+      @Param('userId') userId: number,
+    ) {
+      // 開発者以外は削除不可
+      const user = await this.prisma.user.findUnique({ where: { id: userId }});
+      if (!user) {
+        throw new NotFoundException('ユーザーが見つかりません');
+      }
+      if (user.role === 'DEVELOPER') {
+        throw new ForbiddenException('DEVELOPER は削除できません');
+      }
+      if (user.tenantId !== tenantId) {
+        throw new ForbiddenException('このテナントのユーザーではありません');
+      }
+
+      await this.prisma.user.delete({
+        where: { id: userId },
+      });
+
+      return { success: true };
+    }
 }

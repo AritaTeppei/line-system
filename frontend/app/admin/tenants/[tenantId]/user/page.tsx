@@ -26,7 +26,6 @@ export default function AdminTenantUsersPage() {
   const params = useParams<{ tenantId: string }>();
   const tenantId = Number(params.tenantId);
 
-
   const [me, setMe] = useState<Me | null>(null);
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +69,10 @@ export default function AdminTenantUsersPage() {
 
       try {
         // /auth/me で開発者チェック
-        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers });
+        const meRes = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/auth/me`,
+          { headers },
+        );
         if (!meRes.ok) {
           const data = await meRes.json().catch(() => null);
           let msg = "auth me error";
@@ -245,8 +247,54 @@ export default function AdminTenantUsersPage() {
     } catch (err: any) {
       console.error(err);
       setResetMessage(
-        err?.message ?? "パスワードリセットに失敗しました。（詳細はコンソールを参照）",
+        err?.message ??
+          "パスワードリセットに失敗しました。（詳細はコンソールを参照）",
       );
+    }
+  };
+
+  // ★ 追加：ユーザー削除
+  const handleDeleteUser = async (userId: number) => {
+    const savedToken =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("auth_token")
+        : null;
+
+    if (!savedToken) {
+      alert("トークンがありません。再ログインしてください。");
+      return;
+    }
+
+    const ok = window.confirm("このユーザーを削除します。よろしいですか？");
+    if (!ok) return;
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users/${userId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${savedToken}`,
+          },
+        },
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(
+          `削除に失敗しました (${res.status}): ${
+            text || res.statusText || "不明なエラー"
+          }`,
+        );
+      }
+
+      // 一覧から即時削除
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+
+      alert("ユーザーを削除しました。");
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message ?? "削除に失敗しました。");
     }
   };
 
@@ -289,7 +337,9 @@ export default function AdminTenantUsersPage() {
       {/* ヘッダー */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold">テナント ログインユーザー管理（ID: {tenantId}）</h1>
+          <h1 className="text-xl font-bold">
+            テナント ログインユーザー管理（ID: {tenantId}）
+          </h1>
           {me && (
             <div className="mt-1 text-sm text-gray-700">
               ログイン中: {me.email}（role: {me.role}
@@ -318,7 +368,9 @@ export default function AdminTenantUsersPage() {
 
       {/* 新規作成フォーム */}
       <section className="mb-6 border rounded px-4 py-3 bg-white max-w-xl">
-        <h2 className="font-semibold text-sm mb-2">ログインユーザー追加（MANAGER / CLIENT）</h2>
+        <h2 className="font-semibold text-sm mb-2">
+          ログインユーザー追加（MANAGER / CLIENT）
+        </h2>
         {createMessage && (
           <div className="mb-2 text-xs whitespace-pre-wrap">
             {createMessage}
@@ -358,7 +410,9 @@ export default function AdminTenantUsersPage() {
               className="border rounded px-2 py-1 text-sm"
               value={newRole}
               onChange={(e) =>
-                setNewRole(e.target.value === "CLIENT" ? "CLIENT" : "MANAGER")
+                setNewRole(
+                  e.target.value === "CLIENT" ? "CLIENT" : "MANAGER",
+                )
               }
             >
               <option value="MANAGER">MANAGER（管理者）</option>
@@ -430,7 +484,9 @@ export default function AdminTenantUsersPage() {
 
       {/* 一覧 */}
       <section className="border rounded px-4 py-3 bg-white max-w-3xl">
-        <h2 className="font-semibold text-sm mb-2">テナントのログインユーザー一覧</h2>
+        <h2 className="font-semibold text-sm mb-2">
+          テナントのログインユーザー一覧
+        </h2>
         {users.length === 0 ? (
           <p className="text-sm text-gray-600">
             まだ MANAGER / CLIENT ユーザーが登録されていません。
@@ -456,13 +512,20 @@ export default function AdminTenantUsersPage() {
                     <td className="border px-2 py-1">{u.name ?? ""}</td>
                     <td className="border px-2 py-1">{u.role}</td>
                     <td className="border px-2 py-1">{u.phone ?? ""}</td>
-                    <td className="border px-2 py-1">
+                    <td className="border px-2 py-1 space-x-1">
                       <button
                         type="button"
                         onClick={() => handleStartReset(u.id)}
                         className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700 hover:bg-orange-200"
                       >
                         初期PWリセット
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteUser(u.id)}
+                        className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                      >
+                        削除
                       </button>
                     </td>
                   </tr>
