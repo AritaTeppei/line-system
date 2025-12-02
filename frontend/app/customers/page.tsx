@@ -13,7 +13,7 @@ type Customer = {
   mobilePhone?: string | null;
   lineUid?: string | null;
   birthday?: string | null;
-  hasVehicle?: boolean | null;   // サーバ側で true/false を返してもOK
+  hasVehicle?: boolean;   // サーバ側で true/false を返してもOK
   vehicleCount?: number | null;  // 台数で返したい場合
   createdAt?: string | null;     // 並び替え用（登録日が取れるなら）
 };
@@ -1056,7 +1056,7 @@ export default function CustomersPage() {
                             <td className="border px-2 py-1 align-middle whitespace-nowrap">
                               {resolveHasVehicle(c) ? (
                                 <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-400 px-2 py-0.5 text-[10px] text-emerald-800">
-                                  車両あり
+                                  🚗車両あり
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-300 px-2 py-0.5 text-[10px] text-gray-600">
