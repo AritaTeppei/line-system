@@ -44,23 +44,14 @@ export class PublicService {
   /**
    * トークン＋入力情報から顧客を作成 or 更新
    */
-    /**
-   * トークン＋入力情報から顧客を作成 or 更新
-   * - まず lineUid で既存顧客がいないか確認
-   * - いなければ「tenantId + mobilePhone」で既存顧客を探してマージ
-   * - どちらも無ければ新規作成
-   */
-  async completeRegister(
-    token: string,
-    data: {
-      lastName: string;
-      firstName: string;
-      postalCode?: string;
-      address1?: string;
-      address2?: string;
-      mobilePhone?: string;
-    },
-  ) {
+  async completeRegister(token: string, data: {
+    lastName: string;
+    firstName: string;
+    postalCode?: string;
+    address1?: string;
+    address2?: string;
+    mobilePhone?: string;
+  }) {
     const record = await this.prisma.customerRegisterToken.findUnique({
       where: { token },
     });
@@ -79,17 +70,15 @@ export class PublicService {
     const lineUid = record.lineUid;
 
     try {
-      let customer: any = null;
-
-      // 1. まず「この UID で既に顧客がいるか」を確認
-      const existingByUid = await this.prisma.customer.findFirst({
+      // すでにこのUIDで顧客がいれば更新、いなければ新規作成
+      const existing = await this.prisma.customer.findFirst({
         where: { tenantId, lineUid },
       });
 
-      if (existingByUid) {
-        // → その顧客の情報を更新（従来の動き）
+      let customer;
+      if (existing) {
         customer = await this.prisma.customer.update({
-          where: { id: existingByUid.id },
+          where: { id: existing.id },
           data: {
             lastName: data.lastName,
             firstName: data.firstName,
@@ -99,35 +88,7 @@ export class PublicService {
             mobilePhone: data.mobilePhone,
           },
         });
-      } else if (data.mobilePhone) {
-        // 2. UID では見つからなかった場合、
-        //    「tenantId + mobilePhone」で既存顧客を探してマージ
-        const existingByPhone = await this.prisma.customer.findFirst({
-          where: {
-            tenantId,
-            mobilePhone: data.mobilePhone,
-          },
-        });
-
-        if (existingByPhone) {
-          customer = await this.prisma.customer.update({
-            where: { id: existingByPhone.id },
-            data: {
-              lastName: data.lastName,
-              firstName: data.firstName,
-              postalCode: data.postalCode,
-              address1: data.address1,
-              address2: data.address2,
-              mobilePhone: data.mobilePhone,
-              // ★ ここで LINE UID を紐づける
-              lineUid,
-            },
-          });
-        }
-      }
-
-      // 3. UID でも電話番号でも既存が見つからなかった場合 → 新規作成
-      if (!customer) {
+      } else {
         customer = await this.prisma.customer.create({
           data: {
             tenantId,
@@ -142,7 +103,7 @@ export class PublicService {
         });
       }
 
-      // 4. トークンを使用済みにする
+      // トークンを使用済みにする
       await this.prisma.customerRegisterToken.update({
         where: { token },
         data: { usedAt: new Date() },

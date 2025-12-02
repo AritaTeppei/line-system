@@ -17,11 +17,10 @@ export class PublicController {
 
   /**
    * GET /public/customer-register/:token
-   * → 事前確認用（店舗名やマスク済みUIDなど）
+   * → フォーム表示前にリンクが有効かチェック
    */
   @Get('customer-register/:token')
-  async preview(@Param('token') token: string) {
-    // ★ PublicService 側のメソッド名は「previewRegisterToken」
+  preview(@Param('token') token: string) {
     return this.publicService.previewRegisterToken(token);
   }
 
