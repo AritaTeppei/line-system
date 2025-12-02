@@ -55,6 +55,14 @@ export default function CustomersPage() {
   const [isLogListModalOpen, setIsLogListModalOpen] =
     useState(false);
 
+      // ----- CSV取り込み用 state -----
+  const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvImportError, setCsvImportError] = useState<string | null>(null);
+  const [csvImportSuccess, setCsvImportSuccess] = useState<string | null>(null);
+
+
   // 新規登録＆編集フォーム用 state（モーダルで使う）
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -440,6 +448,46 @@ export default function CustomersPage() {
     setFormError(null);
     setFormSuccess(null);
     setIsCustomerModalOpen(true);
+  };
+
+    // ===== CSV取り込み関連 =====
+  const openCsvImportModal = () => {
+    setCsvImportError(null);
+    setCsvImportSuccess(null);
+    setCsvFile(null);
+    setIsCsvImportModalOpen(true);
+  };
+
+  const closeCsvImportModal = () => {
+    if (csvImporting) return;
+    setIsCsvImportModalOpen(false);
+  };
+
+  const handleCsvImport = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setCsvImportError(null);
+    setCsvImportSuccess(null);
+
+    if (!csvFile) {
+      setCsvImportError('CSVファイルを選択してください。');
+      return;
+    }
+
+    // ★ ここは「今の挙動を変えない」ためにダミー処理だけ
+    //    後で /customers/import-csv みたいなAPIに接続する想定。
+    setCsvImporting(true);
+    try {
+      // 疑似的に少し待つ
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      setCsvImportSuccess(
+        'CSVファイルの取り込み処理の準備が完了しました。（※現在は画面のみ実装）',
+      );
+    } catch (err) {
+      setCsvImportError('CSV取り込み中にエラーが発生しました。');
+    } finally {
+      setCsvImporting(false);
+    }
   };
 
   const handleEditClick = (c: Customer) => {
@@ -830,24 +878,42 @@ export default function CustomersPage() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg白 p-4 shadow-sm flex flex-col justify-between gap-2 bg-white">
-            <div className="text-[11px] font-semibold text-gray-500">
-              新規顧客登録
-            </div>
-            <p className="text-[11px] text-gray-500">
-              店舗側で把握している顧客を随時追加できます。
-            </p>
-            <div className="mt-1">
-              <button
-                type="button"
-                onClick={openNewCustomerModal}
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
-              >
-                <span className="text-[14px]">＋</span>
-                <span>新規顧客を登録</span>
-              </button>
-            </div>
-          </div>
+            {/* 3枚目：新規顧客登録カード */}
+  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col justify-between gap-2">
+    <div>
+      <div className="text-[11px] font-semibold text-gray-500">
+        新規顧客登録
+      </div>
+      <p className="mt-1 text-[11px] text-gray-500">
+        店舗側で把握している顧客を随時追加できます。
+      </p>
+    </div>
+
+    {/* ★ 右下にボタン2つを横並びで配置 */}
+    <div className="mt-1 flex justify-end gap-2">
+      {/* 新規顧客を登録ボタン（位置を下にずらしてここへ） */}
+      <button
+        type="button"
+        onClick={openNewCustomerModal}
+        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
+      >
+        <span className="text-[14px]">＋</span>
+        <span>新規顧客を登録</span>
+      </button>
+
+      {/* CSVから取り込みボタン（MANAGERのみ表示） */}
+      {me?.role === 'MANAGER' && (
+        <button
+          type="button"
+          onClick={openCsvImportModal}
+          className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 text-xs font-semibold px-3 py-1.5 shadow-sm"
+        >
+          <span className="text-[14px]">📥</span>
+          <span>CSVから取り込み</span>
+        </button>
+      )}
+    </div>
+  </div>
         </section>
 
         {/* 顧客一覧 + 一括送信 */}
@@ -1544,6 +1610,68 @@ export default function CustomersPage() {
                 閉じる
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+            {/* ===== CSV取り込みモーダル ===== */}
+      {isCsvImportModalOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-2">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
+            <h2 className="text-sm font-semibold text-gray-900 mb-2">
+              顧客CSV取り込み
+            </h2>
+            <p className="text-[11px] text-gray-600 mb-3">
+              顧客情報が格納されたCSVファイルを選択してください。
+              <br />
+              ※ 現時点では画面のみの実装で、実際の取り込み処理はまだ接続していません。
+            </p>
+
+            {csvImportError && (
+              <div className="mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                {csvImportError}
+              </div>
+            )}
+
+            {csvImportSuccess && (
+              <div className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
+                {csvImportSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleCsvImport} className="space-y-3">
+              <div>
+                <label className="block text-[11px] text-gray-700 mb-1">
+                  CSVファイル
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) =>
+                    setCsvFile(e.target.files?.[0] ?? null)
+                  }
+                  className="block w-full text-[11px] text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-[11px] file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeCsvImportModal}
+                  disabled={csvImporting}
+                  className="inline-flex items-center rounded-md border border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-[11px] text-gray-700 disabled:opacity-60"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  disabled={csvImporting}
+                  className="inline-flex items-center rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-[11px] font-semibold shadow-sm disabled:opacity-60"
+                >
+                  {csvImporting ? '処理中...' : '取り込みを実行'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
