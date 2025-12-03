@@ -31,6 +31,9 @@ type MonthReminderItem = {
   customerPhone?: string | null;
   customerAddress?: string | null;
 
+  // ★ 追加：顧客の LINE UID
+  lineUid?: string | null;
+
   // ★ 追加：車検日・点検日
   shakenDate?: string | null;
   inspectionDate?: string | null;
@@ -239,19 +242,52 @@ export default function RemindersMonthPage() {
   };
 
   const filteredItems = useMemo(() => {
-    if (!data) return [];
-    let items = data.items ?? [];
-    if (categoryFilter !== 'ALL') {
-      items = items.filter((item) => item.category === categoryFilter);
+  if (!data) return [];
+
+  // ★ ① まず LINE UID があるものだけを対象にする
+  let items = (data.items ?? []).filter(
+    (item) => item.lineUid && item.lineUid.trim() !== '',
+  );
+
+  // ★ ② 誕生日は「選択中の月」と同じ月だけに絞る
+  if (month) {
+    const [_, mStr] = month.split('-'); // "YYYY-MM" から月だけ取り出す
+    const selectedMonth = Number(mStr);
+
+    if (!Number.isNaN(selectedMonth)) {
+      items = items.filter((item) => {
+        // 誕生日以外（車検・点検・custom）はそのまま残す
+        if (item.category !== 'birthday') return true;
+
+        // 誕生日の行だけ「date の月」が一致するものだけ残す
+        if (!item.date) return false;
+
+        // "YYYY-MM-DD" 想定で Date に変換
+        const d = new Date(item.date);
+        if (Number.isNaN(d.getTime())) return false;
+
+        const itemMonth = d.getMonth() + 1; // JS の月は 0 始まり
+        return itemMonth === selectedMonth;
+      });
     }
-    // 日付＋カテゴリーで安定ソート
-    return items.slice().sort((a, b) => {
-      if (a.date === b.date) {
-        return a.category.localeCompare(b.category);
-      }
-      return a.date.localeCompare(b.date);
-    });
-  }, [data, categoryFilter]);
+  }
+
+  // ★ ③ 種別フィルタ
+  if (categoryFilter !== 'ALL') {
+    items = items.filter((item) => item.category === categoryFilter);
+  }
+
+  // ★ ④ 日付＋カテゴリーで安定ソート
+  return items.slice().sort((a, b) => {
+    if (a.date === b.date) {
+      return a.category.localeCompare(b.category);
+    }
+    return a.date.localeCompare(b.date);
+  });
+}, [data, categoryFilter, month]);
+
+
+
 
   // ★ 選択中のアイテム一覧（モーダル表示用）
   const selectedItems = useMemo(() => {

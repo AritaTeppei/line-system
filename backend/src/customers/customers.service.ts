@@ -169,31 +169,36 @@ async importFromCsv(
     }
 
     // 誕生日のパース（YYYY-MM-DD / YYYY/M/D あたりを想定）
-    let birthday: Date | null = null;
-    if (birthdayRaw) {
-      const normalized = birthdayRaw.replace(/\./g, '/').replace(/-/g, '/');
-      const parts = normalized.split(/[\/]/);
+let birthday: Date | null = null;
+if (birthdayRaw) {
+  const normalized = birthdayRaw.replace(/\./g, '/').replace(/-/g, '/');
+  const parts = normalized.split(/[\/]/);
 
-      if (parts.length === 3) {
-        const [y, m, d] = parts.map((p) => parseInt(p, 10));
-        if (!y || !m || !d) {
-          rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
-        } else {
-          const date = new Date(y, m - 1, d);
-          if (
-            date.getFullYear() !== y ||
-            date.getMonth() !== m - 1 ||
-            date.getDate() !== d
-          ) {
-            rowErrors.push('誕生日の日付が存在しません。');
-          } else {
-            birthday = date;
-          }
-        }
+  if (parts.length === 3) {
+    const [y, m, d] = parts.map((p) => parseInt(p, 10));
+    if (!y || !m || !d) {
+      rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+    } else {
+      // ★ここをローカルタイム → UTC に変更
+      const utcMs = Date.UTC(y, m - 1, d);
+      const date = new Date(utcMs);
+
+      // UTC基準でバリデーション
+      if (
+        date.getUTCFullYear() !== y ||
+        date.getUTCMonth() !== m - 1 ||
+        date.getUTCDate() !== d
+      ) {
+        rowErrors.push('誕生日の日付が存在しません。');
       } else {
-        rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+        birthday = date;
       }
     }
+  } else {
+    rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+  }
+}
+
 
     if (rowErrors.length > 0) {
       errors.push({
