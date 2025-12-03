@@ -645,69 +645,63 @@ export default function CustomersPage() {
     }
   };
 
-    // 並び替え後の顧客リスト
-  const sortedCustomers = [...customers].sort((a, b) => {
-    const mul = sortOrder === "asc" ? 1 : -1;
+ // 並び替え後の顧客リスト
+const sortedCustomers = [...customers].sort((a, b) => {
+  const mul = sortOrder === "asc" ? 1 : -1;
 
-    if (sortKey === "id") {
-      return (a.id - b.id) * mul;
-    }
+  if (sortKey === "id") {
+    return (a.id - b.id) * mul;
+  }
 
-    if (sortKey === "name") {
-      const an = `${a.lastName ?? ""}${a.firstName ?? ""}`;
-      const bn = `${b.lastName ?? ""}${b.firstName ?? ""}`;
-      return an.localeCompare(bn, "ja") * mul;
-    }
+  if (sortKey === "name") {
+    const an = `${a.lastName ?? ""}${a.firstName ?? ""}`;
+    const bn = `${b.lastName ?? ""}${b.firstName ?? ""}`;
+    return an.localeCompare(bn, "ja") * mul;
+  }
 
-    if (sortKey === "createdAt") {
-      const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return (ad - bd) * mul;
-    }
+  if (sortKey === "createdAt") {
+    const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return (ad - bd) * mul;
+  }
 
-    if (sortKey === "hasVehicle") {
-      const av = resolveHasVehicle(a) ? 1 : 0;
-      const bv = resolveHasVehicle(b) ? 1 : 0;
-      return (av - bv) * mul;
-    }
+  if (sortKey === "hasVehicle") {
+    const av = resolveHasVehicle(a) ? 1 : 0;
+    const bv = resolveHasVehicle(b) ? 1 : 0;
+    return (av - bv) * mul;
+  }
 
-    return 0;
-  });
+  return 0;
+});
 
-  // チェックボックス
-  const toggleCustomerSelection = (id: number) => {
-    setSelectedCustomerIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
+// 検索＋ページング用の顧客リスト
+const normalizedQuery = searchQuery.trim().toLowerCase();
+const filteredCustomers = normalizedQuery
+  ? sortedCustomers.filter((c) => {
+      const fields: string[] = [];
+      fields.push(formatCustomerId(c));
+      fields.push(`${c.lastName ?? ""}${c.firstName ?? ""}`);
+      if (c.postalCode) fields.push(c.postalCode);
+      if (c.address1) fields.push(c.address1);
+      if (c.address2) fields.push(c.address2);
+      if (c.mobilePhone) fields.push(c.mobilePhone);
+      if (c.lineUid) fields.push(c.lineUid);
+      if (c.birthday) fields.push(formatDate(c.birthday));
+      const text = fields.join(" ").toLowerCase();
+      return text.includes(normalizedQuery);
+    })
+  : sortedCustomers;
 
-  // 検索＋ページング用の顧客リスト
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredCustomers = normalizedQuery
-    ? customers.filter((c) => {
-        const fields: string[] = [];
-        fields.push(formatCustomerId(c));
-        fields.push(`${c.lastName ?? ""}${c.firstName ?? ""}`);
-        if (c.postalCode) fields.push(c.postalCode);
-        if (c.address1) fields.push(c.address1);
-        if (c.address2) fields.push(c.address2);
-        if (c.mobilePhone) fields.push(c.mobilePhone);
-        if (c.lineUid) fields.push(c.lineUid);
-        if (c.birthday) fields.push(formatDate(c.birthday));
-        const text = fields.join(" ").toLowerCase();
-        return text.includes(normalizedQuery);
-      })
-    : customers;
+const totalPages = Math.max(
+  1,
+  Math.ceil(filteredCustomers.length / pageSize),
+);
+const currentPage = Math.min(page, totalPages);
+const pagedCustomers = filteredCustomers.slice(
+  (currentPage - 1) * pageSize,
+  currentPage * pageSize,
+);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredCustomers.length / pageSize),
-  );
-  const currentPage = Math.min(page, totalPages);
-  const pagedCustomers = filteredCustomers.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
 
   const allDisplayedSelected =
     pagedCustomers.length > 0 &&
@@ -1149,87 +1143,122 @@ export default function CustomersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedCustomers.map((c) => {
-                      const fullAddress =
-                        (c.postalCode ? `〒${c.postalCode} ` : "") +
-                        (c.address1 ?? "") +
-                        (c.address2 ? ` ${c.address2}` : "");
+  {pagedCustomers.map((c) => {
+    const fullAddress =
+      (c.postalCode ? `〒${c.postalCode} ` : "") +
+      [c.address1, c.address2].filter(Boolean).join("");
 
-                      return (
-                        <tr
-                          key={c.id}
-                          className="hover:bg-gray-50 text-gray-900"
-                        >
-                          <td className="border px-2 py-1 text-center align-middle">
-                            <input
-                              type="checkbox"
-                              checked={selectedCustomerIds.includes(
-                                c.id,
-                              )}
-                              onChange={() =>
-                                toggleCustomerSelection(c.id)
-                              }
-                            />
-                          </td>
-                          <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                            {formatCustomerId(c)}
-                          </td>
-                          <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                            {c.lastName} {c.firstName}
-                          </td>
-                          <td className="border px-2 py-1 align-middle">
-                            {fullAddress}
-                          </td>
-                          <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                            {c.mobilePhone ?? ""}
-                          </td>
-                          <td className="border px-2 py-1 align-middle">
-                            {c.lineUid ? (
-                              <span title={c.lineUid}>
-                                {formatLineUid(c.lineUid)}
-                              </span>
-                            ) : (
-                              ""
-                            )}
-                          </td>
-                          <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                            {formatDate(c.birthday)}
-                          </td>
-                            <td className="border px-2 py-1 align-middle whitespace-nowrap">
-                              {resolveHasVehicle(c) ? (
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-400 px-2 py-0.5 text-[10px] text-emerald-800">
-                                  🚗車両あり
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full bg-gray-50 border border-gray-300 px-2 py-0.5 text-[10px] text-gray-600">
-                                  車両未登録
-                                </span>
-                              )}
-                            </td>
-                          <td className="border px-2 py-1 align-middle">
-                            <div className="flex gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleEditClick(c)}
-                                className="px-2 py-0.5 border border-gray-400 rounded-md text-[10px] hover:bg-gray-100"
-                              >
-                                編集
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteClick(c.id)
-                                }
-                                className="px-2 py-0.5 border border-red-500 rounded-md text-[10px] text-red-700 hover:bg-red-50"
-                              >
-                                削除
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
+    const isSelected = selectedCustomerIds.includes(c.id);
+
+    return (
+      <tr
+        key={c.id}
+        className="hover:bg-gray-50 text-gray-900"
+      >
+        {/* チェックボックス */}
+        <td className="border px-2 py-1 text-center">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => {
+              setSelectedCustomerIds((prev) =>
+                isSelected
+                  ? prev.filter((id) => id !== c.id)
+                  : [...prev, c.id],
+              );
+            }}
+          />
+        </td>
+
+        {/* 顧客ID */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          {formatCustomerId(c)}
+        </td>
+
+        {/* 名前 */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          {c.lastName} {c.firstName}
+        </td>
+
+        {/* 住所 */}
+        <td className="border px-2 py-1">
+          {fullAddress ? (
+            fullAddress
+          ) : (
+            <span className="text-gray-400">未設定</span>
+          )}
+        </td>
+
+        {/* 携帯番号 */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          {c.mobilePhone ? (
+            c.mobilePhone
+          ) : (
+            <span className="text-gray-400">未設定</span>
+          )}
+        </td>
+
+        {/* LINE UID */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          {c.lineUid ? (
+            <span title={c.lineUid}>
+              {formatLineUid(c.lineUid)}
+            </span>
+          ) : (
+            <span className="text-gray-400">未連携</span>
+          )}
+        </td>
+
+        {/* 誕生日 */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          {c.birthday ? (
+            formatDate(c.birthday)
+          ) : (
+            <span className="text-gray-400">未設定</span>
+          )}
+        </td>
+
+        {/* タグ */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          <div className="flex flex-wrap gap-1">
+            {resolveHasVehicle(c) && (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] text-emerald-700">
+                車両あり
+              </span>
+            )}
+            {c.lineUid && (
+              <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] text-green-700">
+                LINE連携
+              </span>
+            )}
+          </div>
+        </td>
+
+        {/* 操作ボタン */}
+        <td className="border px-2 py-1 whitespace-nowrap">
+          <div className="flex flex-col sm:flex-row gap-1">
+            <button
+              type="button"
+              onClick={() => handleEditClick(c)}
+              className="px-2 py-1 rounded-md border border-gray-400 bg-white text-[11px] hover:bg-gray-100"
+            >
+              編集
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteClick(c.id)}
+              className="px-2 py-1 rounded-md border border-red-400 bg-white text-[11px] text-red-700 hover:bg-red-50"
+            >
+              削除
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
+
+
                 </table>
               </div>
 

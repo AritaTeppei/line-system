@@ -58,17 +58,18 @@ export class CustomersController {
    *   - file: CSV ファイル
    *   - strategy: 'skip' | 'rollback' （任意 / デフォルト skip）
    */
+    /**
+   * 顧客CSVインポート
+   * POST /customers/import-csv
+   */
   @Post('import-csv')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(
     @Req() req: Request,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any, // まずは any でOK（型でハマらないように）
     @Query('strategy') strategy: ImportStrategy = 'skip',
   ) {
     const user = (req as any).authUser as AuthPayload;
-
-    // ここでは CustomersService に丸投げするだけ。
-    // ロールチェック（MANAGER だけ許可）もサービス側でやる想定。
     return this.customersService.importFromCsv(user, file, strategy);
   }
 
