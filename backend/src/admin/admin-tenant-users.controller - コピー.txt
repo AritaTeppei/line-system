@@ -221,51 +221,6 @@ const created = await this.prisma.user.create({
     // フロントは success を見てトースト表示
     return { success: true };
   }
-  
-  // ★ 追加：テナント単位で customers / cars / bookings / reminders logs をリセット
-  @Delete(':id/reset')
-  async resetTenantData(@Param('id') id: string) {
-    const tenantId = Number(id);
-    if (Number.isNaN(tenantId)) {
-      throw new BadRequestException('ID が不正です');
-    }
 
-    // 対象テナントの存在チェック
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
 
-    if (!tenant) {
-      throw new NotFoundException('テナントが存在しません');
-    }
-
-    // まとめて削除（トランザクション）
-    await this.prisma.$transaction(async (tx) => {
-      // 1. リマインド送信ログ
-      await tx.reminderSentLog.deleteMany({
-        where: { tenantId },
-      });
-
-      // 2. 予約
-      await tx.booking.deleteMany({
-        where: { tenantId },
-      });
-
-      // 3. 車両
-      await tx.car.deleteMany({
-        where: { tenantId },
-      });
-
-      // 4. 顧客
-      await tx.customer.deleteMany({
-        where: { tenantId },
-      });
-    });
-
-    return {
-      success: true,
-      tenantId,
-      message: '指定テナントのデータをリセットしました',
-    };
-  }
 }
