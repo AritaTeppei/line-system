@@ -51,17 +51,6 @@ export class CustomersController {
     return this.customersService.updateForUser(user, Number(id), dto);
   }
 
-  /**
-   * 顧客CSVインポート
-   * POST /customers/import-csv
-   * Content-Type: multipart/form-data
-   *   - file: CSV ファイル
-   *   - strategy: 'skip' | 'rollback' （任意 / デフォルト skip）
-   */
-    /**
-   * 顧客CSVインポート
-   * POST /customers/import-csv
-   */
   @Post('import-csv')
   @UseInterceptors(FileInterceptor('file'))
   importCsv(
