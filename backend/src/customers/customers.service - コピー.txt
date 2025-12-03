@@ -33,14 +33,37 @@ export class CustomersService {
   /**
    * ログインユーザーに紐づく顧客一覧
    */
-  async findAllForUser(user: AuthPayload) {
+    async findAllForUser(user: AuthPayload) {
     const tenantId = this.ensureTenant(user);
 
-    return this.prisma.customer.findMany({
+    // 顧客と一緒に「cars の件数」も取る
+    const rows = await this.prisma.customer.findMany({
       where: { tenantId },
-      orderBy: { id: 'asc' },
+      orderBy: { id: 'asc' }, // ここは今使ってる orderBy に合わせてOK
+      include: {
+        _count: {
+          select: { cars: true },
+        },
+      },
     });
+
+    // フロントで扱いやすいように hasVehicle を付けて返す
+    return rows.map((c) => ({
+      id: c.id,
+      tenantId: c.tenantId,
+      lastName: c.lastName,
+      firstName: c.firstName,
+      postalCode: c.postalCode,
+      address1: c.address1,
+      address2: c.address2,
+      mobilePhone: c.mobilePhone,
+      lineUid: c.lineUid,
+      birthday: c.birthday,
+      // ★ ここがタグの元ネタ
+      hasVehicle: c._count.cars > 0,
+    }));
   }
+
 
   /**
    * 顧客新規作成

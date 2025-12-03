@@ -37,20 +37,6 @@ type BroadcastLog = {
   customerIds?: number[];
 };
 
-type CsvImportErrorRow = {
-  rowNumber: number;
-  messages: string[];
-  raw: Record<string, string>;
-};
-
-type CsvImportResult = {
-  totalRows: number;
-  importedCount: number;
-  skippedCount: number;
-  errors: CsvImportErrorRow[];
-};
-
-
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
@@ -75,7 +61,6 @@ export default function CustomersPage() {
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvImportError, setCsvImportError] = useState<string | null>(null);
   const [csvImportSuccess, setCsvImportSuccess] = useState<string | null>(null);
-  const [csvImportResult, setCsvImportResult] = useState<CsvImportResult | null>(null);
 
 
   // 新規登録＆編集フォーム用 state（モーダルで使う）
@@ -378,24 +363,16 @@ export default function CustomersPage() {
       return;
     }
 
-      const payload = {
-    lastName,
-    firstName,
-    // 以下の項目は「空欄なら null を送る」ようにする
-    postalCode:
-      postalCode.trim() === "" ? null : postalCode.trim(),
-    address1:
-      address1.trim() === "" ? null : address1.trim(),
-    address2:
-      address2.trim() === "" ? null : address2.trim(),
-    // mobilePhone は必須チェックをしているのでそのまま送る
-    mobilePhone,
-    lineUid:
-      lineUid.trim() === "" ? null : lineUid.trim(),
-    birthday:
-      birthday.trim() === "" ? null : birthday.trim(),
-  };
-
+    const payload = {
+      lastName,
+      firstName,
+      postalCode: postalCode || undefined,
+      address1: address1 || undefined,
+      address2: address2 || undefined,
+      mobilePhone: mobilePhone || undefined,
+      lineUid: lineUid || undefined,
+      birthday: birthday || undefined,
+    };
 
     try {
       if (editingCustomerId == null) {
@@ -486,85 +463,32 @@ export default function CustomersPage() {
     setIsCsvImportModalOpen(false);
   };
 
-    const handleCsvImport = async (e: FormEvent<HTMLFormElement>) => {
+  const handleCsvImport = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCsvImportError(null);
     setCsvImportSuccess(null);
-    setCsvImportResult(null);
-
-    if (!token) {
-      setCsvImportError("トークンがありません。再度ログインしてください。");
-      return;
-    }
 
     if (!csvFile) {
-      setCsvImportError("CSVファイルを選択してください。");
+      setCsvImportError('CSVファイルを選択してください。');
       return;
     }
 
+    // ★ ここは「今の挙動を変えない」ためにダミー処理だけ
+    //    後で /customers/import-csv みたいなAPIに接続する想定。
     setCsvImporting(true);
-
     try {
-      const formData = new FormData();
-      formData.append("file", csvFile);
-
-      // strategy=skip で「エラー行だけスキップ」モード
-      const res = await fetch(
-        `${apiBase}/customers/import-csv?strategy=skip`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        let msg = "CSVの取り込みに失敗しました。";
-
-        const m = (data as any)?.message;
-        if (typeof m === "string") {
-          msg = m;
-        } else if (Array.isArray(m) && m[0]) {
-          msg = String(m[0]);
-        }
-
-        setCsvImportError(msg);
-        return;
-      }
-
-      const result: CsvImportResult = await res.json();
-      setCsvImportResult(result);
+      // 疑似的に少し待つ
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       setCsvImportSuccess(
-        `全 ${result.totalRows}件中、${result.importedCount}件を登録しました（エラー: ${result.errors.length}件）。`,
+        'CSVファイルの取り込み処理の準備が完了しました。（※現在は画面のみ実装）',
       );
-
-      // 取り込み後に顧客一覧を再取得して画面に反映
-      try {
-        const customersRes = await fetch(`${apiBase}/customers`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (customersRes.ok) {
-          const data: Customer[] = await customersRes.json();
-          setCustomers(data);
-        }
-      } catch (e) {
-        console.warn("顧客一覧の再取得に失敗しましたが、CSVの取り込み自体は成功しています。", e);
-      }
     } catch (err) {
-      console.error(err);
-      setCsvImportError("CSV取り込み中にエラーが発生しました。");
+      setCsvImportError('CSV取り込み中にエラーが発生しました。');
     } finally {
       setCsvImporting(false);
     }
   };
-
 
   const handleEditClick = (c: Customer) => {
     setEditingCustomerId(c.id);
@@ -1697,12 +1621,11 @@ export default function CustomersPage() {
             <h2 className="text-sm font-semibold text-gray-900 mb-2">
               顧客CSV取り込み
             </h2>
-                        <p className="text-[11px] text-gray-600 mb-3">
-              顧客情報が格納されたCSVファイルを選択して取り込みを実行します。
+            <p className="text-[11px] text-gray-600 mb-3">
+              顧客情報が格納されたCSVファイルを選択してください。
               <br />
-              ※ 1行目は必ずヘッダー（姓, 名, 郵便番号, 住所（番地まで）, 住所（建物名など）, 携帯番号, LINE UID, 誕生日）にしてください。
+              ※ 現時点では画面のみの実装で、実際の取り込み処理はまだ接続していません。
             </p>
-
 
             {csvImportError && (
               <div className="mb-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
@@ -1713,39 +1636,6 @@ export default function CustomersPage() {
             {csvImportSuccess && (
               <div className="mb-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
                 {csvImportSuccess}
-              </div>
-            )}
-
-                        {csvImportResult && (
-              <div className="mb-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[11px] text-gray-800">
-                <div>
-                  全 {csvImportResult.totalRows}件中{" "}
-                  <span className="font-semibold text-emerald-700">
-                    {csvImportResult.importedCount}件
-                  </span>
-                  を登録 /
-                  <span className="ml-1">
-                    スキップ {csvImportResult.skippedCount}件
-                  </span>
-                </div>
-
-                {csvImportResult.errors.length > 0 && (
-                  <>
-                    <div className="mt-1 text-red-700">
-                      エラーのあった行（最大20件まで表示）:
-                    </div>
-                    <ul className="mt-1 max-h-32 overflow-y-auto space-y-1">
-                      {csvImportResult.errors.slice(0, 20).map((err) => (
-                        <li key={err.rowNumber}>
-                          <span className="font-semibold">
-                            行 {err.rowNumber}:
-                          </span>{" "}
-                          {err.messages.join(" / ")}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
               </div>
             )}
 

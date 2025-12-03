@@ -9,9 +9,6 @@ import {
   Param,
   Req,
   UseGuards,
-  UseInterceptors,
-  UploadedFile,
-  Query,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CustomersService } from './customers.service';
@@ -19,10 +16,6 @@ import { JwtAuthGuard } from '../jwt.guard';
 import type { AuthPayload } from '../auth/auth.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
-import type { Express } from 'express';
-
-type ImportStrategy = 'skip' | 'rollback';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard)
@@ -49,27 +42,6 @@ export class CustomersController {
   ) {
     const user = (req as any).authUser as AuthPayload;
     return this.customersService.updateForUser(user, Number(id), dto);
-  }
-
-  /**
-   * 顧客CSVインポート
-   * POST /customers/import-csv
-   * Content-Type: multipart/form-data
-   *   - file: CSV ファイル
-   *   - strategy: 'skip' | 'rollback' （任意 / デフォルト skip）
-   */
-  @Post('import-csv')
-  @UseInterceptors(FileInterceptor('file'))
-  importCsv(
-    @Req() req: Request,
-    @UploadedFile() file: Express.Multer.File,
-    @Query('strategy') strategy: ImportStrategy = 'skip',
-  ) {
-    const user = (req as any).authUser as AuthPayload;
-
-    // ここでは CustomersService に丸投げするだけ。
-    // ロールチェック（MANAGER だけ許可）もサービス側でやる想定。
-    return this.customersService.importFromCsv(user, file, strategy);
   }
 
   @Delete(':id')

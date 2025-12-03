@@ -8,10 +8,314 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { Prisma } from '@prisma/client';
+import * as fs from 'fs';
+import { parse } from 'csv-parse/sync';
+
+type ImportStrategy = 'skip' | 'rollback';
+
+type CsvImportError = {
+  rowNumber: number;             // CSV上の行番号（ヘッダー1行目として）
+  messages: string[];            // その行のエラー内容
+  raw: Record<string, string>;   // 生の値（デバッグ＆画面表示用）
+};
+
+type NormalizedCustomerRow = {
+  rowNumber: number;
+  raw: Record<string, string>;
+  lastName: string;
+  firstName: string;
+  postalCode: string | null;
+  address1: string | null;
+  address2: string | null;
+  phoneNumber: string | null;
+  lineUid: string | null;
+  birthday: Date | null;
+};
 
 @Injectable()
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
+
+// 顧客CSVインポート本体
+async importFromCsv(
+  user: AuthPayload,
+  file: any,
+  strategy: ImportStrategy = 'skip',
+) {
+  if (!file) {
+    return {
+      totalRows: 0,
+      importedCount: 0,
+      skippedCount: 0,
+      errors: [
+        {
+          rowNumber: 0,
+          messages: ['CSVファイルがアップロードされていません。'],
+          raw: {},
+        },
+      ] as CsvImportError[],
+    };
+  }
+
+  if (!user.tenantId) {
+    return {
+      totalRows: 0,
+      importedCount: 0,
+      skippedCount: 0,
+      errors: [
+        {
+          rowNumber: 0,
+          messages: ['tenantId が取得できません。ログイン状態を確認してください。'],
+          raw: {},
+        },
+      ] as CsvImportError[],
+    };
+  }
+
+  const tenantId = user.tenantId;
+
+  // 1. CSVファイルの中身を文字列で取得
+  let csvText: string;
+  if (file.buffer) {
+    csvText = file.buffer.toString('utf8');
+  } else if (file.path) {
+    csvText = fs.readFileSync(file.path, 'utf8');
+  } else {
+    return {
+      totalRows: 0,
+      importedCount: 0,
+      skippedCount: 0,
+      errors: [
+        {
+          rowNumber: 0,
+          messages: ['CSVファイルの内容を読み取れませんでした。'],
+          raw: {},
+        },
+      ] as CsvImportError[],
+    };
+  }
+
+  // 2. CSVをパース（1行目ヘッダー前提）
+  const records = parse(csvText, {
+    columns: true,          // 1行目をヘッダーとして扱う
+    skip_empty_lines: true, // 完全に空の行は飛ばす
+    bom: true,              // BOM 付きUTF-8対応
+    trim: true,             // 前後の空白除去
+  }) as Record<string, string>[];
+
+  const errors: CsvImportError[] = [];
+  const validRows: NormalizedCustomerRow[] = [];
+  const lineUidSeenInFile = new Map<string, number>(); // 同一CSV内のLINE UID重複チェック
+
+  let totalRows = 0;
+
+  records.forEach((raw, index) => {
+    const rowNumber = index + 2; // 1行目がヘッダーなので +2
+
+    // 全カラムが空っぽっぽい行は無視（末尾の空行対策）
+    const allEmpty = Object.values(raw).every(
+      (v) => !v || String(v).trim().length === 0,
+    );
+    if (allEmpty) {
+      return;
+    }
+
+    totalRows++;
+
+    const rowErrors: string[] = [];
+
+    const lastName = (raw['姓'] || '').trim();
+    const firstName = (raw['名'] || '').trim();
+    const postalCodeRaw = (raw['郵便番号'] || '').trim();
+    const address1 = (raw['住所（番地まで）'] || '').trim() || null;
+    const address2 = (raw['住所（建物名など）'] || '').trim() || null;
+    const phoneRaw = (raw['携帯番号'] || '').trim();
+    const lineUidRaw = (raw['LINE UID'] || '').trim();
+    const birthdayRaw = (raw['誕生日'] || '').trim();
+
+    if (!lastName) {
+      rowErrors.push('姓は必須です。');
+    }
+    if (!firstName) {
+      rowErrors.push('名は必須です。');
+    }
+
+    // 郵便番号の整形（数字だけ抽出 → 7桁なら 123-4567 に整形）
+    let postalCode: string | null = null;
+    if (postalCodeRaw) {
+      const digits = postalCodeRaw.replace(/\D/g, '');
+      if (digits.length !== 7) {
+        rowErrors.push('郵便番号は7桁で入力してください（例：8100001）。');
+      } else {
+        postalCode = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      }
+    }
+
+    // 携帯番号：とりあえず形式はあまり縛らず、そのまま or null
+    const phoneNumber = phoneRaw || null;
+
+    // LINE UID：CSV内での重複チェック（空はスキップ）
+    let lineUid: string | null = null;
+    if (lineUidRaw) {
+      lineUid = lineUidRaw;
+      const existed = lineUidSeenInFile.get(lineUidRaw);
+      if (existed) {
+        rowErrors.push(
+          `LINE UID が同じCSV内で重複しています（${existed}行目と重複）。`,
+        );
+      } else {
+        lineUidSeenInFile.set(lineUidRaw, rowNumber);
+      }
+    }
+
+    // 誕生日のパース（YYYY-MM-DD / YYYY/M/D あたりを想定）
+    let birthday: Date | null = null;
+    if (birthdayRaw) {
+      const normalized = birthdayRaw.replace(/\./g, '/').replace(/-/g, '/');
+      const parts = normalized.split(/[\/]/);
+
+      if (parts.length === 3) {
+        const [y, m, d] = parts.map((p) => parseInt(p, 10));
+        if (!y || !m || !d) {
+          rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+        } else {
+          const date = new Date(y, m - 1, d);
+          if (
+            date.getFullYear() !== y ||
+            date.getMonth() !== m - 1 ||
+            date.getDate() !== d
+          ) {
+            rowErrors.push('誕生日の日付が存在しません。');
+          } else {
+            birthday = date;
+          }
+        }
+      } else {
+        rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+      }
+    }
+
+    if (rowErrors.length > 0) {
+      errors.push({
+        rowNumber,
+        messages: rowErrors,
+        raw,
+      });
+      return;
+    }
+
+    // バリデーションOKの行を溜める
+    validRows.push({
+      rowNumber,
+      raw,
+      lastName,
+      firstName,
+      postalCode,
+      address1,
+      address2,
+      phoneNumber,
+      lineUid,
+      birthday,
+    });
+  });
+
+  // 3. strategy='rollback' で、バリデーションエラーが1件でもあれば中止
+  if (strategy === 'rollback' && errors.length > 0) {
+    return {
+      totalRows,
+      importedCount: 0,
+      skippedCount: totalRows,
+      errors,
+    };
+  }
+
+  // 4. DB登録
+  let importedCount = 0;
+  const allErrors: CsvImportError[] = [...errors];
+
+  if (strategy === 'rollback') {
+    // 4-1. 全ロールバックモード
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const row of validRows) {
+          await tx.customer.create({
+            data: {
+              tenantId,
+              lastName: row.lastName,
+              firstName: row.firstName,
+              postalCode: row.postalCode,
+              address1: row.address1,
+              address2: row.address2,
+              mobilePhone: row.phoneNumber,
+              lineUid: row.lineUid,
+              birthday: row.birthday,
+            },
+          });
+        }
+      });
+
+      importedCount = validRows.length;
+
+      return {
+        totalRows,
+        importedCount,
+        skippedCount: totalRows - importedCount,
+        errors: allErrors,
+      };
+    } catch (e: any) {
+      // どこか1件でもDBエラーが出たら全ロールバック
+      allErrors.push({
+        rowNumber: 0,
+        messages: [
+          'データベース登録中にエラーが発生したため、全件ロールバックしました。',
+        ],
+        raw: {},
+      });
+
+      return {
+        totalRows,
+        importedCount: 0,
+        skippedCount: totalRows,
+        errors: allErrors,
+      };
+    }
+  } else {
+    // 4-2. エラー行だけスキップモード（デフォルト）
+    for (const row of validRows) {
+      try {
+        await this.prisma.customer.create({
+          data: {
+            tenantId,
+            lastName: row.lastName,
+            firstName: row.firstName,
+            postalCode: row.postalCode,
+            address1: row.address1,
+            address2: row.address2,
+            mobilePhone: row.phoneNumber,
+            lineUid: row.lineUid,
+            birthday: row.birthday,
+          },
+        });
+        importedCount++;
+      } catch (e: any) {
+        allErrors.push({
+          rowNumber: row.rowNumber,
+          messages: ['DB登録時にエラーが発生したため、この行はスキップしました。'],
+          raw: row.raw,
+        });
+      }
+    }
+
+    const skippedCount = totalRows - importedCount;
+
+    return {
+      totalRows,
+      importedCount,
+      skippedCount,
+      errors: allErrors,
+    };
+  }
+}
 
   /**
    * テナントIDを取り出すヘルパー

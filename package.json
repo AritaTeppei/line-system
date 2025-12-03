@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "@types/multer": "^2.0.0"
+  },
+  "dependencies": {
+    "csv-parse": "^6.1.0"
+  }
+}
