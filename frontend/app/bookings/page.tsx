@@ -189,6 +189,7 @@ function BookingsPageInner() {
     null,
   );
   const [editDate, setEditDate] = useState('');
+  const [editNote, setEditNote] = useState('');  // ★追加
   const [editTimeSlot, setEditTimeSlot] =
     useState<TimeSlot>('MORNING');
   const [editSaving, setEditSaving] = useState(false);
@@ -325,55 +326,78 @@ function BookingsPageInner() {
   }, [selectedDateKey, bookingsByDate]);
 
   const monthInfo = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstWeekday = firstDay.getDay();
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = firstDay.getDay();
 
-    const cells: {
-      key: string;
-      dayNumber: number | null;
-      dateKey: string | null;
-      totalCount: number;
-      pendingCount: number;
-    }[] = [];
+  const cells: {
+    key: string;
+    dayNumber: number | null;
+    dateKey: string | null;
+    totalCount: number;
+    pendingCount: number;
+    morningCount: number;
+    afternoonCount: number;
+    eveningCount: number;
+  }[] = [];
 
-    for (let i = 0; i < firstWeekday; i++) {
-      cells.push({
-        key: `empty-${i}`,
-        dayNumber: null,
-        dateKey: null,
-        totalCount: 0,
-        pendingCount: 0,
-      });
-    }
+  // ★ 月初前の空きマス
+  for (let i = 0; i < firstWeekday; i++) {
+    cells.push({
+      key: `empty-${i}`,
+      dayNumber: null,
+      dateKey: null,
+      totalCount: 0,
+      pendingCount: 0,
+      morningCount: 0,
+      afternoonCount: 0,
+      eveningCount: 0,
+    });
+  }
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const d = new Date(year, month, day);
-      const key = toDateKey(d);
-      const list = bookingsByDate.get(key) ?? [];
-      const totalCount = list.length;
-      const pendingCount = list.filter(
-        (b) => b.status === 'PENDING',
-      ).length;
+  // ★ 実データの日
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const key = toDateKey(d);
+    const list = bookingsByDate.get(key) ?? [];
 
-      cells.push({
-        key,
-        dayNumber: day,
-        dateKey: key,
-        totalCount,
-        pendingCount,
-      });
-    }
+    const totalCount = list.length;
+    const pendingCount = list.filter(
+      (b) => b.status === 'PENDING',
+    ).length;
 
-    return {
-      year,
-      month,
-      daysInMonth,
-      cells,
-    };
-  }, [currentMonth, bookingsByDate]);
+    const morningCount = list.filter(
+      (b) => b.timeSlot === 'MORNING',
+    ).length;
+    const afternoonCount = list.filter(
+      (b) => b.timeSlot === 'AFTERNOON',
+    ).length;
+    const eveningCount = list.filter(
+      (b) => b.timeSlot === 'EVENING',
+    ).length;
+
+    cells.push({
+      key,
+      dayNumber: day,
+      dateKey: key,
+      totalCount,
+      pendingCount,
+      morningCount,
+      afternoonCount,
+      eveningCount,
+    });
+  }
+
+  return {
+    year,
+    month,
+    daysInMonth,
+    cells,
+  };
+}, [currentMonth, bookingsByDate]);
+
 
   const todayKey = toDateKey(new Date());
 
@@ -425,6 +449,19 @@ function BookingsPageInner() {
         return String(slot || '');
     }
   };
+
+  const timeSlotBadgeClass = (slot: TimeSlot) => {
+  switch (slot) {
+    case 'MORNING':
+      return 'bg-sky-50 text-sky-800 border-sky-300';
+    case 'AFTERNOON':
+      return 'bg-orange-50 text-orange-800 border-orange-300';
+    case 'EVENING':
+      return 'bg-purple-50 text-purple-800 border-purple-300';
+    default:
+      return 'bg-gray-50 text-gray-800 border-gray-300';
+  }
+};
 
   const openConfirmModal = (booking: Booking) => {
     const dateKey = toDateKey(booking.bookingDate).replace(/-/g, '/');
@@ -542,6 +579,7 @@ function BookingsPageInner() {
     setEditDate(toDateKey(booking.bookingDate));
     setEditTimeSlot(booking.timeSlot as TimeSlot);
     setEditError(null);
+    setEditNote(booking.note ?? '');  
   };
 
   const closeEditModal = () => {
@@ -582,6 +620,7 @@ function BookingsPageInner() {
           body: JSON.stringify({
             bookingDate: editDate,
             timeSlot: editTimeSlot,
+            note: editNote,   
           }),
         },
       );
@@ -849,72 +888,124 @@ function BookingsPageInner() {
           </div>
 
           {/* 曜日ヘッダー */}
-          <div className="grid grid-cols-7 text-center text-[11px] sm:text-xs text-gray-600 mb-1">
-            {weekdayLabels.map((w) => (
-              <div key={w} className="py-1">
-                {w}
-              </div>
-            ))}
-          </div>
+          <div className="grid grid-cols-7 text-center text-[11px] sm:text-xs mb-1 gap-1 sm:gap-1.5">
+  {weekdayLabels.map((w, idx) => (
+    <div
+      key={w}
+      className={
+        'py-1 rounded-md font-medium ' +
+        (idx === 0
+          ? 'bg-red-50 text-red-600'   // 日
+          : idx === 6
+          ? 'bg-sky-50 text-sky-600'   // 土
+          : 'bg-gray-50 text-gray-700') // 月〜金
+      }
+    >
+      {w}
+    </div>
+  ))}
+</div>
+
 
           {/* 日付セル */}
           <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-xs">
             {monthInfo.cells.map((cell) => {
-              if (cell.dayNumber == null) {
-                return (
-                  <div
-                    key={cell.key}
-                    className="h-14 sm:h-16 rounded-lg bg-transparent"
-                  />
-                );
-              }
+  if (cell.dayNumber == null) {
+    return (
+      <div
+        key={cell.key}
+        className="min-h-[3.5rem] sm:min-h-[4rem] rounded-lg bg-transparent"
+      />
+    );
+  }
 
-              const isToday = cell.dateKey === todayKey;
-              const isSelected = cell.dateKey === selectedDateKey;
-              const hasBooking = cell.totalCount > 0;
-              const hasPending = cell.pendingCount > 0;
+  const isToday = cell.dateKey === todayKey;
+const isSelected = cell.dateKey === selectedDateKey;
+const hasBooking = cell.totalCount > 0;
+const hasPending = cell.pendingCount > 0;
+const hasMorning = cell.morningCount > 0;
+const hasAfternoon = cell.afternoonCount > 0;
+const hasEvening = cell.eveningCount > 0;
 
-              let baseClass =
-                'h-14 sm:h-16 rounded-lg border border-black flex flex-col items-stretch justify-between px-1.5 py-1 cursor-pointer transition-colors bg-green-50 hover:bg-green-200';
+let baseClass =
+  'min-h-[3.5rem] sm:min-h-[4.25rem] rounded-lg border flex flex-col items-stretch justify-between px-1.5 py-1 cursor-pointer text-left transition-colors';
 
-              if (isSelected) {
-                baseClass += ' ring-2 ring-emerald-500';
-              }
+// ① デフォルト（日付だけのマス）
+if (!hasBooking) {
+  baseClass += ' border-gray-200 bg-slate-50 hover:bg-slate-100';
+}
+// ② 予約あり（確定だけ or 全部）
+if (hasBooking && !hasPending) {
+  baseClass += ' border-emerald-500 bg-emerald-50 hover:bg-emerald-100';
+}
+// ③ 未確認あり（優先表示）
+if (hasPending) {
+  baseClass += ' border-amber-500 bg-amber-50 hover:bg-amber-100';
+}
 
-              return (
-                <button
-                  key={cell.key}
-                  type="button"
-                  onClick={() =>
-                    cell.dateKey && setSelectedDateKey(cell.dateKey)
-                  }
-                  className={baseClass}
-                >
-                  <div className="flex items-center justify-between text-[11px] text-gray-900">
-                    <span className="font-semibold text-[11px]">
-                      {cell.dayNumber}
-                    </span>
-                    {isToday && (
-                      <span className="text-[10px] text-emerald-700">
-                        今日
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 flex flex-col items-start justify-end gap-0.5">
-                    {hasBooking && (
-                      <span className="inline-flex items-center rounded-full bg-emerald-600 text-white text-[10px] px-1.5 shadow-sm">
-                        予約 {cell.totalCount}件
-                      </span>
-                    )}
-                    {hasPending && (
-                      <span className="inline-flex items-center rounded-full bg-amber-500 text-white text-[10px] px-1.5">
-                        未確認 {cell.pendingCount}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+// ④ 選択／今日の枠線
+if (isSelected) {
+  baseClass += ' ring-2 ring-emerald-600';
+} else if (isToday) {
+  baseClass += ' ring-2 ring-sky-400';
+}
+
+
+  return (
+    <button
+      key={cell.key}
+      type="button"
+      onClick={() =>
+        cell.dateKey && setSelectedDateKey(cell.dateKey)
+      }
+      className={baseClass}
+    >
+      <div className="flex items-center justify-between text-[11px] text-gray-900">
+        <span className="font-semibold text-[11px]">
+          {cell.dayNumber}
+        </span>
+        {isToday && (
+          <span className="text-[10px] text-emerald-700">
+            今日
+          </span>
+        )}
+      </div>
+
+      <div className="mt-0.5 flex-1 flex flex-col items-start justify-end gap-0.5">
+        {hasBooking && (
+          <span className="inline-flex items-center rounded-full bg-emerald-600 text-white text-[10px] px-1.5 shadow-sm">
+            予約 {cell.totalCount}件
+          </span>
+        )}
+        {hasPending && (
+          <span className="inline-flex items-center rounded-full bg-amber-500 text-white text-[10px] px-1.5">
+            未確認 {cell.pendingCount}
+          </span>
+        )}
+
+        {/* 時間帯ごとの件数ラベル（小さめ＆折り返し） */}
+        <div className="flex flex-wrap gap-[2px] mt-0.5">
+          {hasMorning && (
+            <span className="inline-flex items-center rounded-full border border-sky-300 bg-sky-50 text-sky-800 text-[9px] px-1">
+              午前 {cell.morningCount}
+            </span>
+          )}
+          {hasAfternoon && (
+            <span className="inline-flex items-center rounded-full border border-orange-300 bg-orange-50 text-orange-800 text-[9px] px-1">
+              午後 {cell.afternoonCount}
+            </span>
+          )}
+          {hasEvening && (
+            <span className="inline-flex items-center rounded-full border border-purple-300 bg-purple-50 text-purple-800 text-[9px] px-1">
+              夕方 {cell.eveningCount}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+})}
+
           </div>
 
           <div className="mt-3 sm:mt-4 text-[11px] text-gray-600 sm:hidden">
@@ -980,202 +1071,215 @@ function BookingsPageInner() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedBookings
-                    .slice()
-                    .sort((a, b) =>
-                      (a.timeSlot || '').localeCompare(
-                        b.timeSlot || '',
-                      ),
-                    )
-                    .map((b) => {
-                      const customerName = b.customer
-                        ? `${b.customer.lastName ?? ''} ${
-                            b.customer.firstName ?? ''
-                          }`.trim()
-                        : '-';
+  {selectedBookings
+    .slice()
+    .sort((a, b) =>
+      (a.timeSlot || '').localeCompare(b.timeSlot || ''),
+    )
+    .map((b) => {
+      const customerName = b.customer
+        ? `${b.customer.lastName ?? ''} ${
+            b.customer.firstName ?? ''
+          }`.trim()
+        : '-';
 
-                      const tel =
-                        (b.customer?.mobilePhone ?? '').trim() || '—';
+      const tel =
+        (b.customer?.mobilePhone ?? '').trim() || '—';
 
-                      const carLabel = b.car
-                        ? `${b.car.carName ?? ''}${
-                            b.car.registrationNumber
-                              ? `（${b.car.registrationNumber}）`
-                              : ''
-                          }`
-                        : '-';
+      const carLabel = b.car
+        ? `${b.car.carName ?? ''}${
+            b.car.registrationNumber
+              ? `（${b.car.registrationNumber}）`
+              : ''
+          }`
+        : '-';
 
-                      const shakenLabel = formatDateLabel(
-                        b.car?.shakenDate,
-                      );
-                      const inspectionLabel = formatDateLabel(
-                        b.car?.inspectionDate,
-                      );
+      const shakenLabel = formatDateLabel(b.car?.shakenDate);
+      const inspectionLabel = formatDateLabel(
+        b.car?.inspectionDate,
+      );
 
-                      const rawNote = (b.note ?? '').trim();
-                      const purpose =
-                        rawNote === ''
-                          ? '未入力'
-                          : rawNote.length > 20
-                          ? rawNote.slice(0, 20) + '…'
-                          : rawNote;
+      const rawNote = (b.note ?? '').trim();
+      const purpose =
+        rawNote === ''
+          ? '未入力'
+          : rawNote.length > 20
+          ? rawNote.slice(0, 20) + '…'
+          : rawNote;
 
-                      const sourceLabel =
-                        b.source === 'LINE_PUBLIC_FORM'
-                          ? 'LINE予約フォーム'
-                          : b.source === 'ADMIN'
-                          ? '管理画面（ADMIN）'
-                          : b.source === 'TENANT_MANUAL'
-                          ? '店舗入力（手動）'
-                          : b.source || '不明';
+      const sourceLabel =
+        b.source === 'LINE_PUBLIC_FORM'
+          ? 'LINE予約フォーム'
+          : b.source === 'ADMIN'
+          ? '管理画面（ADMIN）'
+          : b.source === 'TENANT_MANUAL'
+          ? '店舗入力（手動）'
+          : b.source || '不明';
 
-                      return (
-                        <tr
-                          key={b.id}
-                          className="text-gray-900 align-top"
-                        >
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            {timeSlotLabel(b.timeSlot)}
-                          </td>
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            {customerName || '-'}
-                          </td>
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            {tel}
-                          </td>
+      return (
+        <tr key={b.id} className="text-gray-900 align-top">
+          {/* 時間帯 */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] ${timeSlotBadgeClass(
+                b.timeSlot,
+              )}`}
+            >
+              {timeSlotLabel(b.timeSlot)}
+            </span>
+          </td>
 
-                          {/* 車両＋車検日・点検日 */}
-                          <td className="px-2 py-1 border border-gray-300 align-top">
-                            <div className="flex flex-col gap-0.5 text-[10px] sm:text-[11px] text-gray-900">
-                              <span className="font-semibold">
-                                {carLabel || '-'}
-                              </span>
+          {/* 顧客 */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <div className="flex flex-col text-[10px] sm:text-[11px]">
+              <span className="font-semibold">
+                {customerName || '-'}
+              </span>
+            </div>
+          </td>
 
-                              {shakenLabel && (
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
-                                    車検
-                                  </span>
-                                  <span>{shakenLabel}</span>
-                                </span>
-                              )}
+          {/* 連絡先 */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <div className="text-[10px] sm:text-[11px]">
+              {tel === '—' ? (
+                '—'
+              ) : (
+                <a
+                  href={`tel:${tel}`}
+                  className="text-emerald-700 hover:underline"
+                >
+                  {tel}
+                </a>
+              )}
+            </div>
+          </td>
 
-                              {inspectionLabel && (
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
-                                    点検
-                                  </span>
-                                  <span>{inspectionLabel}</span>
-                                </span>
-                              )}
-                            </div>
-                          </td>
+          {/* 車両 / 車検・点検 */}
+          <td className="px-2 py-1 border border-gray-300 align-top">
+            <div className="flex flex-col gap-0.5 text-[10px] sm:text-[11px] text-gray-900">
+              <span className="font-semibold">
+                {carLabel || '-'}
+              </span>
 
-                          {/* ステータス＋操作（LINE送信・削除） */}
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            <div className="flex flex-col items-start gap-1">
-                              <span
-                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
-                                  b.status,
-                                )}`}
-                              >
-                                {statusLabel(b.status)}
-                              </span>
+              {shakenLabel && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
+                    車検
+                  </span>
+                  <span>{shakenLabel}</span>
+                </span>
+              )}
 
-                              <select
-                                value={b.status}
-                                onChange={(e) =>
-                                  handleChangeStatus(
-                                    b.id,
-                                    e.target
-                                      .value as BookingStatus,
-                                  )
-                                }
-                                disabled={updatingId === b.id}
-                                className="mt-0.5 rounded-md border border-gray-500 bg-white px-1.5 py-0.5 text-[10px] sm:text-[11px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-                              >
-                                <option value="PENDING">未確認</option>
-                                <option value="CONFIRMED">確定</option>
-                              </select>
+              {inspectionLabel && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
+                    点検
+                  </span>
+                  <span>{inspectionLabel}</span>
+                </span>
+              )}
+            </div>
+          </td>
 
-                              {b.status === 'CONFIRMED' && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openConfirmModal(b)
-                                  }
-                                  className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
-                                >
-                                  <span>📲</span>
-                                  <span>
-                                    {b.confirmationLineSentAt
-                                      ? 'LINE確定メッセージ再送'
-                                      : 'LINE確定メッセージ送信'}
-                                  </span>
-                                </button>
-                              )}
+          {/* ステータス / LINE送信 / 削除 */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <div className="flex flex-col items-start gap-1">
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
+                  b.status,
+                )}`}
+              >
+                {statusLabel(b.status)}
+              </span>
 
-                              {b.confirmationLineSentAt && (
-                                <span className="mt-0.5 text-[10px] text-gray-600">
-                                  確定LINE送信済み
-                                </span>
-                              )}
+              <select
+                value={b.status}
+                onChange={(e) =>
+                  handleChangeStatus(
+                    b.id,
+                    e.target.value as BookingStatus,
+                  )
+                }
+                disabled={updatingId === b.id}
+                className="mt-0.5 rounded-md border border-gray-500 bg-white px-1.5 py-0.5 text-[10px] sm:text-[11px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="PENDING">未確認</option>
+                <option value="CONFIRMED">確定</option>
+              </select>
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteBooking(b.id)
-                                }
-                                disabled={deletingId === b.id}
-                                className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-500 bg-white px-2.5 py-1 text-[10px] sm:text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-60"
-                              >
-                                <span>🗑</span>
-                                <span>
-                                  {deletingId === b.id
-                                    ? '削除中...'
-                                    : '予約を削除'}
-                                </span>
-                              </button>
-                            </div>
-                          </td>
+              {b.status === 'CONFIRMED' && (
+                <button
+                  type="button"
+                  onClick={() => openConfirmModal(b)}
+                  className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
+                >
+                  <span>📲</span>
+                  <span>
+                    {b.confirmationLineSentAt
+                      ? 'LINE確定メッセージ再送'
+                      : 'LINE確定メッセージ送信'}
+                  </span>
+                </button>
+              )}
 
-                          {/* 何の予約か */}
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
-                              {purpose}
-                            </span>
-                          </td>
+              {b.confirmationLineSentAt && (
+                <span className="mt-0.5 text-[10px] text-gray-600">
+                  確定LINE送信済み
+                </span>
+              )}
 
-                          {/* 受付経路＋日程変更ボタン */}
-                          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                            <div className="flex flex-col gap-1 text-[11px]">
-                              {b.source === 'ADMIN' ? (
-                                <span className="font-bold text-gray-900">
-                                  {sourceLabel}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center rounded-full border border-gray-400 bg-white px-2 py-0.5 text-[10px] text-gray-900">
-                                  {sourceLabel}
-                                </span>
-                              )}
+              <button
+                type="button"
+                onClick={() => handleDeleteBooking(b.id)}
+                disabled={deletingId === b.id}
+                className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-500 bg-white px-2.5 py-1 text-[10px] sm:text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                <span>🗑</span>
+                <span>
+                  {deletingId === b.id ? '削除中...' : '予約を削除'}
+                </span>
+              </button>
+            </div>
+          </td>
 
-                              {(b.source === 'ADMIN' ||
-                                b.source === 'TENANT_MANUAL') && (
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(b)}
-                                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
-                                >
-                                  <span>🗓</span>
-                                  <span>予定日を変更</span>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
+          {/* 何の予約か */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
+              {purpose}
+            </span>
+          </td>
+
+          {/* 受付経路 / 日程変更ボタン */}
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+            <div className="flex flex-col gap-1 text-[11px]">
+              {b.source === 'ADMIN' ? (
+                <span className="font-bold text-gray-900">
+                  {sourceLabel}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-gray-400 bg-white px-2 py-0.5 text-[10px] text-gray-900">
+                  {sourceLabel}
+                </span>
+              )}
+
+              {(b.source === 'ADMIN' ||
+                b.source === 'TENANT_MANUAL') && (
+                <button
+                  type="button"
+                  onClick={() => openEditModal(b)}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
+                >
+                  <span>🗓</span>
+                  <span>予定日を変更</span>
+                </button>
+              )}
+            </div>
+          </td>
+        </tr>
+      );
+    })}
+</tbody>
+
               </table>
             </div>
           )}
@@ -1413,14 +1517,28 @@ function BookingsPageInner() {
                   <option value="EVENING">夕方</option>
                 </select>
               </div>
-            </div>
+
+                {/* ★ 追加：何の予約か（メモ） */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-900 mb-1">
+                    何の予約か（メモ）
+                  </label>
+                  <textarea
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
+                    placeholder="例）車検、オイル交換、鈑金見積もり など"
+                  />
+                </div>
+              </div>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={closeEditModal}
                 disabled={editSaving}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white_hover:bg-gray-100"
+                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
               >
                 閉じる
               </button>
