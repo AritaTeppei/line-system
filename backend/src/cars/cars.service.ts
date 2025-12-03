@@ -122,6 +122,11 @@ export class CarsService {
    * 車両更新
    * - 顧客を変更する場合は、その顧客も同一テナントかチェック
    */
+    /**
+   * 車両更新
+   * - 顧客を変更する場合は、その顧客も同一テナントかチェック
+   * - 日付を空欄にした場合は null に更新できるようにする
+   */
   async updateForUser(
     user: AuthPayload,
     id: number,
@@ -130,10 +135,10 @@ export class CarsService {
       chassisNumber?: string;
       carName?: string;
       customerId?: number;
-      shakenDate?: string;
-      inspectionDate?: string;
-      customReminderDate?: string;
-      customDaysBefore?: number;
+      shakenDate?: string | null;
+      inspectionDate?: string | null;
+      customReminderDate?: string | null;
+      customDaysBefore?: number | null;
     },
   ) {
     const tenantId = this.ensureTenant(user);
@@ -165,6 +170,29 @@ export class CarsService {
       customerIdToUse = data.customerId;
     }
 
+    // 日付更新用ヘルパー
+    const normalizeDate = (
+      value: string | null | undefined,
+      current: Date | null,
+    ): Date | null => {
+      // undefined → そのフィールドは「変更なし」
+      if (value === undefined) return current;
+      // null or '' → 明示的に空にしたい → null 保存
+      if (value === null || value === '') return null;
+      // それ以外は日付に変換
+      return new Date(value);
+    };
+
+    // 数値(任意何日前)の更新用ヘルパー
+    const normalizeNumber = (
+      value: number | null | undefined,
+      current: number | null,
+    ): number | null => {
+      if (value === undefined) return current; // 変更なし
+      if (value === null) return null;         // 空でクリア
+      return value;                            // 新しい数値
+    };
+
     // 3. 更新本体
     try {
       return await this.prisma.car.update({
@@ -174,20 +202,31 @@ export class CarsService {
             data.registrationNumber ?? existing.registrationNumber,
           chassisNumber: data.chassisNumber ?? existing.chassisNumber,
           carName: data.carName ?? existing.carName,
-          customerId: customerIdToUse,
 
-          // 日付系も create と同じノリで更新
-          shakenDate: data.shakenDate
-            ? new Date(data.shakenDate)
-            : existing.shakenDate,
-          inspectionDate: data.inspectionDate
-            ? new Date(data.inspectionDate)
-            : existing.inspectionDate,
-          customReminderDate: data.customReminderDate
-            ? new Date(data.customReminderDate)
-            : existing.customReminderDate,
-          customDaysBefore:
-            data.customDaysBefore ?? existing.customDaysBefore,
+          // ★ 外部キーの代わりにリレーションで connect する
+          customer: {
+            connect: { id: customerIdToUse },
+          },
+
+          // ★ 日付系：undefined=そのまま / null or ''=null にクリア / それ以外は新しい日付
+          shakenDate: normalizeDate(
+            data.shakenDate,
+            existing.shakenDate,
+          ),
+          inspectionDate: normalizeDate(
+            data.inspectionDate,
+            existing.inspectionDate,
+          ),
+          customReminderDate: normalizeDate(
+            data.customReminderDate,
+            existing.customReminderDate,
+          ),
+
+          // ★ 任意何日前：同じく null でクリア可能
+          customDaysBefore: normalizeNumber(
+            data.customDaysBefore,
+            existing.customDaysBefore,
+          ),
         },
         include: {
           customer: true, // フロントで名前を出したいので顧客も返す
@@ -212,6 +251,8 @@ export class CarsService {
       throw e;
     }
   }
+
+
 
   /**
    * 車両削除

@@ -118,6 +118,10 @@ export class CarsService {
    * 車両更新（必要に応じて使う）
    * - 顧客を変更する場合は、その顧客も同一テナントかチェック
    */
+    /**
+   * 車両更新
+   * - 顧客を変更する場合は、その顧客も同一テナントかチェック
+   */
   async updateForUser(
     user: AuthPayload,
     id: number,
@@ -126,10 +130,15 @@ export class CarsService {
       chassisNumber?: string;
       carName?: string;
       customerId?: number;
+      shakenDate?: string;
+      inspectionDate?: string;
+      customReminderDate?: string;
+      customDaysBefore?: number;
     },
   ) {
     const tenantId = this.ensureTenant(user);
 
+    // 1. 自テナントの車両か確認
     const existing = await this.prisma.car.findFirst({
       where: { id, tenantId },
     });
@@ -138,30 +147,50 @@ export class CarsService {
       throw new NotFoundException('車両が見つかりません');
     }
 
+    // 2. 顧客変更が指定されている場合は、その顧客も同一テナントか確認
     let customerIdToUse = existing.customerId;
 
-    // customerId が変更される場合は、その顧客が同じテナントか確認
-    if (data.customerId && data.customerId !== existing.customerId) {
+    if (
+      typeof data.customerId === 'number' &&
+      data.customerId !== existing.customerId
+    ) {
       const customer = await this.prisma.customer.findFirst({
         where: { id: data.customerId, tenantId },
       });
       if (!customer) {
-        throw new NotFoundException('顧客が見つかりません（または別テナントです）');
+        throw new NotFoundException(
+          '顧客が見つかりません（または別テナントです）',
+        );
       }
       customerIdToUse = data.customerId;
     }
 
+    // 3. 更新本体
     try {
       return await this.prisma.car.update({
         where: { id },
         data: {
-          registrationNumber: data.registrationNumber ?? existing.registrationNumber,
+          registrationNumber:
+            data.registrationNumber ?? existing.registrationNumber,
           chassisNumber: data.chassisNumber ?? existing.chassisNumber,
           carName: data.carName ?? existing.carName,
           customerId: customerIdToUse,
+
+          // 日付系も create と同じノリで更新
+          shakenDate: data.shakenDate
+            ? new Date(data.shakenDate)
+            : existing.shakenDate,
+          inspectionDate: data.inspectionDate
+            ? new Date(data.inspectionDate)
+            : existing.inspectionDate,
+          customReminderDate: data.customReminderDate
+            ? new Date(data.customReminderDate)
+            : existing.customReminderDate,
+          customDaysBefore:
+            data.customDaysBefore ?? existing.customDaysBefore,
         },
         include: {
-          customer: true,
+          customer: true, // フロントで名前を出したいので顧客も返す
         },
       });
     } catch (e) {
@@ -170,9 +199,14 @@ export class CarsService {
         e.code === 'P2002'
       ) {
         const target = (e.meta?.target as string[]) ?? [];
+
+        // chassisNumber 一意制約エラー
         if (target.some((t) => t.includes('chassisNumber'))) {
-          throw new BadRequestException('この車台番号はすでに登録されています');
+          throw new BadRequestException(
+            'この車台番号はすでに登録されています',
+          );
         }
+
         throw new BadRequestException('一意制約エラーが発生しました');
       }
       throw e;

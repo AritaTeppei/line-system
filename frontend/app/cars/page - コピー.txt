@@ -38,8 +38,6 @@ type Car = {
   };
 };
 
-type SortKey = "id" | "customer" | "shakenDate" | "inspectionDate" | "customReminderDate";
-
 type BroadcastLog = {
   id: number;
   message: string;
@@ -96,13 +94,6 @@ export default function CarsPage() {
   );
   const [isLogDetailModalOpen, setIsLogDetailModalOpen] =
     useState(false);
-  const [isLogListModalOpen, setIsLogListModalOpen] = useState(false);
-   // 検索・ソート・ページング
- const [searchQuery, setSearchQuery] = useState("");
- const [sortKey, setSortKey] = useState<SortKey>("id");
- const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
- const [page, setPage] = useState(1);
- const pageSize = 20;
 
   const formatDate = (value?: string | null) => {
     if (!value) return "";
@@ -235,32 +226,20 @@ export default function CarsPage() {
       return;
     }
 
-      setSubmitting(true);
-  try {
-    const body: any = {
-      customerId: Number(customerId),
+    setSubmitting(true);
+    try {
+      const body: any = {
+        customerId: Number(customerId),
+        registrationNumber,
+        chassisNumber,
+        carName,
+      };
 
-      // 必須項目はそのまま trim して送る
-      registrationNumber: registrationNumber.trim(),
-      chassisNumber: chassisNumber.trim(),
-      carName: carName.trim(),
-
-      // 日付系・任意項目は「空文字なら null」を明示的に送る
-      shakenDate:
-        shakenDate.trim() === "" ? null : shakenDate.trim(),
-      inspectionDate:
-        inspectionDate.trim() === "" ? null : inspectionDate.trim(),
-      customReminderDate:
-        customReminderDate.trim() === ""
-          ? null
-          : customReminderDate.trim(),
-
-      // 任意何日前：空欄なら null、数字が入っていれば number に変換
-      customDaysBefore:
-        customDaysBefore.trim() === ""
-          ? null
-          : Number(customDaysBefore.trim()),
-    };
+      if (shakenDate) body.shakenDate = shakenDate;
+      if (inspectionDate) body.inspectionDate = inspectionDate;
+      if (customReminderDate) body.customReminderDate = customReminderDate;
+      if (customDaysBefore)
+        body.customDaysBefore = Number(customDaysBefore);
 
       if (editingCarId == null) {
         // 新規登録
@@ -419,19 +398,13 @@ export default function CarsPage() {
     );
   };
 
-    // 全選択 / 全解除（このページに表示されている車両のみ）
+  // 全選択 / 全解除（customersページと同じ操作感）
   const handleToggleSelectAll = () => {
     setSelectedCarIds((prev) => {
-      const displayIds = pagedCars.map((c) => c.id);
-      if (displayIds.length === 0) return prev;
-
-      const allSelected = displayIds.every((id) => prev.includes(id));
-      if (allSelected) {
-        // ページ内が全選択 → ページ内だけ解除
-        return prev.filter((id) => !displayIds.includes(id));
+      if (prev.length === cars.length) {
+        return [];
       }
-      // ページ内の未選択を追加
-      return Array.from(new Set([...prev, ...displayIds]));
+      return cars.map((c) => c.id);
     });
   };
 
@@ -559,74 +532,6 @@ export default function CarsPage() {
     );
   }
 
-    // ===== 車両一覧の並び替え・検索・ページング =====
-  const sortedCars = [...cars].sort((a, b) => {
-    const mul = sortOrder === "asc" ? 1 : -1;
-
-    if (sortKey === "id") {
-      return (a.id - b.id) * mul;
-    }
-
-    if (sortKey === "customer") {
-      const an = `${a.customer.lastName ?? ""}${a.customer.firstName ?? ""}`;
-      const bn = `${b.customer.lastName ?? ""}${b.customer.firstName ?? ""}`;
-      return an.localeCompare(bn, "ja") * mul;
-    }
-
-    if (sortKey === "shakenDate") {
-      const ad = a.shakenDate ? new Date(a.shakenDate).getTime() : 0;
-      const bd = b.shakenDate ? new Date(b.shakenDate).getTime() : 0;
-      return (ad - bd) * mul;
-    }
-
-    if (sortKey === "inspectionDate") {
-      const ad = a.inspectionDate ? new Date(a.inspectionDate).getTime() : 0;
-      const bd = b.inspectionDate ? new Date(b.inspectionDate).getTime() : 0;
-      return (ad - bd) * mul;
-    }
-
-    if (sortKey === "customReminderDate") {
-      const ad = a.customReminderDate ? new Date(a.customReminderDate).getTime() : 0;
-      const bd = b.customReminderDate ? new Date(b.customReminderDate).getTime() : 0;
-      return (ad - bd) * mul;
-    }
-
-    return 0;
-  });
-
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  const filteredCars = normalizedQuery
-    ? sortedCars.filter((car) => {
-        const customerName = `${car.customer.lastName ?? ""}${car.customer.firstName ?? ""}`;
-        const fields: string[] = [
-          String(car.id),
-          customerName,
-          car.carName,
-          car.registrationNumber,
-          car.chassisNumber,
-        ];
-
-        if (car.shakenDate) fields.push(formatDate(car.shakenDate));
-        if (car.inspectionDate) fields.push(formatDate(car.inspectionDate));
-        if (car.customReminderDate) fields.push(formatDate(car.customReminderDate));
-
-        const text = fields.join(" ").toLowerCase();
-        return text.includes(normalizedQuery);
-      })
-    : sortedCars;
-
-  const totalPages = Math.max(1, Math.ceil(filteredCars.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-
-  const pagedCars = filteredCars.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
-
-  const allDisplayedSelected =
-    pagedCars.length > 0 &&
-    pagedCars.every((c) => selectedCarIds.includes(c.id));
-
   if (pageError) {
     return (
       <TenantLayout>
@@ -728,118 +633,60 @@ export default function CarsPage() {
           </div>
         </section>
 
-                <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+        {/* 車両一覧 + 一括送信 */}
+        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <h2 className="text-sm sm:text-base font-semibold text-gray-900">
               車両一覧 & 一括メッセージ送信
             </h2>
-            <div className="flex flex-col sm:items-end gap-1 sm:gap-2 text-[11px] text-gray-500">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[11px] text-gray-500">
               <span>
                 送信したい車両にチェックを入れて、「選択した車両の顧客にメッセージ送信」をクリックしてください。
               </span>
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                  検索：
-                </span>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPage(1);
-                  }}
-                  placeholder="顧客名・車名・登録番号などで絞り込み"
-                  className="w-48 sm:w-64 rounded-md border border-gray-300 px-2 py-1 text-[11px]"
-                />
-              </div>
-              <div className="text-[10px] text-gray-500">
-                表示中: {filteredCars.length}件 / 登録 {cars.length}件
-              </div>
             </div>
           </div>
 
-
-                    {/* 一括送信トリガー：選択中表示 + 並び替え + 送信ボタン */}
-          <div className="mb-2 flex flex-col gap-1">
-            <div className="text-[11px] text-gray-600">
-              選択中:{" "}
-              <span className="font-semibold text-emerald-700">
-                {selectedCarIds.length}件
+          {/* 一括送信トリガー */}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="text-[11px] text-gray-600 flex items-center gap-2">
+              <span>
+                選択中:{" "}
+                <span className="font-semibold text-emerald-700">
+                  {selectedCarIds.length}件
+                </span>
               </span>
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px] ml-2"
+                className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px]"
               >
-                {allDisplayedSelected
-                  ? "このページをすべて解除"
-                  : "このページをすべて選択"}
+                {selectedCarIds.length === cars.length &&
+                cars.length > 0
+                  ? "すべて解除"
+                  : "すべて選択"}
               </button>
             </div>
-
-            <div className="mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              {/* 並び替え */}
-              <div className="flex items-center gap-1 text-[11px] text-gray-600">
-                <span>並び替え:</span>
-                <select
-                  value={sortKey}
-                  onChange={(e) =>
-                    setSortKey(e.target.value as SortKey)
-                  }
-                  className="rounded-md border border-gray-300 text-[11px] px-2 py-1 bg-white"
-                >
-                  <option value="id">車両ID順</option>
-                  <option value="customer">顧客名順</option>
-                  <option value="shakenDate">車検日順</option>
-                  <option value="inspectionDate">点検日順</option>
-                  <option value="customReminderDate">任意日付順</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSortOrder((prev) =>
-                      prev === "asc" ? "desc" : "asc",
-                    )
-                  }
-                  className="rounded-md border border-gray-300 px-2 py-1 text-[11px] bg-white hover:bg-gray-100"
-                >
-                  {sortOrder === "asc" ? "↑ 昇順" : "↓ 降順"}
-                </button>
-              </div>
-
-              {/* 履歴ボタン + 一括送信ボタン */}
-              <div className="flex flex-wrap items-center gap-2">
-                {broadcastError && (
-                  <span className="text-[11px] text-red-600">
-                    {broadcastError}
-                  </span>
-                )}
-                {broadcastSuccess && (
-                  <span className="text-[11px] text-emerald-700">
-                    {broadcastSuccess}
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setIsLogListModalOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 text-xs font-semibold px-3 py-1.5"
-                >
-                  📊 送信履歴を見る
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openBroadcastModal}
-                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm disabled:opacity-60"
-                  disabled={broadcasting}
-                >
-                  🚗 選択した車両の顧客にメッセージ送信
-                </button>
-              </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              {broadcastError && (
+                <span className="text-[11px] text-red-600">
+                  {broadcastError}
+                </span>
+              )}
+              {broadcastSuccess && (
+                <span className="text-[11px] text-emerald-700">
+                  {broadcastSuccess}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={openBroadcastModal}
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm disabled:opacity-60"
+                disabled={broadcasting}
+              >
+                🚗 選択した車両の顧客にメッセージ送信
+              </button>
             </div>
           </div>
-
 
           {/* 車両一覧テーブル */}
           {cars.length === 0 ? (
@@ -884,7 +731,7 @@ export default function CarsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedCars.map((car) => {
+                  {cars.map((car) => {
                     const selected = selectedCarIds.includes(car.id);
                     const customerName = `${car.customer.lastName} ${car.customer.firstName}`;
                     return (
@@ -988,47 +835,64 @@ export default function CarsPage() {
                   })}
                 </tbody>
               </table>
-
-                            {/* ページネーション */}
-              <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] text-gray-600">
-                <div>
-                  {filteredCars.length}件中{" "}
-                  {(currentPage - 1) * pageSize + 1}～
-                  {Math.min(
-                    currentPage * pageSize,
-                    filteredCars.length,
-                  )}
-                  件を表示
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPage((p) => Math.max(1, p - 1))
-                    }
-                    disabled={currentPage === 1}
-                    className="px-2 py-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    前の20件
-                  </button>
-                  <span>
-                    {currentPage} / {totalPages}ページ
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="px-2 py-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    次の20件
-                  </button>
-                </div>
-              </div>
-
             </div>
           )}
+        </section>
+
+        {/* 一括メッセージ送信の履歴（直近3か月） */}
+        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-6">
+          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+            一括メッセージ送信の履歴（直近3か月）
+          </h2>
+          {broadcastLogs.length === 0 ? (
+            <p className="text-xs text-gray-600">
+              まだ一括メッセージ送信の履歴がありません。
+            </p>
+          ) : (
+            <div className="overflow-x-auto border rounded-lg max-h-[260px]">
+              <table className="min-w-full text-[11px] sm:text-xs">
+                <thead className="bg-gray-50 sticky top-0 z-10">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">
+                      送信日時
+                    </th>
+                    <th className="border px-2 py-1 text-left">
+                      送信件数
+                    </th>
+                    <th className="border px-2 py-1 text-left">
+                      メッセージ内容（一部）
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {broadcastLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50">
+                      <td className="border px-2 py-1 whitespace-nowrap">
+                        {formatDateTime(log.createdAt)}
+                      </td>
+                      <td className="border px-2 py-1 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => openLogDetailModal(log)}
+                          className="underline text-emerald-700 hover:text-emerald-900"
+                        >
+                          {log.sentCount}件 / 対象 {log.targetCount}件
+                        </button>
+                      </td>
+                      <td className="border px-2 py-1">
+                        {log.message.length > 40
+                          ? log.message.slice(0, 40) + "…"
+                          : log.message}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-2 text-[10px] text-gray-500">
+            ※ 履歴はサーバ側で3か月間保持されます（顧客管理の一括送信と共通のログです）。
+          </p>
         </section>
       </div>
 
@@ -1253,80 +1117,6 @@ export default function CarsPage() {
           </div>
         </div>
       )}
-
-            {/* 一括送信履歴一覧モーダル（直近3か月） */}
-      {isLogListModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-3xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              一括メッセージ送信の履歴（直近3か月）
-            </h3>
-            {broadcastLogs.length === 0 ? (
-              <p className="text-xs text-gray-600 mb-3">
-                まだ送信履歴がありません。車両を選択して一括メッセージ送信を行うと、ここに履歴が表示されます。
-              </p>
-            ) : (
-              <div className="overflow-x-auto border rounded-lg max-h-[260px] mb-2">
-                <table className="min-w-full text-[11px] sm:text-xs">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="border px-2 py-1 text-left">
-                        送信日時
-                      </th>
-                      <th className="border px-2 py-1 text-left">
-                        送信件数
-                      </th>
-                      <th className="border px-2 py-1 text-left">
-                        メッセージ内容（一部）
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {broadcastLogs.map((log) => (
-                      <tr
-                        key={log.id}
-                        className="hover:bg-gray-50"
-                      >
-                        <td className="border px-2 py-1 whitespace-nowrap">
-                          {formatDateTime(log.createdAt)}
-                        </td>
-                        <td className="border px-2 py-1 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => openLogDetailModal(log)}
-                            className="underline text-emerald-700 hover:text-emerald-900"
-                          >
-                            {log.sentCount}件 / 対象{" "}
-                            {log.targetCount}件
-                          </button>
-                        </td>
-                        <td className="border px-2 py-1">
-                          {log.message.length > 40
-                            ? log.message.slice(0, 40) + "…"
-                            : log.message}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="text-[10px] text-gray-500 mb-3">
-              ※ この履歴はサーバ側で3か月間保持されます（顧客管理の一括送信と共通のログです）。
-            </p>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsLogListModalOpen(false)}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
 
       {/* 一括送信履歴の詳細モーダル（送信先の顧客一覧） */}
       {isLogDetailModalOpen && selectedLog && (
