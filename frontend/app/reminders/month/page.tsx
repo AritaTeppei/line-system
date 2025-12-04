@@ -26,6 +26,7 @@ type MonthReminderItem = {
   customerName: string;
   carName?: string | null;
   plateNumber?: string | null;
+  registrationNumber?: string | null;
 
   // 顧客情報
   customerPhone?: string | null;
@@ -81,6 +82,7 @@ const categoryOptions: {
   { value: 'custom', label: '任意日付' },
 ];
 
+
 // 日付ラベルを YYYY/MM/DD で表示
 function formatDateLabel(value?: string | null): string {
   if (!value) return '-';
@@ -98,6 +100,12 @@ function formatDateLabel(value?: string | null): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}/${m}/${day}`;
 }
+
+// ★ 追加：下のテーブルで使う別名ヘルパー
+function formatDateDisplay(value?: string | null): string {
+  return formatDateLabel(value);
+}
+
 
 export default function RemindersMonthPage() {
   const [month, setMonth] = useState<string>('');
@@ -244,14 +252,21 @@ export default function RemindersMonthPage() {
   const filteredItems = useMemo(() => {
   if (!data) return [];
 
-  // ★ ① まず LINE UID があるものだけを対象にする
-  let items = (data.items ?? []).filter(
-    (item) => item.lineUid && item.lineUid.trim() !== '',
-  );
+  const canSelect = (item: MonthReminderItem): boolean => {
+
+  if (item.sent) return false;
+
+  if (!item.lineUid || item.lineUid.trim() === '') return false;
+
+  return true;
+};
+
+  // ★ ① まずは「その月の全アイテム」を対象にする
+  let items = data.items ?? [];
 
   // ★ ② 誕生日は「選択中の月」と同じ月だけに絞る
   if (month) {
-    const [_, mStr] = month.split('-'); // "YYYY-MM" から月だけ取り出す
+    const [_, mStr] = month.split('-'); // "YYYY-MM" から月を取り出す
     const selectedMonth = Number(mStr);
 
     if (!Number.isNaN(selectedMonth)) {
@@ -259,14 +274,12 @@ export default function RemindersMonthPage() {
         // 誕生日以外（車検・点検・custom）はそのまま残す
         if (item.category !== 'birthday') return true;
 
-        // 誕生日の行だけ「date の月」が一致するものだけ残す
         if (!item.date) return false;
 
-        // "YYYY-MM-DD" 想定で Date に変換
         const d = new Date(item.date);
         if (Number.isNaN(d.getTime())) return false;
 
-        const itemMonth = d.getMonth() + 1; // JS の月は 0 始まり
+        const itemMonth = d.getMonth() + 1;
         return itemMonth === selectedMonth;
       });
     }
@@ -286,8 +299,11 @@ export default function RemindersMonthPage() {
   });
 }, [data, categoryFilter, month]);
 
-
-
+  // ★ LINE 連携している行だけ「選択可能」とみなす
+  const canSelect = (item: MonthReminderItem): boolean => {
+    // lineUid が null / 空文字 / 空白だけ の場合は選択不可
+    return !!(item.lineUid && item.lineUid.trim() !== "");
+  };
 
   // ★ 選択中のアイテム一覧（モーダル表示用）
   const selectedItems = useMemo(() => {
@@ -297,8 +313,10 @@ export default function RemindersMonthPage() {
     return (data.items ?? []).filter((item) => idSet.has(item.id));
   }, [data, selectedIds]);
 
-  // 「未送信の行だけ」を選択対象にする
-  const selectableItems = filteredItems.filter((item) => !item.sent);
+    // ★「未送信」かつ「LINE連携あり」の行だけを「選択可能」とみなす
+  const selectableItems = filteredItems.filter(
+    (item) => !item.sent && canSelect(item),
+  );
 
   // チェック切り替え（未送信のみ）
   const toggleItem = (id: number) => {
@@ -743,71 +761,98 @@ export default function RemindersMonthPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((item) => {
-                  const isSent = !!item.sent;
-                  const isChecked =
-                    !isSent && selectedIds.includes(item.id);
+   {filteredItems.map((item) => {
+      const isSent = !!item.sent;
 
-                  return (
-                    <tr
-                      key={item.id}
-                      className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setDetailItem(item)} // 行クリックで詳細モーダル
-                    >
-                      <td
-                        className="px-2 py-1 text-center align-middle"
-                        onClick={(e) => e.stopPropagation()} // チェックボックスクリックでモーダル開かないように
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          disabled={isSent}
-                          onChange={() => {
-                            if (!isSent) toggleItem(item.id);
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {item.date}
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {categoryLabelMap[item.category]}
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {item.customerName}
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {item.carName || '-'}
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {item.plateNumber || '-'}
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap align-middle">
-                        {isSent ? (
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-400 px-2 py-0.5 text-[10px] text-emerald-800 font-semibold">
-                            送信済み
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-400">
-                            未送信
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {filteredItems.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-2 py-4 text-center text-gray-500"
-                    >
-                      この条件に合う対象はありません。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+      // ★ LINE連携あり＆未送信だけ選択可能
+      const selectable = !isSent && canSelect(item);
+      const isChecked = selectable && selectedIds.includes(item.id);
+
+      return (
+        <tr
+          key={item.id}
+          className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+          onClick={() => setDetailItem(item)} // 行クリックで詳細モーダル
+        >
+          {/* チェックボックス */}
+          <td
+            className="px-2 py-1 text-center align-middle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={isChecked}
+              disabled={!selectable}
+              onChange={() => {
+                if (selectable) {
+                  toggleItem(item.id);
+                }
+              }}
+            />
+          </td>
+
+          {/* 日付 */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {item.date}
+          </td>
+
+          {/* 種別 */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {categoryLabelMap[item.category]}
+          </td>
+
+          {/* 顧客名 */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {item.customerName}
+          </td>
+
+          {/* 車両名 */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {item.carName ?? '-'}
+          </td>
+
+          {/* ナンバー（plateNumber 優先 → registrationNumber） */}
+          <td className="px-2 py-1 whitespace-nowrap">
+            {item.plateNumber ?? item.registrationNumber ?? '-'}
+          </td>
+
+          {/* 状態 */}
+          <td className="px-2 py-1 text-xs whitespace-nowrap">
+            {item.lineUid ? (
+              isSent ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  送信済み
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  未送信
+                </span>
+              )
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                LINE未連携
+              </span>
+            )}
+          </td>
+        </tr>
+      );
+    })}
+
+    {filteredItems.length === 0 && (
+      <tr>
+        <td
+          colSpan={7}
+          className="px-2 py-4 text-center text-gray-500"
+        >
+          この条件に合う対象はありません。
+        </td>
+      </tr>
+    )}
+  </tbody>
+</table>
           </section>
         )}
 

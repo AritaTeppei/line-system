@@ -10,7 +10,6 @@ import type { AuthPayload } from '../auth/auth.service';
 import { Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import { parse } from 'csv-parse/sync';
-import { CreateCustomerDto } from './dto/create-customer.dto';
 
 type ImportStrategy = 'skip' | 'rollback';
 
@@ -32,48 +31,6 @@ type NormalizedCustomerRow = {
   lineUid: string | null;
   birthday: Date | null;
 };
-
-// ★追加：携帯番号を数字だけに正規化するヘルパー
-function normalizePhone(phoneRaw: string | null | undefined): string | null {
-  if (!phoneRaw) return null;
-  const digits = phoneRaw.replace(/\D/g, '');
-  return digits || null;
-}
-
-function parseJapaneseDate(value: string | null | undefined): Date | null {
-  if (!value) return null;
-  const v = value.trim();
-  if (!v) return null;
-
-  const ymd = v.replace(/\./g, '/');
-  const ymdMatch = ymd.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
-  if (ymdMatch) {
-    const y = Number(ymdMatch[1]);
-    const m = Number(ymdMatch[2]);
-    const d = Number(ymdMatch[3]);
-    const dt = new Date(y, m - 1, d);
-    return Number.isNaN(dt.getTime()) ? null : dt;
-  }
-
-  const eraMatch = v.match(/(令和|平成|昭和)\s*(\d+)年\s*(\d+)月\s*(\d+)日/);
-  if (eraMatch) {
-    const era = eraMatch[1];
-    const yearInEra = Number(eraMatch[2]);
-    const m = Number(eraMatch[3]);
-    const d = Number(eraMatch[4]);
-
-    let baseYear = 0;
-    if (era === '令和') baseYear = 2018;
-    if (era === '平成') baseYear = 1988;
-    if (era === '昭和') baseYear = 1925;
-
-    const y = baseYear + yearInEra;
-    const dt = new Date(y, m - 1, d);
-    return Number.isNaN(dt.getTime()) ? null : dt;
-  }
-
-  return null;
-}
 
 @Injectable()
 export class CustomersService {
@@ -167,80 +124,23 @@ async importFromCsv(
 
     const rowErrors: string[] = [];
 
-    // --- 氏名の処理 -------------------------
-    // ① まずは従来どおり、姓・名カラムがあればそれを使う
-    let lastName = (raw['姓'] || '').trim();
-    let firstName = (raw['名'] || '').trim();
-
-    // ② 姓・名が両方とも空なら、氏名まとめカラムから分解を試す
-    if (!lastName && !firstName) {
-      const fullName =
-        (raw['氏名'] ||
-          raw['名前'] ||
-          raw['顧客名'] ||
-          raw['お客様名'] ||
-          '') // 必要に応じてヘッダー名追加
-          .trim();
-
-      if (fullName) {
-        // まずは「ハイフン系」で区切ってみる
-        const hyphenParts = fullName
-          .split(/[-ー−‐-]/) // 半角/全角/見た目ハイフンっぽいやつ全部
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-
-        if (hyphenParts.length >= 2) {
-          // 「山田-太郎」「山田－太郎」など
-          lastName = hyphenParts[0];
-          firstName = hyphenParts.slice(1).join(' ');
-        } else {
-          // ハイフンが無いときは、スペース / 全角スペースで区切る
-          const spaceParts = fullName
-            .split(/\s+/)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0);
-
-          if (spaceParts.length >= 2) {
-            // 「山田 太郎」「山田　太郎」など
-            lastName = spaceParts[0];
-            firstName = spaceParts.slice(1).join(' ');
-          } else {
-            // どうしても分けられない → ぜんぶ姓に入れる（会社名もここ）
-            lastName = fullName;
-          }
-        }
-      }
-    }
-
-    // ★姓（=個人の苗字 or 会社名）は必須
-    if (!lastName) {
-      rowErrors.push('姓（会社名を含む）は必須です。');
-    }
-    // 名は任意なのでバリデーションしない
-
-    // --- 住所・電話などのカラム -------------------------
-const postalCodeRaw = (raw['郵便番号'] || '').trim();
-
-// まずは既存仕様（住所（番地まで）/住所（建物名など））を見る
-let address1 = (raw['住所（番地まで）'] || '').trim() || null;
-let address2 = (raw['住所（建物名など）'] || '').trim() || null;
-
-// ★ 両方空っぽなら、単一の住所カラムから全部 address1 に入れる
-if (!address1 && !address2) {
-  const singleAddress =
-    (raw['住所'] || raw['所在地'] || '').trim(); // 必要ならヘッダー追加
-  if (singleAddress) {
-    address1 = singleAddress;
-  }
-}
-
-    // 携帯番号カラム名を2パターン見て、数字だけに正規化
-    const phoneRaw =
-      (raw['携帯番号'] || raw['携帯電話番号'] || '').trim();
+    const lastName = (raw['姓'] || '').trim();
+    const firstName = (raw['名'] || '').trim();
+    const postalCodeRaw = (raw['郵便番号'] || '').trim();
+    const address1 = (raw['住所（番地まで）'] || '').trim() || null;
+    const address2 = (raw['住所（建物名など）'] || '').trim() || null;
+    const phoneRaw = (raw['携帯番号'] || '').trim();
     const lineUidRaw = (raw['LINE UID'] || '').trim();
     const birthdayRaw = (raw['誕生日'] || '').trim();
 
-    // ★ 郵便番号の整形（数字だけ抽出 → 7桁なら 123-4567 に整形）
+    if (!lastName) {
+      rowErrors.push('姓は必須です。');
+    }
+    if (!firstName) {
+      rowErrors.push('名は必須です。');
+    }
+
+    // 郵便番号の整形（数字だけ抽出 → 7桁なら 123-4567 に整形）
     let postalCode: string | null = null;
     if (postalCodeRaw) {
       const digits = postalCodeRaw.replace(/\D/g, '');
@@ -251,8 +151,8 @@ if (!address1 && !address2) {
       }
     }
 
-    // ★ 携帯番号は normalizePhone で「数字のみ」に
-    const phoneNumber = normalizePhone(phoneRaw);
+    // 携帯番号：とりあえず形式はあまり縛らず、そのまま or null
+    const phoneNumber = phoneRaw || null;
 
     // LINE UID：CSV内での重複チェック（空はスキップ）
     let lineUid: string | null = null;
@@ -268,36 +168,38 @@ if (!address1 && !address2) {
       }
     }
 
-    // 誕生日のパース（YYYY-MM-DD / YYYY/M/D あたりを想定）※UTCで固定
-    let birthday: Date | null = null;
-    if (birthdayRaw) {
-      const normalized = birthdayRaw.replace(/\./g, '/').replace(/-/g, '/');
-      const parts = normalized.split(/[\/]/);
+    // 誕生日のパース（YYYY-MM-DD / YYYY/M/D あたりを想定）
+let birthday: Date | null = null;
+if (birthdayRaw) {
+  const normalized = birthdayRaw.replace(/\./g, '/').replace(/-/g, '/');
+  const parts = normalized.split(/[\/]/);
 
-      if (parts.length === 3) {
-        const [y, m, d] = parts.map((p) => parseInt(p, 10));
-        if (!y || !m || !d) {
-          rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
-        } else {
-          const utcMs = Date.UTC(y, m - 1, d);
-          const date = new Date(utcMs);
+  if (parts.length === 3) {
+    const [y, m, d] = parts.map((p) => parseInt(p, 10));
+    if (!y || !m || !d) {
+      rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+    } else {
+      // ★ここをローカルタイム → UTC に変更
+      const utcMs = Date.UTC(y, m - 1, d);
+      const date = new Date(utcMs);
 
-          if (
-            date.getUTCFullYear() !== y ||
-            date.getUTCMonth() !== m - 1 ||
-            date.getUTCDate() !== d
-          ) {
-            rowErrors.push('誕生日の日付が存在しません。');
-          } else {
-            birthday = date;
-          }
-        }
+      // UTC基準でバリデーション
+      if (
+        date.getUTCFullYear() !== y ||
+        date.getUTCMonth() !== m - 1 ||
+        date.getUTCDate() !== d
+      ) {
+        rowErrors.push('誕生日の日付が存在しません。');
       } else {
-        rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+        birthday = date;
       }
     }
+  } else {
+    rowErrors.push('誕生日の形式が不正です。（例：1985-04-01）');
+  }
+}
 
-    // --- 行ごとのエラー判定 -------------------------
+
     if (rowErrors.length > 0) {
       errors.push({
         rowNumber,
@@ -383,19 +285,10 @@ if (!address1 && !address2) {
       };
     }
   } else {
-  // 4-2. エラー行だけスキップモード（デフォルト）
-
-  // ★携帯番号ごとに 1 顧客にまとめるためのキャッシュ
-  const phoneToCustomerId = new Map<string, number>();
-
-  for (const row of validRows) {
-    try {
-      const phone = row.phoneNumber;
-      let customerId: number;
-
-      if (!phone) {
-        // 携帯番号が無い行は毎回新規で作成
-        const created = await this.prisma.customer.create({
+    // 4-2. エラー行だけスキップモード（デフォルト）
+    for (const row of validRows) {
+      try {
+        await this.prisma.customer.create({
           data: {
             tenantId,
             lastName: row.lastName,
@@ -408,97 +301,25 @@ if (!address1 && !address2) {
             birthday: row.birthday,
           },
         });
-        customerId = created.id;
-      } else {
-        // 携帯番号あり：同一CSV内で一度作った顧客を再利用
-        const cached = phoneToCustomerId.get(phone);
-        if (cached) {
-          customerId = cached;
-        } else {
-          // 既にDBに同じ携帯番号の顧客がいればそれを使う
-          const existed = await this.prisma.customer.findFirst({
-            where: {
-              tenantId,
-              mobilePhone: phone,
-            },
-            select: { id: true },
-          });
-
-          if (existed) {
-            customerId = existed.id;
-          } else {
-            const created = await this.prisma.customer.create({
-              data: {
-                tenantId,
-                lastName: row.lastName,
-                firstName: row.firstName,
-                postalCode: row.postalCode,
-                address1: row.address1,
-                address2: row.address2,
-                mobilePhone: row.phoneNumber,
-                lineUid: row.lineUid,
-                birthday: row.birthday,
-              },
-            });
-            customerId = created.id;
-          }
-
-          phoneToCustomerId.set(phone, customerId);
-        }
+        importedCount++;
+      } catch (e: any) {
+        allErrors.push({
+          rowNumber: row.rowNumber,
+          messages: ['DB登録時にエラーが発生したため、この行はスキップしました。'],
+          raw: row.raw,
+        });
       }
-
-          // ★このあとで車両登録を行う
-      // CSV に車両情報があれば car を作成
-      const raw = row.raw;
-const registrationNumber = (raw['登録番号'] || '').trim();
-const carName = (raw['車両名'] || '').trim();
-const chassisNumber = (raw['車台番号'] || '').trim();
-const shakenRaw = (raw['車検日'] || '').trim();
-
-if (
-  registrationNumber ||
-  carName ||
-  chassisNumber ||
-  shakenRaw
-) {
-  const shakenDate = parseJapaneseDate(shakenRaw);
-
-  await this.prisma.car.create({
-    data: {
-      tenantId,
-      customerId,
-      // ★ Prisma 側が string 必須なので、空なら "" にする
-      registrationNumber: registrationNumber || '',
-      carName: carName || '',
-      chassisNumber: chassisNumber || '',
-      shakenDate,
-    },
-  });
-}
-
-      importedCount++;
-
-
-      importedCount++;
-    } catch (e: any) {
-      allErrors.push({
-        rowNumber: row.rowNumber,
-        messages: ['DB登録時にエラーが発生したため、この行はスキップしました。'],
-        raw: row.raw,
-      });
     }
+
+    const skippedCount = totalRows - importedCount;
+
+    return {
+      totalRows,
+      importedCount,
+      skippedCount,
+      errors: allErrors,
+    };
   }
-
-  const skippedCount = totalRows - importedCount;
-
-  return {
-    totalRows,
-    importedCount,
-    skippedCount,
-    errors: allErrors,
-  };
-}
-
 }
 
   /**
@@ -559,27 +380,63 @@ if (
    * - mobilePhone / lineUid の一意制約違反時は分かりやすいメッセージに変換
    * - birthday は "YYYY-MM-DD" 文字列で受け取り Date に変換
    */
-  async createForUser(user: AuthPayload, data: CreateCustomerDto) {
-  if (!user.tenantId) {
-    throw new Error('テナント情報が取得できませんでした。');
-  }
-
-  return this.prisma.customer.create({
+  async createForUser(
+    user: AuthPayload,
     data: {
-      tenantId: user.tenantId,
-      lastName: data.lastName,
-      // ★ firstName は任意なので、undefined/null のときは空文字で保存
-      firstName: data.firstName ?? '',
-      postalCode: data.postalCode ?? null,
-      address1: data.address1 ?? null,
-      address2: data.address2 ?? null,
-      mobilePhone: data.mobilePhone ?? null,
-      lineUid: data.lineUid ?? null,
-      birthday: data.birthday ? new Date(data.birthday) : null,
+      lastName: string;
+      firstName: string;
+      postalCode?: string;
+      address1?: string;
+      address2?: string;
+      mobilePhone?: string;
+      lineUid?: string;
+      birthday?: string;
     },
-  });
-}
+  ) {
+    const tenantId = this.ensureTenant(user);
 
+    try {
+      return await this.prisma.customer.create({
+        data: {
+          tenantId,
+          lastName: data.lastName,
+          firstName: data.firstName,
+          postalCode: data.postalCode,
+          address1: data.address1,
+          address2: data.address2,
+          mobilePhone: data.mobilePhone,
+          lineUid: data.lineUid,
+          birthday: data.birthday ? new Date(data.birthday) : undefined,
+        },
+      });
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        // 一意制約違反
+        const rawTarget = e.meta?.target as string[] | string | undefined;
+        const targets =
+          typeof rawTarget === 'string' ? [rawTarget] : rawTarget ?? [];
+
+        if (targets.some((t) => t.includes('mobilePhone'))) {
+          throw new BadRequestException(
+            'この携帯番号は既に登録されています',
+          );
+        }
+
+        if (targets.some((t) => t.includes('lineUid'))) {
+          throw new BadRequestException(
+            'このLINE UIDは既に登録されています',
+          );
+        }
+
+        throw new BadRequestException('顧客情報の一意制約エラーが発生しました');
+      }
+
+      throw e;
+    }
+  }
 
   /**
    * 単一顧客の取得（テナントチェック付き）

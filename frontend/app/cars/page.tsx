@@ -84,6 +84,7 @@ export default function CarsPage() {
   const [broadcastSuccess, setBroadcastSuccess] =
     useState<string | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] =
     useState(false);
 
@@ -331,6 +332,23 @@ export default function CarsPage() {
     }
   };
 
+  // 顧客検索用の絞り込み（車両モーダルのセレクト用）
+const normalizedCustomerQuery = customerSearchQuery.trim().toLowerCase();
+const filteredCustomersForSelect = normalizedCustomerQuery
+  ? customers.filter((c) => {
+      const name = `${c.lastName ?? ""}${c.firstName ?? ""}`;
+      const phone = c.mobilePhone ?? "";
+      const lineUid = c.lineUid ?? "";
+      const idText = String(c.id);
+
+      const text = [name, phone, lineUid, idText]
+        .join(" ")
+        .toLowerCase();
+
+      return text.includes(normalizedCustomerQuery);
+    })
+  : customers;
+
   const handleEditClick = (car: Car) => {
     setEditingCarId(car.id);
     setFormError(null);
@@ -340,6 +358,8 @@ export default function CarsPage() {
     setRegistrationNumber(car.registrationNumber);
     setChassisNumber(car.chassisNumber);
     setCarName(car.carName);
+    setCustomerSearchQuery("");
+    setIsCarModalOpen(true);
 
     setShakenDate(toDateInputValue(car.shakenDate));
     setInspectionDate(toDateInputValue(car.inspectionDate));
@@ -356,6 +376,8 @@ export default function CarsPage() {
     resetFormFields();
     setFormError(null);
     setFormSuccess(null);
+    setIsCarModalOpen(true);
+    setCustomerSearchQuery("");
     setIsCarModalOpen(true);
   };
 
@@ -847,6 +869,7 @@ export default function CarsPage() {
               まだ車両が登録されていません。
             </p>
           ) : (
+            <>
             <div className="overflow-x-auto max-h-[520px] border rounded-lg">
               <table className="min-w-full text-[11px] sm:text-xs">
                 <thead className="bg-gray-50 sticky top-0 z-10">
@@ -988,7 +1011,7 @@ export default function CarsPage() {
                   })}
                 </tbody>
               </table>
-
+</div>
                             {/* ページネーション */}
               <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] text-gray-600">
                 <div>
@@ -1026,8 +1049,7 @@ export default function CarsPage() {
                   </button>
                 </div>
               </div>
-
-            </div>
+            </>
           )}
         </section>
       </div>
@@ -1053,22 +1075,44 @@ export default function CarsPage() {
               onSubmit={handleCreateOrUpdateCar}
             >
               <div>
-                <label className="block text-xs font-medium mb-1">
-                  顧客 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  <option value="">選択してください</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.lastName} {c.firstName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+  <label className="block text-xs font-medium mb-1">
+    顧客 <span className="text-red-500">*</span>
+  </label>
+
+  {/* ★ 顧客検索入力欄を追加 */}
+  <input
+    type="text"
+    value={customerSearchQuery}
+    onChange={(e) => {
+      setCustomerSearchQuery(e.target.value);
+      // 新しい検索語に合わせて選択をクリアしたいならこれもアリ：
+      // setCustomerId("");
+    }}
+    placeholder="顧客名・携帯番号・IDなどで検索"
+    className="w-full mb-2 rounded-md border border-gray-400 px-2 py-1 text-[11px]"
+  />
+
+  <select
+    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+    value={customerId}
+    onChange={(e) => setCustomerId(e.target.value)}
+  >
+    <option value="">選択してください</option>
+
+    {/* ★ ここを customers → filteredCustomersForSelect に変更 */}
+    {filteredCustomersForSelect.map((c) => (
+      <option key={c.id} value={c.id}>
+        {/* 表示情報はお好みで増やせる */}
+        {c.lastName} {c.firstName}
+        {c.mobilePhone ? `（${c.mobilePhone}）` : ""}
+      </option>
+    ))}
+  </select>
+
+  <p className="mt-1 text-[10px] text-gray-500">
+    上の検索欄に名前や携帯番号を入力すると候補が絞り込まれます。
+  </p>
+</div>
 
               <div>
                 <label className="block text-xs font-medium mb-1">

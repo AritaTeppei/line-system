@@ -1,7 +1,7 @@
 // src/customers/dto/create-customer.dto.ts
 export class CreateCustomerDto {
   lastName!: string;
-  firstName!: string;
+  firstName?: string;
   postalCode?: string;
   address1?: string;
   address2?: string;
