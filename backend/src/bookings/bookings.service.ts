@@ -204,6 +204,7 @@ if (Number.isNaN(bookingDate.getTime())) {
       bookingDate?: string; // "YYYY-MM-DD"
       timeSlot?: string;
       note?: string;
+      carId?: number;  
     },
   ) {
     const prisma = this.prisma as any;
@@ -255,6 +256,25 @@ if (Number.isNaN(bookingDate.getTime())) {
 
     if (typeof params.note === 'string') {
       data.note = params.note;
+    }
+
+    // ★ 追加：車両を選び直した場合はcarIdを更新する
+    if (typeof params.carId === 'number') {
+      // この予約が属しているテナントの車だけ許可
+      const car = await prisma.car.findFirst({
+        where: {
+          id: params.carId,
+          tenantId: booking.tenantId,
+        },
+      });
+
+      if (!car) {
+        throw new BadRequestException(
+          '指定された車両が見つからないか、他テナントのデータです。',
+        );
+      }
+
+      data.carId = car.id;
     }
 
     const updated = await prisma.booking.update({

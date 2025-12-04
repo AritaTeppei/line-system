@@ -27,15 +27,25 @@ type Booking = {
   note?: string | null;
   source?: string | null;
   customer?: {
+    id: number;                     // ★ 追加
     lastName: string;
     firstName: string;
     mobilePhone?: string | null;
+    lineUid?: string | null;
+    birthday?: string | null;       // ★ 追加
+    postalCode?: string | null;     // ★ 追加（住所系は実テーブル名に合わせてね）
+    address1?: string | null;       // ★ 追加
+    address2?: string | null;       // ★ 追加
   } | null;
+  carId?: number | null;
+
   car?: {
+    id: number;                     // ★ 追加（選び直し用）
     carName?: string | null;
     registrationNumber?: string | null;
     shakenDate?: string | null;
     inspectionDate?: string | null;
+    customerId?: number | null;     // ★ あれば便利（cars の絞り込み）
   } | null;
   confirmationLineSentAt?: string | null;
   confirmationLineMessage?: string | null;
@@ -63,6 +73,7 @@ async function updateBookingStatus(
   status: BookingStatus,
   token: string,
 ) {
+  // ★ ここは「ステータスだけ更新する専用 API」にする
   const res = await fetch(`${apiBase}/bookings/${id}/status`, {
     method: 'PATCH',
     headers: {
@@ -195,6 +206,17 @@ function BookingsPageInner() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+    // ★ 予約詳細モーダル用の state
+  const [editCustomerId, setEditCustomerId] = useState<number | null>(null);
+  const [editCustomerMobile, setEditCustomerMobile] = useState('');
+  const [editCustomerLineUid, setEditCustomerLineUid] = useState('');
+  const [editCustomerBirthday, setEditCustomerBirthday] = useState('');
+  const [editCustomerPostalCode, setEditCustomerPostalCode] = useState('');
+  const [editCustomerAddress1, setEditCustomerAddress1] = useState('');
+  const [editCustomerAddress2, setEditCustomerAddress2] = useState('');
+
+  const [editCarId, setEditCarId] = useState<number | null>(null);
+
   const [me, setMe] = useState<Me | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [confirmModalBooking, setConfirmModalBooking] =
@@ -211,6 +233,22 @@ function BookingsPageInner() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  // ★ 追加：検索キーワードで顧客リストを絞り込む
+const filteredCustomers = useMemo(() => {
+  if (!customerSearch.trim()) {
+    // 何も入力されていないとき → 全顧客
+    return customers;
+  }
+
+  const keyword = customerSearch.trim().toLowerCase();
+
+  return customers.filter((c) => {
+    const fullName = `${c.lastName ?? ''}${c.firstName ?? ''}`.toLowerCase();
+    return fullName.includes(keyword);
+  });
+}, [customers, customerSearch]);
+
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -575,12 +613,32 @@ function BookingsPageInner() {
   };
 
   const openEditModal = (booking: Booking) => {
-    setEditingBooking(booking);
-    setEditDate(toDateKey(booking.bookingDate));
-    setEditTimeSlot(booking.timeSlot as TimeSlot);
-    setEditError(null);
-    setEditNote(booking.note ?? '');  
-  };
+  setEditingBooking(booking);
+
+  // 予約情報
+  setEditDate(toDateKey(booking.bookingDate));
+  setEditTimeSlot(booking.timeSlot as TimeSlot);
+  setEditNote(booking.note ?? '');
+  setEditError(null);
+  setEditCarId(booking.carId ?? null);
+
+  // 顧客情報
+  setEditCustomerId(booking.customer?.id ?? null);
+  setEditCustomerMobile(booking.customer?.mobilePhone ?? '');
+  setEditCustomerLineUid(booking.customer?.lineUid ?? '');
+  setEditCustomerBirthday(
+    booking.customer?.birthday
+      ? toDateKey(booking.customer.birthday)
+      : '',
+  );
+  setEditCustomerPostalCode(booking.customer?.postalCode ?? '');
+  setEditCustomerAddress1(booking.customer?.address1 ?? '');
+  setEditCustomerAddress2(booking.customer?.address2 ?? '');
+
+  // 車両情報
+  setEditCarId(booking.car?.id ?? null);
+};
+
 
   const closeEditModal = () => {
     setEditingBooking(null);
@@ -588,70 +646,105 @@ function BookingsPageInner() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingBooking) return;
+  if (!editingBooking) return;
 
-    if (!editDate) {
-      setEditError('日付を入力してください。');
-      return;
-    }
+  if (!editDate) {
+    setEditError('日付を入力してください。');
+    return;
+  }
 
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
+  const token =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem('auth_token')
+      : null;
 
-    if (!token) {
-      alert('ログイン情報が見つかりません。再ログインしてください。');
-      return;
-    }
+  if (!token) {
+    alert('ログイン情報が見つかりません。再ログインしてください。');
+    return;
+  }
 
-    setEditSaving(true);
-    setEditError(null);
+  setEditSaving(true);
+  setEditError(null);
 
-    try {
-      const res = await fetch(
-        `${apiBase}/bookings/${editingBooking.id}`,
+  try {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+
+    // --- 1) 顧客情報の更新（あれば） ---
+    if (editCustomerId) {
+      const resCustomer = await fetch(
+        `${apiBase}/customers/${editCustomerId}`,
         {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
           body: JSON.stringify({
-            bookingDate: editDate,
-            timeSlot: editTimeSlot,
-            note: editNote,   
+            mobilePhone: editCustomerMobile || null,
+            lineUid: editCustomerLineUid || null,
+            birthday: editCustomerBirthday || null,
+            postalCode: editCustomerPostalCode || null,
+            address1: editCustomerAddress1 || null,
+            address2: editCustomerAddress2 || null,
           }),
         },
       );
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
+      if (!resCustomer.ok) {
+        const data = await resCustomer.json().catch(() => null);
         const msg =
           (data && data.message) ||
-          '予約の更新に失敗しました。時間をおいて再度お試しください。';
+          '顧客情報の更新に失敗しました。';
         setEditError(msg);
+        setEditSaving(false);
         return;
       }
-
-      const updated = (await res.json()) as Booking;
-
-      setBookings((prev) =>
-        prev.map((b) => (b.id === updated.id ? updated : b)),
-      );
-
-      closeEditModal();
-      alert('予約日程を更新しました。');
-    } catch (e: any) {
-      console.error(e);
-      setEditError(
-        e?.message ??
-          '予約の更新に失敗しました。時間をおいて再度お試しください。',
-      );
-    } finally {
-      setEditSaving(false);
     }
-  };
+
+    // --- 2) 予約情報の更新（日時・メモ・車両） ---
+    const resBooking = await fetch(
+      `${apiBase}/bookings/${editingBooking.id}`,
+      {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          bookingDate: editDate,
+          timeSlot: editTimeSlot,
+          note: editNote,
+          carId: editCarId ?? undefined,
+        }),
+      },
+    );
+
+    if (!resBooking.ok) {
+      const data = await resBooking.json().catch(() => null);
+      const msg =
+        (data && data.message) ||
+        '予約の更新に失敗しました。時間をおいて再度お試しください。';
+      setEditError(msg);
+      setEditSaving(false);
+      return;
+    }
+
+    const updated = (await resBooking.json()) as Booking;
+
+    setBookings((prev) =>
+      prev.map((b) => (b.id === updated.id ? updated : b)),
+    );
+
+    closeEditModal();
+    alert('予約の内容を更新しました。');
+  } catch (e: any) {
+    console.error(e);
+    setEditError(
+      e?.message ??
+        '予約の更新に失敗しました。時間をおいて再度お試しください。',
+    );
+  } finally {
+    setEditSaving(false);
+  }
+};
+
 
   const handleChangeStatus = async (
     bookingId: number,
@@ -1093,7 +1186,7 @@ if (isSelected) {
               : ''
           }`
         : '-';
-
+      const hasLineUid = !!b.customer?.lineUid?.trim();
       const shakenLabel = formatDateLabel(b.car?.shakenDate);
       const inspectionLabel = formatDateLabel(
         b.car?.inspectionDate,
@@ -1207,20 +1300,33 @@ if (isSelected) {
                 <option value="CONFIRMED">確定</option>
               </select>
 
-              {b.status === 'CONFIRMED' && (
-                <button
-                  type="button"
-                  onClick={() => openConfirmModal(b)}
-                  className="mt-1 inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
-                >
-                  <span>📲</span>
-                  <span>
-                    {b.confirmationLineSentAt
-                      ? 'LINE確定メッセージ再送'
-                      : 'LINE確定メッセージ送信'}
-                  </span>
-                </button>
-              )}
+                  {b.status === 'CONFIRMED' && (
+      <button
+        type="button"
+        disabled={!hasLineUid} // ★ UIDがないときは押せない
+        onClick={
+          hasLineUid
+            ? () => openConfirmModal(b) // UIDあり → いつも通りモーダル表示
+            : undefined                  // UIDなし → クリックイベントも外しておく
+        }
+        className={
+          'mt-1 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm ' +
+          (hasLineUid
+            ? 'bg-emerald-600 text-white hover:bg-emerald-700' // UIDあり：今まで通りの緑
+            : 'bg-gray-300 text-gray-600 cursor-not-allowed')  // UIDなし：グレー＆クリック不可
+        }
+      >
+        <span>📲</span>
+        <span>
+          {hasLineUid
+            ? b.confirmationLineSentAt
+              ? 'LINE確定メッセージ再送'
+              : 'LINE確定メッセージ送信'
+            : 'LINE未連携'}  {/* ★ UIDなしのときの表示 */}
+        </span>
+      </button>
+    )}
+
 
               {b.confirmationLineSentAt && (
                 <span className="mt-0.5 text-[10px] text-gray-600">
@@ -1270,7 +1376,7 @@ if (isSelected) {
                   className="inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
                 >
                   <span>🗓</span>
-                  <span>予定日を変更</span>
+                  <span>予定の詳細</span>
                 </button>
               )}
             </div>
@@ -1333,6 +1439,19 @@ if (isSelected) {
                 <label className="block text-xs font-medium text-gray-900 mb-1">
                   顧客
                 </label>
+
+                {/* ★ 追加：顧客検索欄 */}
+<input
+  type="text"
+  value={customerSearch}
+  onChange={(e) => setCustomerSearch(e.target.value)}
+  placeholder="名前で検索（例：山田、田中太郎 など）"
+  className="w-full rounded-md border border-gray-400 bg-white px-2 py-1.5 text-[11px] sm:text-xs mb-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+/>
+<p className="text-[10px] text-gray-500 mb-1">
+  入力すると該当する顧客だけが下のリストに表示されます。
+</p>
+
                 <select
                   value={modalCustomerId ?? ''}
                   onChange={(e) => {
@@ -1343,14 +1462,13 @@ if (isSelected) {
                   className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 >
                   <option value="">選択してください</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {`${c.lastName ?? ''} ${
-                        c.firstName ?? ''
-                      }`.trim() || `ID: ${c.id}`}
-                    </option>
-                  ))}
-                </select>
+                   {/* ★ 修正：customers → filteredCustomers */}
+  {filteredCustomers.map((c) => (
+    <option key={c.id} value={c.id}>
+      {`${c.lastName ?? ''} ${c.firstName ?? ''}`.trim() || `ID: ${c.id}`}
+    </option>
+  ))}
+</select>
               </div>
 
               <div>
@@ -1473,87 +1591,216 @@ if (isSelected) {
 
       {/* 日程編集モーダル */}
       {editingBooking && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              予約日程の変更
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              {`予約ID: ${editingBooking.id}`}
-            </p>
+  <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-2xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
+      <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+        予約の詳細
+      </h3>
+      <p className="text-xs text-gray-600 mb-3">
+        {`予約ID: ${editingBooking.id}`}
+      </p>
 
-            {editError && (
-              <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
-                {editError}
-              </div>
-            )}
-
-            <div className="space-y-3 text-[12px] sm:text-sm">
-              <div>
-                <label className="block text-xs font-medium text-gray-900 mb-1">
-                  日付
-                </label>
-                <input
-                  type="date"
-                  value={editDate}
-                  onChange={(e) => setEditDate(e.target.value)}
-                  className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-900 mb-1">
-                  時間帯
-                </label>
-                <select
-                  value={editTimeSlot}
-                  onChange={(e) =>
-                    setEditTimeSlot(e.target.value as TimeSlot)
-                  }
-                  className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                >
-                  <option value="MORNING">午前</option>
-                  <option value="AFTERNOON">午後</option>
-                  <option value="EVENING">夕方</option>
-                </select>
-              </div>
-
-                {/* ★ 追加：何の予約か（メモ） */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-900 mb-1">
-                    何の予約か（メモ）
-                  </label>
-                  <textarea
-                    value={editNote}
-                    onChange={(e) => setEditNote(e.target.value)}
-                    rows={3}
-                    className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
-                    placeholder="例）車検、オイル交換、鈑金見積もり など"
-                  />
-                </div>
-              </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeEditModal}
-                disabled={editSaving}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-              >
-                閉じる
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveEdit}
-                disabled={editSaving}
-                className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
-              >
-                {editSaving ? '保存中…' : 'この内容で保存'}
-              </button>
-            </div>
-          </div>
+      {editError && (
+        <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
+          {editError}
         </div>
       )}
+
+      <div className="space-y-4 text-[12px] sm:text-sm">
+        {/* 予約情報 */}
+        <section>
+          <h4 className="text-xs font-semibold text-gray-900 mb-2">
+            予約情報
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                日付
+              </label>
+              <input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                時間帯
+              </label>
+              <select
+                value={editTimeSlot}
+                onChange={(e) =>
+                  setEditTimeSlot(e.target.value as TimeSlot)
+                }
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value="MORNING">午前</option>
+                <option value="AFTERNOON">午後</option>
+                <option value="EVENING">夕方</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-900 mb-1">
+              何の予約か（メモ）
+            </label>
+            <textarea
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
+              placeholder="例）車検、オイル交換、鈑金見積もり など"
+            />
+          </div>
+        </section>
+
+        {/* 顧客情報 */}
+        <section>
+          <h4 className="text-xs font-semibold text-gray-900 mb-2">
+            顧客情報
+          </h4>
+          <p className="text-[11px] text-gray-600 mb-2">
+            {editingBooking.customer
+              ? `${editingBooking.customer.lastName ?? ''} ${
+                  editingBooking.customer.firstName ?? ''
+                }`.trim()
+              : '（顧客情報なし）'}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                携帯番号
+              </label>
+              <input
+                type="tel"
+                value={editCustomerMobile}
+                onChange={(e) => setEditCustomerMobile(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                LINE UID
+              </label>
+              <input
+                type="text"
+                value={editCustomerLineUid}
+                onChange={(e) => setEditCustomerLineUid(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                誕生日
+              </label>
+              <input
+                type="date"
+                value={editCustomerBirthday}
+                onChange={(e) => setEditCustomerBirthday(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                郵便番号
+              </label>
+              <input
+                type="text"
+                value={editCustomerPostalCode}
+                onChange={(e) => setEditCustomerPostalCode(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                住所１
+              </label>
+              <input
+                type="text"
+                value={editCustomerAddress1}
+                onChange={(e) => setEditCustomerAddress1(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-900 mb-1">
+                住所２（建物名等）
+              </label>
+              <input
+                type="text"
+                value={editCustomerAddress2}
+                onChange={(e) => setEditCustomerAddress2(e.target.value)}
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* 車両情報 */}
+        <section>
+          <h4 className="text-xs font-semibold text-gray-900 mb-2">
+            車両情報
+          </h4>
+          <div>
+            <div>
+  <label className="block text-xs font-medium text-gray-900 mb-1">
+    車両（選び直し）
+  </label>
+  <select
+    value={editCarId ?? ''}
+    onChange={(e) =>
+      setEditCarId(
+        e.target.value ? Number(e.target.value) : null,
+      )
+    }
+    className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+  >
+    <option value="">車両を選択してください</option>
+    {cars.map((car) => (
+      <option key={car.id} value={car.id}>
+        {car.carName ?? '車両'}
+        {car.registrationNumber
+          ? `（${car.registrationNumber}）`
+          : ''}
+      </option>
+    ))}
+  </select>
+</div>
+</div>
+        </section>
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={closeEditModal}
+          disabled={editSaving}
+          className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+        >
+          閉じる
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveEdit}
+          disabled={editSaving}
+          className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
+        >
+          {editSaving ? '保存中…' : 'この内容で保存'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </TenantLayout>
   );
 }

@@ -106,6 +106,7 @@ async updateBooking(
     bookingDate?: string; // "YYYY-MM-DD"
     timeSlot?: string;
     note?: string;
+    carId?: number;       // ★ 追加！
   },
 ) {
   const payload =
@@ -113,7 +114,6 @@ async updateBooking(
 
   return this.bookingsService.updateBooking(payload, id, body);
 }
-
 
   /**
    * 確定LINEを送る（任意メッセージも指定可能）
