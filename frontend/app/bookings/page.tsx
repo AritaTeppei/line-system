@@ -234,6 +234,12 @@ function BookingsPageInner() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
+
+  const customerCarsForEditing = useMemo(() => {
+  if (!editCustomerId) return [];
+  return cars.filter((car) => car.customerId === editCustomerId);
+}, [cars, editCustomerId]);
+
   // ★ 追加：検索キーワードで顧客リストを絞り込む
 const filteredCustomers = useMemo(() => {
   if (!customerSearch.trim()) {
@@ -1592,7 +1598,15 @@ if (isSelected) {
       {/* 日程編集モーダル */}
       {editingBooking && (
   <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-2xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
+    <div
+  className="
+    w-full max-w-2xl 
+    max-h-[85vh]                /* 画面の85%以内に収める */
+    overflow-y-auto             /* 中身だけスクロール */
+    rounded-xl bg-white shadow-lg border border-gray-200 
+    p-4 sm:p-5
+  "
+>
       <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
         予約の詳細
       </h3>
@@ -1606,59 +1620,62 @@ if (isSelected) {
         </div>
       )}
 
-      <div className="space-y-4 text-[12px] sm:text-sm">
-        {/* 予約情報 */}
-        <section>
+            {/* ↓↓↓ ここから差し替え ↓↓↓ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[12px] sm:text-sm">
+        {/* 予約情報（左カラム） */}
+        <section className="rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-3 sm:px-4 sm:py-4">
           <h4 className="text-xs font-semibold text-gray-900 mb-2">
             予約情報
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-900 mb-1">
+                  日付
+                </label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-900 mb-1">
+                  時間帯
+                </label>
+                <select
+                  value={editTimeSlot}
+                  onChange={(e) =>
+                    setEditTimeSlot(e.target.value as TimeSlot)
+                  }
+                  className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="MORNING">午前</option>
+                  <option value="AFTERNOON">午後</option>
+                  <option value="EVENING">夕方</option>
+                </select>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-900 mb-1">
-                日付
+                何の予約か（メモ）
               </label>
-              <input
-                type="date"
-                value={editDate}
-                onChange={(e) => setEditDate(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              <textarea
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                rows={2} // ← 3行 → 2行にして縦を少し詰める
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
+                placeholder="例）車検、オイル交換、鈑金見積もり など"
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-900 mb-1">
-                時間帯
-              </label>
-              <select
-                value={editTimeSlot}
-                onChange={(e) =>
-                  setEditTimeSlot(e.target.value as TimeSlot)
-                }
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="MORNING">午前</option>
-                <option value="AFTERNOON">午後</option>
-                <option value="EVENING">夕方</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-gray-900 mb-1">
-              何の予約か（メモ）
-            </label>
-            <textarea
-              value={editNote}
-              onChange={(e) => setEditNote(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-y"
-              placeholder="例）車検、オイル交換、鈑金見積もり など"
-            />
           </div>
         </section>
 
-        {/* 顧客情報 */}
-        <section>
+        {/* 顧客情報（右カラム） */}
+        <section className="rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-3 sm:px-4 sm:py-4">
           <h4 className="text-xs font-semibold text-gray-900 mb-2">
             顧客情報
           </h4>
@@ -1669,6 +1686,7 @@ if (isSelected) {
                 }`.trim()
               : '（顧客情報なし）'}
           </p>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-900 mb-1">
@@ -1678,7 +1696,7 @@ if (isSelected) {
                 type="tel"
                 value={editCustomerMobile}
                 onChange={(e) => setEditCustomerMobile(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 
@@ -1690,7 +1708,7 @@ if (isSelected) {
                 type="text"
                 value={editCustomerLineUid}
                 onChange={(e) => setEditCustomerLineUid(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 
@@ -1702,7 +1720,7 @@ if (isSelected) {
                 type="date"
                 value={editCustomerBirthday}
                 onChange={(e) => setEditCustomerBirthday(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
 
@@ -1714,12 +1732,12 @@ if (isSelected) {
                 type="text"
                 value={editCustomerPostalCode}
                 onChange={(e) => setEditCustomerPostalCode(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
           </div>
 
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 grid grid-cols-1 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-900 mb-1">
                 住所１
@@ -1728,7 +1746,7 @@ if (isSelected) {
                 type="text"
                 value={editCustomerAddress1}
                 onChange={(e) => setEditCustomerAddress1(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
             <div>
@@ -1739,45 +1757,58 @@ if (isSelected) {
                 type="text"
                 value={editCustomerAddress2}
                 onChange={(e) => setEditCustomerAddress2(e.target.value)}
-                className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full rounded-md border border-gray-500 bg-white px-2 py-1.5 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
             </div>
           </div>
         </section>
 
-        {/* 車両情報 */}
-        <section>
+        {/* 車両情報（下段フル幅） */}
+        <section className="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50/70 px-3 py-3 sm:px-4 sm:py-4">
           <h4 className="text-xs font-semibold text-gray-900 mb-2">
             車両情報
           </h4>
+
           <div>
-            <div>
-  <label className="block text-xs font-medium text-gray-900 mb-1">
-    車両（選び直し）
-  </label>
-  <select
-    value={editCarId ?? ''}
-    onChange={(e) =>
-      setEditCarId(
-        e.target.value ? Number(e.target.value) : null,
-      )
-    }
-    className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-  >
-    <option value="">車両を選択してください</option>
-    {cars.map((car) => (
-      <option key={car.id} value={car.id}>
-        {car.carName ?? '車両'}
-        {car.registrationNumber
-          ? `（${car.registrationNumber}）`
-          : ''}
-      </option>
-    ))}
-  </select>
-</div>
-</div>
+            <label className="block text-xs font-medium text-gray-900 mb-1">
+              車両（選び直し）
+            </label>
+            <select
+              value={editCarId ?? ''}
+              onChange={(e) =>
+                setEditCarId(
+                  e.target.value ? Number(e.target.value) : null,
+                )
+              }
+              disabled={!editCustomerId}
+              className="w-full rounded-md border border-gray-500 bg-white px-2 py-2 text-[12px] sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-400"
+            >
+              <option value="">
+                {editCustomerId
+                  ? 'この顧客に紐づく車両を選択してください'
+                  : '先に顧客情報を確認してください'}
+              </option>
+
+              {customerCarsForEditing.map((car) => (
+                <option key={car.id} value={car.id}>
+                  {car.carName ?? '車両'}
+                  {car.registrationNumber
+                    ? `（${car.registrationNumber}）`
+                    : ''}
+                </option>
+              ))}
+
+              {editCustomerId && customerCarsForEditing.length === 0 && (
+                <option value="" disabled>
+                  ※ この顧客に登録されている車両がありません
+                </option>
+              )}
+            </select>
+          </div>
         </section>
       </div>
+      {/* ↑↑↑ ここまで差し替え ↑↑↑ */}
+
 
       <div className="mt-4 flex justify-end gap-2">
         <button

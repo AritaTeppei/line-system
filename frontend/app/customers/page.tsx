@@ -157,7 +157,9 @@ export default function CustomersPage() {
   const [inspectionDate, setInspectionDate] = useState("");
 
   const [carFormError, setCarFormError] = useState<string | null>(null);
-  const [carFormSaving, setCarFormSaving] = useState(false);
+const [carFormSuccess, setCarFormSuccess] = useState<string | null>(null);
+const [carFormSaving, setCarFormSaving] = useState(false);
+
 
 
   // ---- ヘルパー：一括送信履歴（サーバ）取得 ----
@@ -442,66 +444,68 @@ export default function CustomersPage() {
 
     try {
       if (editingCustomerId == null) {
-        // 新規登録
-        const res = await fetch(`${apiBase}/customers`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        });
+  // 新規登録
+  const res = await fetch(`${apiBase}/customers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          let msg: string = "顧客の登録に失敗しました";
-          if (data?.message) {
-            msg = Array.isArray(data.message)
-              ? data.message.join(", ")
-              : String(data.message);
-          }
-          throw new Error(msg);
-        }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    let msg: string = "顧客の登録に失敗しました";
+    if (data?.message) {
+      msg = Array.isArray(data.message)
+        ? data.message.join(", ")
+        : String(data.message);
+    }
+    throw new Error(msg);
+  }
 
-        const created: Customer = await res.json();
-        setCustomers((prev) => [...prev, created]);
-        setFormSuccess("顧客を登録しました");
-        resetFormFields();
-        setIsCustomerModalOpen(false);
-      } else {
-        // 更新
-        const res = await fetch(
-          `${apiBase}/customers/${editingCustomerId}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-          },
-        );
+  const created: Customer = await res.json();
+  setCustomers((prev) => [...prev, created]);
+  setFormSuccess("顧客を登録しました");
+  // ★ モーダルは開いたままにする（閉じない）
+  // resetFormFields() もここでは呼ばず、入力内容は残しておく
+} else {
+  // 更新
+  const res = await fetch(
+    `${apiBase}/customers/${editingCustomerId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          let msg: string = "顧客情報の更新に失敗しました";
-          if (data?.message) {
-            msg = Array.isArray(data.message)
-              ? data.message.join(", ")
-              : String(data.message);
-          }
-          throw new Error(msg);
-        }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    let msg: string = "顧客情報の更新に失敗しました";
+    if (data?.message) {
+      msg = Array.isArray(data.message)
+        ? data.message.join(", ")
+        : String(data.message);
+    }
+    throw new Error(msg);
+  }
 
-        const updated: Customer = await res.json();
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c)),
-        );
-        setFormSuccess("顧客情報を更新しました");
-        setEditingCustomerId(null);
-        resetFormFields();
-        setIsCustomerModalOpen(false);
-      }
+  const updated: Customer = await res.json();
+  setCustomers((prev) =>
+    prev.map((c) => (c.id === updated.id ? updated : c)),
+  );
+  setFormSuccess("顧客情報を更新しました");
+  // ★ ここも閉じない。editingCustomerId も残しておく
+  // setEditingCustomerId(null);
+  // resetFormFields();
+  // setIsCustomerModalOpen(false);
+}
+
     } catch (err: any) {
       console.error(err);
       setFormError(err.message ?? "顧客の登録・更新に失敗しました");
@@ -610,82 +614,66 @@ export default function CustomersPage() {
 
 
   const handleEditClick = (c: Customer) => {
-    setEditingCustomerId(c.id);
-    setFormError(null);
-    setFormSuccess(null);
+  // --- 顧客側 ---
+  setEditingCustomerId(c.id);
+  setFormError(null);
+  setFormSuccess(null);
 
-    setLastName(c.lastName ?? "");
-    setFirstName(c.firstName ?? "");
-    setPostalCode(c.postalCode ?? "");
-    setAddress1(c.address1 ?? "");
-    setAddress2(c.address2 ?? "");
-    setMobilePhone(c.mobilePhone ?? "");
-    setLineUid(c.lineUid ?? "");
+  setLastName(c.lastName ?? "");
+  setFirstName(c.firstName ?? "");
+  setPostalCode(c.postalCode ?? "");
+  setAddress1(c.address1 ?? "");
+  setAddress2(c.address2 ?? "");
+  setMobilePhone(c.mobilePhone ?? "");
+  setLineUid(c.lineUid ?? "");
 
-    if (c.birthday) {
-      try {
-        const d = new Date(c.birthday);
-        if (!Number.isNaN(d.getTime())) {
-          setBirthday(d.toISOString().slice(0, 10));
-        } else {
-          setBirthday("");
-        }
-      } catch {
+  if (c.birthday) {
+    try {
+      const d = new Date(c.birthday);
+      if (!Number.isNaN(d.getTime())) {
+        setBirthday(d.toISOString().slice(0, 10));
+      } else {
         setBirthday("");
       }
-    } else {
+    } catch {
       setBirthday("");
     }
+  } else {
+    setBirthday("");
+  }
 
-    setIsCustomerModalOpen(true);
-  };
+  // --- 車両側：ここが重要 ---
+  setVehicleTargetCustomer(c);
+  setSelectedCar(null);
+  setCarName("");
+  setRegistrationNumber("");
+  setChassisNumber("");
+  setShakenDate("");
+  setInspectionDate("");
+  setCarFormError(null);
+  setCarFormSuccess(null);
+
+  setIsCustomerModalOpen(true);
+};
 
   const closeCustomerModal = () => {
-    setIsCustomerModalOpen(false);
-    setEditingCustomerId(null);
-    resetFormFields();
-    setFormError(null);
-    setFormSuccess(null);
-  };
+  setIsCustomerModalOpen(false);
+  setEditingCustomerId(null);
+  resetFormFields();
+  setFormError(null);
+  setFormSuccess(null);
 
-  // ★ 追加：顧客行クリック → 車両モーダル
-  const openVehicleModal = (c: Customer) => {
-    setVehicleTargetCustomer(c);
-    setCarFormError(null);
-
-    // 対象顧客に紐づく車両を抽出
-    const customerCars = cars.filter(
-      (car) => car.customerId === c.id,
-    );
-
-    if (customerCars.length > 0) {
-      const first = customerCars[0];
-      setSelectedCar(first);
-      setCarName(first.carName ?? "");
-      setRegistrationNumber(first.registrationNumber ?? "");
-      setChassisNumber(first.chassisNumber ?? "");
-      setShakenDate(
-        first.shakenDate
-          ? new Date(first.shakenDate).toISOString().slice(0, 10)
-          : "",
-      );
-      setInspectionDate(
-        first.inspectionDate
-          ? new Date(first.inspectionDate).toISOString().slice(0, 10)
-          : "",
-      );
-    } else {
-      // 車両が1台もない場合はフォームを空にしておく（編集対象なし）
-      setSelectedCar(null);
-      setCarName("");
-      setRegistrationNumber("");
-      setChassisNumber("");
-      setShakenDate("");
-      setInspectionDate("");
-    }
-
-    setIsVehicleModalOpen(true);
-  };
+  // 車両側もリセット
+  setVehicleTargetCustomer(null);
+  setSelectedCar(null);
+  setCarName("");
+  setRegistrationNumber("");
+  setChassisNumber("");
+  setShakenDate("");
+  setInspectionDate("");
+  setCarFormError(null);
+  setCarFormSuccess(null);
+};
 
   const closeVehicleModal = () => {
     setIsVehicleModalOpen(false);
@@ -734,6 +722,80 @@ export default function CustomersPage() {
       setFormError(err.message ?? "顧客の削除に失敗しました");
     }
   };
+
+    const handleSaveCar = async () => {
+  // 編集対象がない場合
+  if (!selectedCar) {
+    setCarFormError("編集する車両が選択されていません。");
+    setCarFormSuccess(null);
+    return;
+  }
+
+  if (!token) {
+    setCarFormError(
+      "トークンがありません。再ログインしてから操作してください。",
+    );
+    setCarFormSuccess(null);
+    return;
+  }
+
+  setCarFormError(null);
+  setCarFormSuccess(null);
+  setCarFormSaving(true);
+
+  try {
+    const res = await fetch(`${apiBase}/cars/${selectedCar.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        carName: carName || null,
+        registrationNumber: registrationNumber || null,
+        chassisNumber: chassisNumber || null,
+        shakenDate: shakenDate || null,
+        inspectionDate: inspectionDate || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      let msg = "車両情報の更新に失敗しました。";
+      const m = (data as any)?.message;
+      if (typeof m === "string") {
+        msg = m;
+      } else if (Array.isArray(m) && m[0]) {
+        msg = String(m[0]);
+      }
+      throw new Error(msg);
+    }
+
+    const updated: Car = await res.json();
+
+    // cars 一覧を更新
+    setCars((prev) =>
+      prev.map((c) => (c.id === updated.id ? updated : c)),
+    );
+
+    // 選択中の車も最新に
+    setSelectedCar(updated);
+
+    // ★ 成功メッセージ
+    setCarFormSuccess("車両情報を更新しました");
+  } catch (err: any) {
+    console.error(err);
+    setCarFormError(
+      err?.message ??
+        "車両情報の更新に失敗しました。時間をおいて再度お試しください。",
+    );
+    setCarFormSuccess(null);
+  } finally {
+    setCarFormSaving(false);
+  }
+};
+
+
 
  // 並び替え後の顧客リスト
 const sortedCustomers = [...customers].sort((a, b) => {
@@ -1227,9 +1289,6 @@ const pagedCustomers = filteredCustomers.slice(
     <th className="border px-2 py-1 text-left">
       タグ
     </th>
-    <th className="border px-2 py-1 text-left w-28">
-      操作
-    </th>
   </tr>
 </thead>
 <tbody>
@@ -1244,7 +1303,7 @@ const pagedCustomers = filteredCustomers.slice(
       <tr
         key={c.id}
         className="hover:bg-gray-50 text-gray-900 cursor-pointer"
-        onClick={() => openVehicleModal(c)}   // ★ 行クリックで車両モーダル
+        onClick={() => handleEditClick(c)}  // ★ 行クリックで車両モーダル
       >
         {/* チェックボックス */}
         <td className="border px-2 py-1 text-center">
@@ -1320,31 +1379,6 @@ const pagedCustomers = filteredCustomers.slice(
           </div>
         </td>
 
-        {/* 操作ボタン */}
-        <td className="border px-2 py-1 whitespace-nowrap">
-          <div className="flex flex-col sm:flex-row gap-1">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEditClick(c);
-              }}
-              className="px-2 py-1 rounded-md border border-gray-400 bg-white text-[11px] hover:bg-gray-100"
-            >
-              編集
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDeleteClick(c.id);
-              }}
-              className="px-2 py-1 rounded-md border border-red-400 bg-white text-[11px] text-red-700 hover:bg-red-50"
-            >
-                                削除
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })}
@@ -1394,162 +1428,358 @@ const pagedCustomers = filteredCustomers.slice(
         </section>
       </div>
 
-      {/* 顧客登録／編集モーダル */}
       {isCustomerModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              {editingCustomerId == null
-                ? "新規顧客の登録"
-                : `顧客情報の編集（ID: ${editingCustomerId}）`}
-            </h3>
+  <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+    <div className="w-full max-w-4xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
+      <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
+        {editingCustomerId == null
+          ? '新規顧客の登録'
+          : `顧客情報の編集（ID: ${editingCustomerId}）`}
+      </h3>
 
-            {formError && (
-              <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
-                {formError}
-              </div>
-            )}
+{formError && (
+  <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
+    {formError}
+  </div>
+)}
 
-            <form
-              className="space-y-3 text-[12px] sm:text-sm"
-              onSubmit={handleCreateOrUpdate}
-            >
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium mb-1">
-                    姓 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-medium mb-1">
-                    名 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                  />
-                </div>
-              </div>
+      {formSuccess && (
+  <div className="mb-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-800">
+    {formSuccess}
+  </div>
+)}
 
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  郵便番号（ハイフンなし）
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px] flex-1"
-                    value={postalCode}
-                    onChange={(e) => setPostalCode(e.target.value)}
-                    placeholder="例: 8100001"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleLookupAddress}
-                    disabled={
-                      isSearchingAddress || !postalCode.trim()
-                    }
-                    className="px-2 py-1.5 rounded-md border border-gray-500 text-[11px] bg-white hover:bg-gray-100 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {isSearchingAddress ? "検索中..." : "住所検索"}
-                  </button>
-                </div>
-                <p className="mt-1 text-[10px] text-gray-500">
-                  郵便番号を入力して「住所検索」を押すと、住所（番地まで）が自動入力されます。
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  住所（番地まで）
-                </label>
-                <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={address1}
-                  onChange={(e) => setAddress1(e.target.value)}
-                  placeholder="例: 福岡市中央区天神1-1-1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  住所（建物名・部屋番号など）
-                </label>
-                <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={address2}
-                  onChange={(e) => setAddress2(e.target.value)}
-                  placeholder="例: GATCHビル3F"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  携帯番号 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={mobilePhone}
-                  onChange={(e) =>
-                    setMobilePhone(e.target.value)
-                  }
-                  placeholder="例: 09012345678"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  ※ 携帯番号が重複している場合は登録不可（サーバ側でチェック）想定。
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  LINE UID（任意）
-                </label>
-                <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={lineUid}
-                  onChange={(e) => setLineUid(e.target.value)}
-                  placeholder="LINE連携が分かっている場合にセット"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  誕生日（任意）
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                  value={birthday}
-                  onChange={(e) => setBirthday(e.target.value)}
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeCustomerModal}
-                  className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-                >
-                  閉じる
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700"
-                >
-                  {editingCustomerId == null
-                    ? "顧客を登録"
-                    : "顧客情報を更新"}
-                </button>
-              </div>
-            </form>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 左：顧客情報フォーム */}
+        <form
+          className="space-y-3 text-[12px] sm:text-sm"
+          onSubmit={handleCreateOrUpdate}
+        >
+          {/* 姓・名・住所・電話・UID・誕生日など、今までの入力たち */}
+          {/* 例： */}
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium mb-1">
+                姓 <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium mb-1">
+                名 <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+            </div>
           </div>
+
+                    {/* 郵便番号＋住所1 */}
+          <div className="space-y-2">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-medium mb-1">
+                  郵便番号
+                </label>
+                <input
+                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                  placeholder="8100001"
+                  value={postalCode}
+                  onChange={(e) => setPostalCode(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleLookupAddress}
+                disabled={isSearchingAddress || !postalCode.trim()}
+                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm bg-white hover:bg-gray-100 disabled:opacity-50"
+              >
+                {isSearchingAddress ? "検索中..." : "住所検索"}
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                住所（番地まで）
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                placeholder="福岡市〇〇区△△1-2-3"
+                value={address1}
+                onChange={(e) => setAddress1(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                住所（建物名・部屋番号など）
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                placeholder="〇〇マンション101号室"
+                value={address2}
+                onChange={(e) => setAddress2(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* 電話・LINE UID・誕生日 */}
+          <div className="space-y-2">
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                携帯番号 <span className="text-red-500">*</span>
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                placeholder="09012345678"
+                value={mobilePhone}
+                onChange={(e) => setMobilePhone(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                LINE UID
+              </label>
+              <input
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                placeholder="Uから始まるIDを貼り付け"
+                value={lineUid}
+                onChange={(e) => setLineUid(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                誕生日
+              </label>
+              <input
+                type="date"
+                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+              />
+            </div>
+          </div>
+
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+  type="button"
+  onClick={closeCustomerModal}
+  className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+>
+  閉じる
+</button>
+
+            <button
+              type="submit"
+              className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700"
+            >
+              {editingCustomerId == null ? '登録する' : '更新する'}
+            </button>
+          </div>
+        </form>
+
+        {/* 右：車両一覧＋編集（元の「車両一覧＆編集モーダル」の中身をほぼそのままコピー） */}
+        <div>
+          <h4 className="text-xs font-semibold text-gray-900 mb-1">
+            車両一覧・編集
+          </h4>
+          <p className="text-[10px] text-gray-500 mb-2">
+            この顧客に紐づいている車両の一覧です。車両をクリックすると下のフォームで編集できます。
+          </p>
+
+            {carFormError && (
+    <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
+      {carFormError}
+    </div>
+  )}
+
+  {carFormSuccess && (
+    <div className="mb-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-800">
+      {carFormSuccess}
+    </div>
+  )}
+
+
+          {/* 一覧部分：今の車両モーダルのテーブルをここにコピー */}
+          <div className="border rounded-lg max-h-64 overflow-y-auto mb-2">
+            <table className="min-w-full text-[11px] sm:text-xs">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="border px-2 py-1 text-left">車名</th>
+                  <th className="border px-2 py-1 text-left">登録番号</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cars
+                  .filter((car) => car.customerId === editingCustomerId)
+                  .map((car) => {
+                    const isActive =
+                      selectedCar && selectedCar.id === car.id;
+                    return (
+                      <tr
+                        key={car.id}
+                        className={
+                          'cursor-pointer hover:bg-emerald-50 ' +
+                          (isActive ? 'bg-emerald-50' : '')
+                        }
+                        onClick={() => {
+                          setSelectedCar(car);
+                          setCarName(car.carName ?? '');
+                          setRegistrationNumber(
+                            car.registrationNumber ?? '',
+                          );
+                          setChassisNumber(car.chassisNumber ?? '');
+                          setShakenDate(
+                            car.shakenDate
+                              ? new Date(car.shakenDate)
+                                  .toISOString()
+                                  .slice(0, 10)
+                              : '',
+                          );
+                          setInspectionDate(
+                            car.inspectionDate
+                              ? new Date(car.inspectionDate)
+                                  .toISOString()
+                                  .slice(0, 10)
+                              : '',
+                          );
+                        }}
+                      >
+                        <td className="border px-2 py-1">
+                          {car.carName || (
+                            <span className="text-gray-400">
+                              車名未設定
+                            </span>
+                          )}
+                        </td>
+                        <td className="border px-2 py-1">
+                          {car.registrationNumber || (
+                            <span className="text-gray-400">
+                              登録番号未設定
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                {cars.filter(
+                  (car) => car.customerId === editingCustomerId,
+                ).length === 0 && (
+                  <tr>
+                    <td
+                      className="border px-2 py-2 text-center text-gray-500"
+                      colSpan={2}
+                    >
+                      この顧客に紐づく車両がありません。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 選択中の車両編集フォーム（これも車両モーダルから流用） */}
+          <h5 className="text-xs font-semibold text-gray-900 mb-1">
+            {selectedCar
+              ? `選択中の車両を編集（ID: ${selectedCar.id}）`
+              : '編集する車両を上の一覧から選択してください'}
+          </h5>
+
+          {selectedCar && (
+  <form
+    className="space-y-2 text-[12px] sm:text-sm"
+    onSubmit={(e) => e.preventDefault()}
+  >
+    {/* 車名 */}
+    <div>
+      <label className="block text-xs font-medium mb-1">
+        車名
+      </label>
+      <input
+        className="w-full rounded-md border border-gray-500 px-2 py-1"
+        value={carName}
+        onChange={(e) => setCarName(e.target.value)}
+      />
+    </div>
+
+    {/* 登録番号 */}
+    <div>
+      <label className="block text-xs font-medium mb-1">
+        登録番号
+      </label>
+      <input
+        className="w-full rounded-md border border-gray-500 px-2 py-1"
+        placeholder="福岡300あ12-34 など"
+        value={registrationNumber}
+        onChange={(e) => setRegistrationNumber(e.target.value)}
+      />
+    </div>
+
+    {/* 車台番号 */}
+    <div>
+      <label className="block text-xs font-medium mb-1">
+        車台番号
+      </label>
+      <input
+        className="w-full rounded-md border border-gray-500 px-2 py-1"
+        value={chassisNumber}
+        onChange={(e) => setChassisNumber(e.target.value)}
+      />
+    </div>
+
+    {/* 車検日・点検日 */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div>
+        <label className="block text-xs font-medium mb-1">
+          車検満了日
+        </label>
+        <input
+          type="date"
+          className="w-full rounded-md border border-gray-500 px-2 py-1"
+          value={shakenDate}
+          onChange={(e) => setShakenDate(e.target.value)}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium mb-1">
+          点検予定日
+        </label>
+        <input
+          type="date"
+          className="w-full rounded-md border border-gray-500 px-2 py-1"
+          value={inspectionDate}
+          onChange={(e) => setInspectionDate(e.target.value)}
+        />
+      </div>
+    </div>
+
+    <div className="flex justify-end gap-2 pt-2">
+      <button
+        type="button"
+        onClick={handleSaveCar}
+        className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700"
+      >
+        車両情報を保存
+      </button>
+    </div>
+  </form>
+)}
+
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
+
 
       {/* 一括送信モーダル */}
       {isBroadcastModalOpen && (
@@ -1904,346 +2134,6 @@ const pagedCustomers = filteredCustomers.slice(
           </div>
         </div>
       )}
-
-            {/* 顧客登録／編集モーダル */}
-      {isCustomerModalOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          {/* ...既存... */}
-        </div>
-      )}
-
-            {/* ★ 車両一覧＆編集モーダル */}
-      {isVehicleModalOpen && vehicleTargetCustomer && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-3xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              車両一覧・編集（顧客: {vehicleTargetCustomer.lastName}{' '}
-              {vehicleTargetCustomer.firstName}）
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              この顧客に紐づいている車両の一覧です。車両をクリックすると下のフォームで編集できます。
-            </p>
-
-            {carFormError && (
-              <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
-                {carFormError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 左側：車両一覧 */}
-              <div>
-                <h4 className="text-xs font-semibold text-gray-900 mb-1">
-                  車両一覧
-                </h4>
-                <div className="border rounded-lg max-h-64 overflow-y-auto">
-                  <table className="min-w-full text-[11px] sm:text-xs">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr>
-                        <th className="border px-2 py-1 text-left">車名</th>
-                        <th className="border px-2 py-1 text-left">登録番号</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cars
-                        .filter((car) => car.customerId === vehicleTargetCustomer.id)
-                        .map((car) => {
-                          const isActive =
-                            selectedCar && selectedCar.id === car.id;
-                          return (
-                            <tr
-                              key={car.id}
-                              className={
-                                'cursor-pointer hover:bg-emerald-50 ' +
-                                (isActive ? 'bg-emerald-50' : '')
-                              }
-                              onClick={() => {
-                                setSelectedCar(car);
-                                setCarName(car.carName ?? '');
-                                setRegistrationNumber(
-                                  car.registrationNumber ?? '',
-                                );
-                                setChassisNumber(car.chassisNumber ?? '');
-                                setShakenDate(
-                                  car.shakenDate
-                                    ? new Date(car.shakenDate)
-                                        .toISOString()
-                                        .slice(0, 10)
-                                    : '',
-                                );
-                                setInspectionDate(
-                                  car.inspectionDate
-                                    ? new Date(car.inspectionDate)
-                                        .toISOString()
-                                        .slice(0, 10)
-                                    : '',
-                                );
-                              }}
-                            >
-                              <td className="border px-2 py-1">
-                                {car.carName || (
-                                  <span className="text-gray-400">
-                                    車名未設定
-                                  </span>
-                                )}
-                              </td>
-                              <td className="border px-2 py-1">
-                                {car.registrationNumber || (
-                                  <span className="text-gray-400">
-                                    登録番号未設定
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-
-                      {cars.filter(
-                        (car) =>
-                          car.customerId === vehicleTargetCustomer.id,
-                      ).length === 0 && (
-                        <tr>
-                          <td
-                            className="border px-2 py-2 text-center text-gray-500"
-                            colSpan={2}
-                          >
-                            この顧客に紐づく車両がありません。
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-1 text-[10px] text-gray-500">
-                  車両の追加・一覧の全体管理は「車両一覧」画面でも行えます。
-                </p>
-              </div>
-
-              {/* 右側：選択中の車両編集フォーム */}
-              <div>
-                <h4 className="text-xs font-semibold text-gray-900 mb-1">
-                  {selectedCar
-                    ? `選択中の車両を編集（ID: ${selectedCar.id}）`
-                    : '編集する車両を左の一覧から選択してください'}
-                </h4>
-
-                {selectedCar ? (
-                  <form
-                    className="space-y-2 text-[12px] sm:text-sm"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      // 保存処理は下の「この内容で保存」ボタン側で実行
-                    }}
-                  >
-                    <div>
-                      <label className="block text-xs font-medium mb-1">
-                        車名
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                        value={carName}
-                        onChange={(e) => setCarName(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">
-                        登録番号
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                        value={registrationNumber}
-                        onChange={(e) =>
-                          setRegistrationNumber(e.target.value)
-                        }
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium mb-1">
-                        車台番号
-                      </label>
-                      <input
-                        className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                        value={chassisNumber}
-                        onChange={(e) =>
-                          setChassisNumber(e.target.value)
-                        }
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs font-medium mb-1">
-                          車検日
-                        </label>
-                        <input
-                          type="date"
-                          className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                          value={shakenDate}
-                          onChange={(e) => setShakenDate(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium mb-1">
-                          点検日
-                        </label>
-                        <input
-                          type="date"
-                          className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-                          value={inspectionDate}
-                          onChange={(e) =>
-                            setInspectionDate(e.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    {/* ボタン行：削除・保存・閉じるを横並び */}
-                    <div className="pt-2 flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!token || !selectedCar) return;
-                          const ok = window.confirm(
-                            'この車両を削除します。よろしいですか？',
-                          );
-                          if (!ok) return;
-
-                          try {
-                            setCarFormSaving(true);
-                            const res = await fetch(
-                              `${apiBase}/cars/${selectedCar.id}`,
-                              {
-                                method: 'DELETE',
-                                headers: {
-                                  Authorization: `Bearer ${token}`,
-                                },
-                              },
-                            );
-                            if (!res.ok) {
-                              throw new Error(
-                                '車両の削除に失敗しました。',
-                              );
-                            }
-
-                            setCars((prev) =>
-                              prev.filter(
-                                (car) => car.id !== selectedCar.id,
-                              ),
-                            );
-                            setSelectedCar(null);
-                            setCarName('');
-                            setRegistrationNumber('');
-                            setChassisNumber('');
-                            setShakenDate('');
-                            setInspectionDate('');
-                          } catch (e: any) {
-                            console.error(e);
-                            setCarFormError(
-                              e?.message ??
-                                '車両の削除に失敗しました。',
-                            );
-                          } finally {
-                            setCarFormSaving(false);
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-md border border-red-500 text-xs sm:text-sm text-red-700 bg-white hover:bg-red-50 disabled:opacity-60"
-                        disabled={carFormSaving}
-                      >
-                        削除
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!token || !selectedCar) return;
-
-                          setCarFormError(null);
-                          setCarFormSaving(true);
-                          try {
-                            const payload = {
-                              carName: carName || null,
-                              registrationNumber:
-                                registrationNumber || null,
-                              chassisNumber: chassisNumber || null,
-                              shakenDate: shakenDate || null,
-                              inspectionDate: inspectionDate || null,
-                            };
-
-                            const res = await fetch(
-                              `${apiBase}/cars/${selectedCar.id}`,
-                              {
-                                method: 'PATCH',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify(payload),
-                              },
-                            );
-
-                            if (!res.ok) {
-                              const data = await res
-                                .json()
-                                .catch(() => null);
-                              let msg =
-                                '車両情報の更新に失敗しました';
-                              if (data?.message) {
-                                msg = Array.isArray(data.message)
-                                  ? data.message.join(', ')
-                                  : String(data.message);
-                              }
-                              throw new Error(msg);
-                            }
-
-                            const updated: Car = await res.json();
-
-                            setCars((prev) =>
-                              prev.map((car) =>
-                                car.id === updated.id ? updated : car,
-                              ),
-                            );
-
-                            window.alert('車両情報を更新しました。');
-                          } catch (e: any) {
-                            console.error(e);
-                            setCarFormError(
-                              e?.message ??
-                                '車両情報の更新に失敗しました。',
-                            );
-                          } finally {
-                            setCarFormSaving(false);
-                          }
-                        }}
-                        className="px-4 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
-                        disabled={carFormSaving}
-                      >
-                        {carFormSaving ? '保存中…' : 'この内容で保存'}
-                      </button>
-
-                      {/* ★ ここに閉じるボタンを追加 */}
-                      <button
-                        type="button"
-                        onClick={closeVehicleModal}
-                        className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
-                        disabled={carFormSaving}
-                      >
-                        閉じる
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="mt-2 text-[11px] text-gray-500">
-                    左の一覧から編集したい車両を選択してください。
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
     </TenantLayout>
   );
 }
