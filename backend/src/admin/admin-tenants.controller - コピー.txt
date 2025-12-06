@@ -10,31 +10,34 @@ import {
   ParseIntPipe,
   BadRequestException,
   NotFoundException,
-  UseGuards,         // ★ 追加
-  ForbiddenException // ★ 追加
+  UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+
+// ★ 追加：許可するプラン
+const ALLOWED_PLANS = ['BASIC', 'STANDARD', 'PRO'] as const;
+type PlanType = (typeof ALLOWED_PLANS)[number];
 
 // 新規作成用 DTO（email / plan は Prisma 側に合わせて必須）
 type CreateTenantDto = {
   name: string;
   email: string;
-  plan: string;
+  plan: string; // フロントからは文字列で飛んでくる想定
   isActive?: boolean;
   validUntil?: string | null; // "2025-12-31" などの文字列
 
-   // ★ 契約者情報（任意）
+  // ★ 契約者情報（任意）
   companyName?: string | null;
   companyAddress1?: string | null;
   companyAddress2?: string | null;
   representativeName?: string | null;
   contactPhone?: string | null;
   contactMobile?: string | null;
-
 };
 
 // 更新用 DTO（全部任意。来たものだけ反映）
@@ -92,11 +95,10 @@ export class AdminTenantsController {
       representativeName: t.representativeName ?? null,
       contactPhone: t.contactPhone ?? null,
       contactMobile: t.contactMobile ?? null,
-
     }));
   }
 
-    // ★ 編集用：単一テナント取得
+  // ★ 編集用：単一テナント取得
   @Get(':id')
   async getTenant(@Param('id') id: string) {
     const tenantId = Number(id);
@@ -133,17 +135,15 @@ export class AdminTenantsController {
       carsCount: t._count?.cars ?? 0,
       bookingsCount: t._count?.bookings ?? 0,
 
-            // ★ 契約者情報
+      // ★ 契約者情報
       companyName: t.companyName ?? null,
       companyAddress1: t.companyAddress1 ?? null,
       companyAddress2: t.companyAddress2 ?? null,
       representativeName: t.representativeName ?? null,
       contactPhone: t.contactPhone ?? null,
       contactMobile: t.contactMobile ?? null,
-
     };
   }
-
 
   // 既存：新規作成
   @Post()
@@ -158,6 +158,14 @@ export class AdminTenantsController {
       throw new BadRequestException('プランは必須です');
     }
 
+    // ★ ここで plan を正規化＆チェック（BASIC / STANDARD / PRO）
+    const plan = body.plan.trim().toUpperCase();
+    if (!ALLOWED_PLANS.includes(plan as PlanType)) {
+      throw new BadRequestException(
+        'プランは BASIC / STANDARD / PRO のいずれかを指定してください',
+      );
+    }
+
     const validUntil =
       body.validUntil && body.validUntil.trim()
         ? new Date(body.validUntil)
@@ -170,7 +178,7 @@ export class AdminTenantsController {
     const data: Prisma.TenantCreateInput = {
       name: body.name.trim(),
       email: body.email.trim(),
-      plan: body.plan.trim(),
+      plan, // ← 正規化済みの plan を保存
       isActive: body.isActive ?? true,
       validUntil,
 
@@ -181,7 +189,6 @@ export class AdminTenantsController {
       representativeName: body.representativeName?.trim() || null,
       contactPhone: body.contactPhone?.trim() || null,
       contactMobile: body.contactMobile?.trim() || null,
-
     };
 
     const tenant = await this.prisma.tenant.create({ data });
@@ -228,7 +235,13 @@ export class AdminTenantsController {
     }
 
     if (body.plan && body.plan.trim()) {
-      data.plan = body.plan.trim();
+      const plan = body.plan.trim().toUpperCase();
+      if (!ALLOWED_PLANS.includes(plan as PlanType)) {
+        throw new BadRequestException(
+          'プランは BASIC / STANDARD / PRO のいずれかを指定してください',
+        );
+      }
+      data.plan = plan;
     }
 
     if (typeof body.isActive === 'boolean') {
@@ -274,6 +287,37 @@ export class AdminTenantsController {
       data,
     });
 
+        // ★ ここから追記：プランに応じて MANAGER の maxConcurrentSessions を更新
+    let maxSessionsForManager: number | null = null;
+
+    // tenant.plan は String 型（"BASIC" / "STANDARD" / "PRO"）想定
+    switch (tenant.plan) {
+      case 'STANDARD':
+        maxSessionsForManager = 2;
+        break;
+      case 'PRO':
+        maxSessionsForManager = 3;
+        break;
+      case 'BASIC':
+      default:
+        maxSessionsForManager = 1;
+        break;
+    }
+
+    // MANAGER ユーザーだけまとめて更新
+    if (maxSessionsForManager !== null) {
+      await this.prisma.user.updateMany({
+        where: {
+          tenantId: tenantId,
+          role: UserRole.MANAGER,
+        },
+        data: {
+          maxConcurrentSessions: maxSessionsForManager,
+        },
+      });
+    }
+    // ★ 追記ここまで
+
     return {
       id: tenant.id,
       name: tenant.name,
@@ -315,39 +359,39 @@ export class AdminTenantsController {
       plan: tenant.plan ?? null,
     };
   }
-      // ▼コントローラ内にメソッド追加（最後あたりでOK）
-    @Patch('')
-    @Delete(':userId')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles('DEVELOPER')
-    async deleteTenantUser(
-      @Param('tenantId') tenantId: number,
-      @Param('userId') userId: number,
-    ) {
-      // 開発者以外は削除不可
-      const user = await this.prisma.user.findUnique({ where: { id: userId }});
-      if (!user) {
-        throw new NotFoundException('ユーザーが見つかりません');
-      }
-      if (user.role === 'DEVELOPER') {
-        throw new ForbiddenException('DEVELOPER は削除できません');
-      }
-      if (user.tenantId !== tenantId) {
-        throw new ForbiddenException('このテナントのユーザーではありません');
-      }
 
-      await this.prisma.user.delete({
-        where: { id: userId },
-      });
+  // ▼ ここのメソッド群は元のまま（挙動変えたくないのでそのまま残してる）
 
-      return { success: true };
+  @Patch('')
+  @Delete(':userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DEVELOPER')
+  async deleteTenantUser(
+    @Param('tenantId') tenantId: number,
+    @Param('userId') userId: number,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('ユーザーが見つかりません');
+    }
+    if (user.role === 'DEVELOPER') {
+      throw new ForbiddenException('DEVELOPER は削除できません');
+    }
+    if (user.tenantId !== tenantId) {
+      throw new ForbiddenException('このテナントのユーザーではありません');
     }
 
-@Post(':tenantId/reset-data')
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return { success: true };
+  }
+
+  @Post(':tenantId/reset-data')
   async resetTenantData(
     @Param('tenantId', ParseIntPipe) tenantId: number,
   ) {
-    // テナント存在チェック
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });
@@ -356,24 +400,19 @@ export class AdminTenantsController {
       throw new NotFoundException('テナントが存在しません');
     }
 
-    // ここから一括削除（トランザクション）
     await this.prisma.$transaction(async (tx) => {
-      // 1. リマインド送信ログ
       await tx.reminderSentLog.deleteMany({
         where: { tenantId },
       });
 
-      // 2. 予約
       await tx.booking.deleteMany({
         where: { tenantId },
       });
 
-      // 3. 車両
       await tx.car.deleteMany({
         where: { tenantId },
       });
 
-      // 4. 顧客
       await tx.customer.deleteMany({
         where: { tenantId },
       });
