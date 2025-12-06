@@ -65,6 +65,18 @@ model User {
   maxConcurrentSessions Int      @default(1)
 
   createdAt DateTime @default(now())
+  // ★ ログインセッションとのリレーション（後々制限に使う）
+  sessions UserSession[]
+}
+
+model UserSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  expiresAt DateTime?  // 有効期限（あとで使う想定）
+  revokedAt DateTime?  // 強制ログアウトした時に入れる想定
 }
 
 enum UserRole {

@@ -4,10 +4,9 @@ import {
   Get,
   Post,
   Req,
-  Res,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { Request, Response } from 'express'; // ★ TS1272 対策で type import
+import type { Request } from 'express'; // ★ TS1272 対策で type import
 import { AuthService, AuthPayload } from './auth.service';
 
 @Controller('auth')
@@ -85,6 +84,7 @@ export class AuthController {
 
     return { ok: true };
   }
+
     /**
    * MANAGER が CLIENT のパスワードを強制変更する
    * POST /auth/manager/reset-client-password
@@ -128,23 +128,5 @@ export class AuthController {
 
     // 返す形（AuthPayload）は今まで通り
     return payload;
-  }
-
-    @Post('logout')
-  async logout(@Req() req: Request, @Res() res: Response) {
-    // JWT から payload を取り出す（トークンが無くてもエラーにはしない）
-    const payload = this.auth.getPayloadFromRequest(req);
-
-    // payload が取れた場合のみ、そのユーザーのセッションを無効化
-    if (payload) {
-      await this.auth.logoutAllSessionsForUser(payload.id);
-    }
-
-    // クッキーは今まで通り全部消す
-    res.clearCookie('Authentication');
-    res.clearCookie('access_token');
-
-    // フロント用にシンプルなレスポンス
-    return res.json({ ok: true });
   }
 }
