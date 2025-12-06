@@ -41,11 +41,7 @@ model Tenant {
   reminderSentLogs ReminderSentLog[]
 }
 
-enum Plan {
-  BASIC
-  STANDARD
-  PRO
-}
+
 
 model User {
   id Int @id @default(autoincrement())
@@ -61,8 +57,7 @@ model User {
   // ★ ロールを追加（開発者 / 管理者 / クライアント）
   role UserRole @default(MANAGER)
   isActive  Boolean  @default(true)
-  plan                 Plan?    @default(BASIC)
-  maxConcurrentSessions Int      @default(1)
+
 
   createdAt DateTime @default(now())
   // ★ ログインセッションとのリレーション（後々制限に使う）
