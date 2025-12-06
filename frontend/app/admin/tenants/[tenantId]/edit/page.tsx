@@ -110,6 +110,16 @@ export default function AdminTenantEditPage() {
         setPlan(data.plan ?? "");
         setIsActive(data.isActive);
 
+                // ★ プランを大文字にそろえて、BASIC / STANDARD / PRO 以外なら「未選択」にする
+        const planValue = (data.plan ?? "").toUpperCase();
+        if (["BASIC", "STANDARD", "PRO"].includes(planValue)) {
+          setPlan(planValue);
+        } else {
+          setPlan("");
+        }
+
+        setIsActive(data.isActive);
+
         // ★ 契約者情報も state に詰める
         setCompanyName(data.companyName ?? "");
         setCompanyAddress1(data.companyAddress1 ?? "");
@@ -138,7 +148,27 @@ export default function AdminTenantEditPage() {
       .finally(() => setLoading(false));
   }, [tenantId, tenantIdParam]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+  const savedToken =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("auth_token")
+      : null;
+
+  try {
+    if (savedToken) {
+      // ★ バックエンドの /auth/logout を叩いて、UserSession を revoked にする
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${savedToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+  } catch (e) {
+    // 失敗しても、とりあえずフロント側のログアウト処理は続行
+    console.error("logout error", e);
+  }
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("auth_token");
       document.cookie = "Authentication=; Max-Age=0; path=/";
@@ -510,15 +540,24 @@ export default function AdminTenantEditPage() {
           <label className="block text-sm font-medium mb-1">
             プラン <span className="text-red-600">*</span>
           </label>
-          <input
-            type="text"
+          <select
             value={plan}
             onChange={(e) => setPlan(e.target.value)}
             className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="trial / standard / premium など"
             required
-          />
+          >
+            <option value="">プランを選択してください</option>
+            <option value="BASIC">Basic（同時ログイン 1）</option>
+            <option value="STANDARD">Standard（同時ログイン 2）</option>
+            <option value="PRO">Pro（同時ログイン 3）</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            ※ 将来の仕様：MANAGER はプランに応じて同時ログイン数を制限します
+            （BASIC:1 / STANDARD:2 / PRO:3）。CLIENT は常に 1、DEVELOPER は制限なし。
+          </p>
         </div>
+
+
 
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium">有効フラグ</label>

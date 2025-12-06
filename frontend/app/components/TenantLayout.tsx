@@ -139,12 +139,38 @@ export default function TenantLayout({ children }: Props) {
     fetchInfo();
   }, []);
 
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('auth_token');
+    const handleLogout = async () => {
+    if (typeof window === 'undefined') {
+      return;
     }
-    router.push('/'); // ログイン画面 or トップ
+
+    const token = window.localStorage.getItem('auth_token');
+    const apiBase = process.env.NEXT_PUBLIC_API_URL;
+
+    if (token && apiBase) {
+      try {
+        // ★ 先にバックエンド側のセッションを無効化
+        await fetch(`${apiBase}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        // レスポンスの成否はそこまで気にしない（失敗しても最後に token は消す）
+      } catch (e) {
+        console.error('logout api error', e);
+      }
+    }
+
+    // ★ フロント側の token / cookie を削除
+    window.localStorage.removeItem('auth_token');
+    document.cookie = 'Authentication=; Max-Age=0; path=/';
+    document.cookie = 'access_token=; Max-Age=0; path=/';
+
+    // ★ ログイン画面 or トップへ戻る
+    router.push('/');
   };
+
 
   return (
     <div className="min-h-screen flex bg-[#F7FFF8]">
