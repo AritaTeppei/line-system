@@ -287,36 +287,36 @@ export class AdminTenantsController {
       data,
     });
 
-        // ★ ここから追記：プランに応じて MANAGER の maxConcurrentSessions を更新
-    let maxSessionsForManager: number | null = null;
+    //     // ★ ここから追記：プランに応じて MANAGER の maxConcurrentSessions を更新
+    // let maxSessionsForManager: number | null = null;
 
-    // tenant.plan は String 型（"BASIC" / "STANDARD" / "PRO"）想定
-    switch (tenant.plan) {
-      case 'STANDARD':
-        maxSessionsForManager = 2;
-        break;
-      case 'PRO':
-        maxSessionsForManager = 3;
-        break;
-      case 'BASIC':
-      default:
-        maxSessionsForManager = 1;
-        break;
-    }
+    // // tenant.plan は String 型（"BASIC" / "STANDARD" / "PRO"）想定
+    // switch (tenant.plan) {
+    //   case 'STANDARD':
+    //     maxSessionsForManager = 2;
+    //     break;
+    //   case 'PRO':
+    //     maxSessionsForManager = 3;
+    //     break;
+    //   case 'BASIC':
+    //   default:
+    //     maxSessionsForManager = 1;
+    //     break;
+    // }
 
-    // MANAGER ユーザーだけまとめて更新
-    if (maxSessionsForManager !== null) {
-      await this.prisma.user.updateMany({
-        where: {
-          tenantId: tenantId,
-          role: UserRole.MANAGER,
-        },
-        data: {
-          maxConcurrentSessions: maxSessionsForManager,
-        },
-      });
-    }
-    // ★ 追記ここまで
+    // // MANAGER ユーザーだけまとめて更新
+    // if (maxSessionsForManager !== null) {
+    //   await this.prisma.user.updateMany({
+    //     where: {
+    //       tenantId: tenantId,
+    //       role: UserRole.MANAGER,
+    //     },
+    //     data: {
+    //       maxConcurrentSessions: maxSessionsForManager,
+    //     },
+    //   });
+    // }
+    // // ★ 追記ここまで
 
     return {
       id: tenant.id,
