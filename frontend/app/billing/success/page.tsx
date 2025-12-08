@@ -1,60 +1,48 @@
 // frontend/app/billing/success/page.tsx
-'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
-import TenantLayout from '../../components/TenantLayout';
-import { useEffect, useState } from 'react';
+type BillingSuccessPageProps = {
+  searchParams: {
+    [key: string]: string | string[] | undefined;
+  };
+};
 
-export default function BillingSuccessPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [sessionId, setSessionId] = useState<string | null>(null);
+export default function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
+  // URL例: /billing/success?session_id=xxx&redirect_status=succeeded などを想定
+  const sessionIdParam = searchParams["session_id"];
+  const sessionId = Array.isArray(sessionIdParam) ? sessionIdParam[0] : sessionIdParam ?? "";
 
-  useEffect(() => {
-    const id = searchParams.get('session_id');
-    if (id) {
-      setSessionId(id);
-    }
-  }, [searchParams]);
+  const statusParam = searchParams["redirect_status"];
+  const status = Array.isArray(statusParam) ? statusParam[0] : statusParam ?? "succeeded";
 
   return (
-    <TenantLayout>
-      <div className="p-4 space-y-6">
-        <h1 className="text-xl font-bold">ご契約ありがとうございます</h1>
+    <div className="min-h-[60vh] flex items-center justify-center px-4">
+      <div className="max-w-md w-full rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-semibold mb-4">決済が完了しました</h1>
 
-        <p className="text-sm text-gray-700 whitespace-pre-line">
-          サブスクリプションの決済が完了しました。
-          {'\n'}
-          現在はテスト環境のため、実際の請求は発生していません。
+        <p className="text-sm text-gray-700 mb-4">
+          ご契約ありがとうございます。サブスク契約の処理が正常に完了しました。
         </p>
 
         {sessionId && (
-          <div className="text-xs text-gray-500">
-            Checkout Session ID:{' '}
-            <span className="font-mono break-all">{sessionId}</span>
-          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            セッションID: <span className="font-mono break-all">{sessionId}</span>
+          </p>
         )}
 
-        <div className="flex gap-3 mt-4">
-          <button
-            className="px-4 py-2 rounded-md bg-green-600 text-white text-sm font-semibold"
-            onClick={() => router.push('/dashboard')}
-          >
-            ダッシュボードへ戻る
-          </button>
-          <button
-            className="px-4 py-2 rounded-md bg-gray-200 text-sm"
-            onClick={() => router.push('/billing')}
-          >
-            プラン画面に戻る
-          </button>
-        </div>
-
-        <p className="text-xs text-gray-500 mt-4">
-          ※ 後ほど、Stripe Webhook を利用してテナントのプラン状態を自動更新する仕組みを追加します。
-          現時点では UI のみの動作確認フェーズです。
+        <p className="text-sm text-gray-700 mb-6">
+          ステータス:{" "}
+          <span className="font-medium">
+            {status === "succeeded" ? "成功" : status}
+          </span>
         </p>
+
+        <a
+          href="/dashboard"
+          className="inline-flex items-center justify-center rounded-lg border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          ダッシュボードへ戻る
+        </a>
       </div>
-    </TenantLayout>
+    </div>
   );
 }
