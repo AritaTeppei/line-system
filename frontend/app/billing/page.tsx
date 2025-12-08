@@ -29,7 +29,7 @@ type BillingStatus = {
 } | null;
 
 const apiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 // 認証トークン取得
 function getAuthToken(): string | null {
