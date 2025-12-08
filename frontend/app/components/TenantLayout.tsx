@@ -1,13 +1,13 @@
 // frontend/app/components/TenantLayout.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 type Props = {
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
 type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED';
@@ -17,19 +17,31 @@ type Booking = {
   status: BookingStatus;
 };
 
+type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
+
 type MeResponse = {
   id: number;
   email: string;
   name: string | null;
   tenantId: number | null;
-  role: 'DEVELOPER' | 'MANAGER' | 'CLIENT';
-  // あるかもしれないフィールドたち（あれば勝手に拾う）
+  role: Role;
   tenantName?: string | null;
   tenant?: {
     name?: string | null;
     displayName?: string | null;
   } | null;
 };
+
+type OnboardingStatus = {
+  tenantId: number;
+  tenantName: string;
+  plan: string;
+  hasLineSettings: boolean;
+  lineSettingsActive: boolean;
+  hasSubscription: boolean;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+} | null;
 
 // メインメニュー
 const mainLinks = [
@@ -40,11 +52,136 @@ const mainLinks = [
   { href: '/reminders/month', label: 'リマインド管理' },
 ];
 
-// 各種設定メニュー
-const settingLinks = [
+// ★ 管理者用「各種設定」メニュー（3つに集約）
+const managerSettingLinks = [
   { href: '/settings/messages', label: 'メッセージ設定' },
-  { href: '/settings/change-password', label: '設定（パスワード）' },
+  { href: '/settings/change-password', label: '設定パスワード' },
+  { href: '/onboarding/line', label: 'LINE連携' },
+  { href: '/billing', label: 'サブスク登録' },
 ];
+
+const apiBase =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const fromSession = window.sessionStorage.getItem('auth_token');
+  if (fromSession) return fromSession;
+  return window.localStorage.getItem('auth_token');
+}
+
+// ★ 初期設定の進捗パネル（管理者 & 未完了のときだけ表示）
+function OnboardingPanel({ me }: { me: MeResponse | null }) {
+  const [status, setStatus] = useState<OnboardingStatus>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token || !me?.tenantId || me.role !== 'MANAGER') {
+      setLoading(false);
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/onboarding/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tenantId: me.tenantId }),
+        });
+
+        if (!res.ok) {
+          setError('設定状況の取得に失敗しました。');
+          setLoading(false);
+          return;
+        }
+
+        const data = (await res.json()) as { status: OnboardingStatus };
+        setStatus(data.status ?? null);
+        setLoading(false);
+      } catch (e) {
+        console.error(e);
+        setError('設定状況の取得に失敗しました。');
+        setLoading(false);
+      }
+    })();
+  }, [me]);
+
+  if (loading) return null;
+  if (!me || me.role !== 'MANAGER') return null;
+  if (!status) return null;
+
+  // LINE設定 + サブスク登録が完了していたらパネル非表示
+  const allDone =
+    status.hasLineSettings &&
+    status.lineSettingsActive &&
+    status.hasSubscription;
+
+  if (allDone) return null;
+
+  return (
+    <section className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-gray-800">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <p className="font-semibold text-yellow-900 text-sm mb-1">
+            初期設定の進捗
+          </p>
+          <p className="text-[11px] text-gray-700">
+            テナント名：<b>{status.tenantName}</b>（プラン: {status.plan}）
+          </p>
+          <ul className="mt-1 space-y-[2px] text-[11px]">
+            <li>
+              ・LINE連携：
+              <b>
+                {status.hasLineSettings
+                  ? status.lineSettingsActive
+                    ? '設定済み（有効）'
+                    : '設定済み（無効）'
+                  : '未設定'}
+              </b>
+            </li>
+            <li>
+              ・サブスク（クレジット登録）：
+              <b>
+                {status.hasSubscription
+                  ? `登録済み（${status.subscriptionStatus ?? '状態不明'}）`
+                  : '未登録'}
+              </b>
+            </li>
+          </ul>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 mt-1 sm:mt-0">
+          <button
+            type="button"
+            className="px-3 py-1 rounded-md border border-emerald-500 bg-white text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+            onClick={() => router.push('/onboarding/line')}
+          >
+            LINE連携の設定
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1 rounded-md border border-blue-500 bg-white text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+            onClick={() => router.push('/billing')}
+          >
+            サブスク登録・プラン管理
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="mt-1 text-[10px] text-red-700 whitespace-pre-wrap">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function TenantLayout({ children }: Props) {
   const pathname = usePathname();
@@ -53,21 +190,19 @@ export default function TenantLayout({ children }: Props) {
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(null); // ★ 追加：ログインユーザー情報
 
   useEffect(() => {
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
+    const token = getAuthToken();
 
     if (!token) {
       setPendingCount(null);
       setTenantName(null);
       setUserName(null);
+      setMe(null);
       return;
     }
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL;
     if (!apiBase) {
       console.error('NEXT_PUBLIC_API_URL が設定されていません');
       return;
@@ -109,19 +244,18 @@ export default function TenantLayout({ children }: Props) {
         }
 
         const meData: MeResponse = await meRes.json();
+        setMe(meData); // ★ me を保存
 
-        // ログインユーザー名（担当者）
+        // ログインユーザー名（担当）
         const userNameValue = meData.name ?? null;
         setUserName(userNameValue);
 
-        // テナント名候補：バックエンドがどの形で返してきても拾えるようにしておく
         const tenantNameFromApi =
           meData.tenantName ??
           meData.tenant?.name ??
           meData.tenant?.displayName ??
           null;
 
-        // それでも取れなければ tenantId を仮表示
         const tenantNameValue =
           tenantNameFromApi ??
           (meData.tenantId != null
@@ -133,44 +267,39 @@ export default function TenantLayout({ children }: Props) {
         console.error('テナント情報の取得に失敗しました', e);
         setTenantName(null);
         setUserName(null);
+        setMe(null);
       }
     };
 
     fetchInfo();
   }, []);
 
-    const handleLogout = async () => {
+  const handleLogout = async () => {
     if (typeof window === 'undefined') {
       return;
     }
 
     const token = window.localStorage.getItem('auth_token');
-    const apiBase = process.env.NEXT_PUBLIC_API_URL;
 
     if (token && apiBase) {
       try {
-        // ★ 先にバックエンド側のセッションを無効化
         await fetch(`${apiBase}/auth/logout`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
-        // レスポンスの成否はそこまで気にしない（失敗しても最後に token は消す）
       } catch (e) {
         console.error('logout api error', e);
       }
     }
 
-    // ★ フロント側の token / cookie を削除
     window.localStorage.removeItem('auth_token');
     document.cookie = 'Authentication=; Max-Age=0; path=/';
     document.cookie = 'access_token=; Max-Age=0; path=/';
 
-    // ★ ログイン画面 or トップへ戻る
     router.push('/');
   };
-
 
   return (
     <div className="min-h-screen flex bg-[#F7FFF8]">
@@ -195,11 +324,19 @@ export default function TenantLayout({ children }: Props) {
             LINE 通知システム
           </div>
 
-          {/* ★ ログインユーザー（担当） */}
+          {/* ログインユーザー（担当） */}
           {userName && (
             <div className="mt-0.5 text-[11px] text-gray-600 text-center">
               ログインユーザー：
               <span className="font-medium">{userName}</span>
+            </div>
+          )}
+
+          {/* テナント名（あれば） */}
+          {tenantName && (
+            <div className="mt-0.5 text-[11px] text-gray-600 text-center">
+              テナント：
+              <span className="font-medium">{tenantName}</span>
             </div>
           )}
 
@@ -253,35 +390,37 @@ export default function TenantLayout({ children }: Props) {
             })}
           </div>
 
-          {/* - 各種設定 - */}
-          <div className="mt-4 pt-3 border-t border-gray-100">
-            <div className="mb-2 text-[11px] font-semibold text-gray-500 tracking-wide">
-              - 各種設定 -
-            </div>
+          {/* 各種設定（★ 管理者のみ・3つに集約） */}
+          {me?.role === 'MANAGER' && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <div className="mb-2 text-[11px] font-semibold text-gray-500 tracking-wide">
+                - 各種設定 -
+              </div>
 
-            <div className="space-y-1">
-              {settingLinks.map((link) => {
-                const active =
-                  pathname === link.href ||
-                  pathname?.startsWith(link.href);
+              <div className="space-y-1">
+                {managerSettingLinks.map((link) => {
+                  const active =
+                    pathname === link.href ||
+                    pathname?.startsWith(link.href);
 
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={[
-                      'flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors',
-                      active
-                        ? 'bg-[#00C300] text-white'
-                        : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
-                    ].join(' ')}
-                  >
-                    <span>{link.label}</span>
-                  </Link>
-                );
-              })}
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={[
+                        'flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors',
+                        active
+                          ? 'bg-[#00C300] text-white'
+                          : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
+                      ].join(' ')}
+                    >
+                      <span>{link.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
         {/* フッター */}
@@ -291,7 +430,12 @@ export default function TenantLayout({ children }: Props) {
       </aside>
 
       {/* 右側：各ページの中身 */}
-      <div className="flex-1 px-4 py-5">{children}</div>
+      <div className="flex-1 px-4 py-5">
+        {/* ★ 初期設定の進捗（TenantLayout 配下の全ページ共通） */}
+        <OnboardingPanel me={me} />
+
+        {children}
+      </div>
     </div>
   );
 }

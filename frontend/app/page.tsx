@@ -32,14 +32,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // すでにトークンがある場合は /auth/me で role を確認して自動遷移
+  // すでにトークンがある場合は自動遷移
   useEffect(() => {
-    // まずは保存済みメールアドレスを復元
     if (typeof window !== 'undefined') {
       const savedEmail = window.localStorage.getItem(SAVED_EMAIL_KEY);
       if (savedEmail) {
         setEmail(savedEmail);
-        setRememberEmail(true); // 保存済みならチェックONにしておく
+        setRememberEmail(true);
       }
     }
 
@@ -55,10 +54,8 @@ export default function LoginPage() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) {
-          // トークンが古いなど → 無視して通常ログイン画面
-          return;
-        }
+        if (!res.ok) return;
+
         const data = (await res.json()) as MeResponse;
 
         if (data.role === 'DEVELOPER') {
@@ -66,9 +63,7 @@ export default function LoginPage() {
         } else {
           router.replace('/dashboard');
         }
-      } catch {
-        // サーバー落ちてる等 → 何もしない（ログイン画面のまま）
-      }
+      } catch {}
     };
 
     run();
@@ -79,7 +74,6 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    // メールアドレス保存／削除（チェックボックスの状態に応じて）
     if (typeof window !== 'undefined') {
       if (rememberEmail) {
         window.localStorage.setItem(SAVED_EMAIL_KEY, email);
@@ -116,7 +110,6 @@ export default function LoginPage() {
         window.localStorage.setItem('auth_token', loginData.token);
       }
 
-      // ロールごとに行き先を分ける（既存仕様維持）
       if (loginData.role === 'DEVELOPER') {
         router.replace('/admin/tenants');
       } else {
@@ -126,14 +119,10 @@ export default function LoginPage() {
       console.error(err);
       if (err?.name === 'TypeError') {
         setError(
-          'サーバーに接続できませんでした。\n' +
-            '・backend が起動しているか\n' +
-            '・CORS 設定が有効か\nを確認してください。',
+          'サーバーに接続できませんでした。\nbackend が起動しているかを確認してください。',
         );
       } else {
-        setError(
-          err?.message || 'ログイン処理中にエラーが発生しました。',
-        );
+        setError(err?.message || 'ログイン処理中にエラーが発生しました。');
       }
     } finally {
       setLoading(false);
@@ -141,11 +130,10 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4">
+    <main className="min-h-screen flex flex-col items-center justify-between px-4 py-6">
       <div className="w-full max-w-md">
-        {/* ロゴ & タイトル部分 */}
+        {/* ロゴ・タイトル */}
         <div className="flex flex-col items-center mb-6">
-          {/* 画像ロゴ */}
           <div className="w-[200px] mx-auto mb-4">
             <Image
               src="/pitlink-logo.png"
@@ -156,9 +144,9 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <p className="text-sm text-gray-700 mt-1">
-  自動車業界向け LINE 連携プラットフォーム
-</p>
+          <p className="text-sm text-gray-700">
+            自動車業界向け LINE 連携プラットフォーム
+          </p>
         </div>
 
         {/* ログインカード */}
@@ -198,32 +186,49 @@ export default function LoginPage() {
               />
             </div>
 
-            {/* メールアドレス記憶チェックボックス */}
+            {/* メールアドレス記憶 */}
             <div className="flex items-center gap-2 text-sm text-gray-700">
-  <input
-    id="remember-email"
-    type="checkbox"
-    className="h-4 w-4 rounded border-gray-300 text-[#00C300] focus:ring-[#00C300]"
-    checked={rememberEmail}
-    onChange={(e) => setRememberEmail(e.target.checked)}
-  />
-  <label htmlFor="remember-email" className="select-none">
-    メールアドレスを記憶する
-  </label>
-</div>
-
+              <input
+                id="remember-email"
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-[#00C300] focus:ring-[#00C300]"
+                checked={rememberEmail}
+                onChange={(e) => setRememberEmail(e.target.checked)}
+              />
+              <label htmlFor="remember-email" className="select-none">
+                メールアドレスを記憶する
+              </label>
+            </div>
 
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-[#00C300] text-white rounded-lg py-2 text-sm font-semibold 
-                         disabled:opacity-50 hover:bg-green-500 transition-colors"
+                disabled:opacity-50 hover:bg-green-500 transition-colors"
             >
               {loading ? 'ログイン中...' : 'ログイン'}
             </button>
           </form>
+
+          {/* ★ 新規登録ボタン（追加） */}
+          <div className="mt-4 border-t pt-4">
+            <p className="text-[11px] text-gray-600 mb-1">
+              初めてご利用の整備工場様はこちら
+            </p>
+            <button
+              className="w-full py-2 border border-[#00C300] text-[#00C300] rounded-lg text-sm font-semibold hover:bg-green-50 transition-colors"
+              onClick={() => router.push('/signup')}
+            >
+              新規登録（無料ではじめる）
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ★ コピーライト（追加） */}
+      <footer className="text-[11px] text-gray-500 mt-6">
+        © 556
+      </footer>
     </main>
   );
 }

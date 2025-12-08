@@ -38,6 +38,18 @@ type Booking = {
   } | null;
 };
 
+type OnboardingStatus = {
+  tenantId: number;
+  tenantName: string;
+  plan: string;
+  hasLineSettings: boolean;
+  lineSettingsActive: boolean;
+  hasSubscription: boolean;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+} | null;
+
+
 type Customer = {
   id: number;
   lastName: string;
@@ -46,6 +58,18 @@ type Customer = {
 
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  // 認証トークン取得（今後 sessionStorage に移行しやすいように共通化）
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // ① まず sessionStorage を優先（あとでここに保存するように変える前提）
+  const fromSession = window.sessionStorage.getItem('auth_token');
+  if (fromSession) return fromSession;
+
+  // ② まだ localStorage を使っているページもあるので一応見る
+  return window.localStorage.getItem('auth_token');
+}
 
 // 共通ヘルパー
 function toDateKey(input: string | Date): string {
@@ -111,6 +135,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // ★ 追加：オンボーディング状態
+  const [onboardingStatus, setOnboardingStatus] =
+    useState<OnboardingStatus>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+
   const router = useRouter();  // ★追加
 
   // 初期ロード：auth/me + bookings + customers
@@ -160,6 +189,96 @@ export default function DashboardPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+    // 初期ロード：auth/me + bookings + customers
+  useEffect(() => {
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('auth_token')
+        : null;
+
+    if (!token) {
+      setLoading(false);
+      setErrorMsg('ログイン情報が見つかりません。再ログインしてください。');
+      return;
+    }
+
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const fetchMe = fetch(`${apiBase}/auth/me`, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error('auth/me api error');
+        return res.json();
+      })
+      .then((data: Me) => setMe(data));
+
+    const fetchBookings = fetch(`${apiBase}/bookings`, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error('bookings api error');
+        return res.json();
+      })
+      .then((data: Booking[]) => setBookings(data));
+
+    const fetchCustomers = fetch(`${apiBase}/customers`, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error('customers api error');
+        return res.json();
+      })
+      .then((data: Customer[]) => setCustomers(data));
+
+    Promise.all([fetchMe, fetchBookings, fetchCustomers])
+      .catch((err) => {
+        console.error(err);
+        setErrorMsg(
+          'ダッシュボード情報の取得に失敗しました。時間をおいて再度お試しください。',
+        );
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // ★ 追加：オンボーディング状態の取得
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) return;
+    if (!me?.tenantId) return;
+
+    const fetchOnboarding = async () => {
+      try {
+        setOnboardingLoading(true);
+
+        const res = await fetch(`${apiBase}/onboarding/status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tenantId: me.tenantId }),
+        });
+
+        if (!res.ok) {
+          console.error('onboarding/status error', await res.text());
+          setOnboardingStatus(null);
+          setOnboardingLoading(false);
+          return;
+        }
+
+        const data = (await res.json()) as {
+          status: OnboardingStatus;
+        };
+
+        setOnboardingStatus(data.status);
+        setOnboardingLoading(false);
+      } catch (e) {
+        console.error(e);
+        setOnboardingStatus(null);
+        setOnboardingLoading(false);
+      }
+    };
+
+    fetchOnboarding();
+  }, [me]);
 
   const today = new Date();
   const todayKey = toDateKey(today);

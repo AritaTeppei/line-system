@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: line-system-db
+    restart: always
+    environment:
+      POSTGRES_USER: lineuser
+      POSTGRES_PASSWORD: linepass
+      POSTGRES_DB: linesystem
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:

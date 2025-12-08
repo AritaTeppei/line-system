@@ -18,6 +18,12 @@ model Tenant {
   lineSecret      String?
   lineAccessToken String?
 
+  // === ここからサブスク/Billing 管理用フィールド ===
+  stripeCustomerId     String? // Stripe 上の Customer ID
+  stripeSubscriptionId String? // Stripe 上の Subscription ID
+  subscriptionStatus   String? // 'active' | 'past_due' | 'canceled' など
+  currentPeriodEnd     DateTime? // 次回課金期間の終了日時（Stripe からもらう）
+
   lineSettings             LineSettings?
   reminderMessageTemplates ReminderMessageTemplate[]
 
@@ -59,24 +65,24 @@ model User {
   password String
 
   // ★ ロールを追加（開発者 / 管理者 / クライアント）
-  role UserRole @default(MANAGER)
-  isActive  Boolean  @default(true)
-  plan                 Plan?    @default(BASIC)
+  role                  UserRole @default(MANAGER)
+  isActive              Boolean  @default(true)
+  plan                  Plan?    @default(BASIC)
   maxConcurrentSessions Int      @default(1)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
   // ★ ログインセッションとのリレーション（後々制限に使う）
-  sessions UserSession[]
+  sessions  UserSession[]
 }
 
 model UserSession {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
-  expiresAt DateTime?  // 有効期限（あとで使う想定）
-  revokedAt DateTime?  // 強制ログアウトした時に入れる想定
+  createdAt DateTime  @default(now())
+  expiresAt DateTime? // 有効期限（あとで使う想定）
+  revokedAt DateTime? // 強制ログアウトした時に入れる想定
 }
 
 enum UserRole {
@@ -288,7 +294,6 @@ model BroadcastLog {
 
   @@index([tenantId, createdAt])
 }
-
 
 model ReminderSentLog {
   id Int @id @default(autoincrement())
