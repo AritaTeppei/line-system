@@ -14,6 +14,9 @@ export class PublicTenantsService {
   async registerTenant(dto: RegisterTenantDto) {
     const { companyName, adminName, email, password, phone } = dto;
 
+    // ★ ここを追加：今から7日後を trialEnd にする
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
     // 同じメールアドレスのユーザーがすでに存在しないかチェック
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -31,16 +34,23 @@ export class PublicTenantsService {
     // テナント＋ユーザーをトランザクションで作成
     const [tenant, user] = await this.prisma
       .$transaction([
-        this.prisma.tenant.create({
+          this.prisma.tenant.create({
           data: {
             name: companyName,
             email,
-            plan: 'BASIC', // とりあえず BASIC で開始（あとで TRIAL などに変更可）
+            // ★ 新規登録は TRIAL プランで開始
+            plan: 'TRIAL',
             isActive: true,
             contactPhone: phone ?? null,
             representativeName: adminName ?? null,
+
+            // ★ お試し終了日（7日後）
+            trialEnd,
+            // ★ ログイン制御で使っている validUntil も trialEnd に揃える
+            validUntil: trialEnd,
           },
         }),
+
         // user は tenant を作ってから
       ])
       .then(async ([tenant]) => {

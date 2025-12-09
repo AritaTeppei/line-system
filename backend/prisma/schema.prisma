@@ -11,7 +11,7 @@ model Tenant {
   id              Int       @id @default(autoincrement())
   name            String
   email           String
-  plan            String
+  plan      String?   @default("TRIAL")
   isActive        Boolean   @default(true)
   validUntil      DateTime?
   lineChannelId   String?
@@ -26,6 +26,8 @@ model Tenant {
 
   lineSettings             LineSettings?
   reminderMessageTemplates ReminderMessageTemplate[]
+
+  trialEnd   DateTime?   // ★追加：お試し終了日
 
   users                  User[]
   customers              Customer[] // ★ 追加

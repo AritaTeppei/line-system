@@ -13,6 +13,30 @@ import { Prisma } from '@prisma/client';
 export class CarsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ★ 追加：TRIAL テナントの車両数上限チェック（最大 10 台）
+  private async ensureTrialCarLimit(tenantId: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    // TRIAL 以外のプランなら何もしない
+    if (!tenant || tenant.plan !== 'TRIAL') {
+      return;
+    }
+
+    // このテナントの車両台数をカウント
+    const count = await this.prisma.car.count({
+      where: { tenantId },
+    });
+
+    if (count >= 10) {
+      throw new BadRequestException(
+        'お試し期間中は車両登録は最大10台までご利用いただけます。\n' +
+          '継続利用をご希望の場合はサブスク登録をお願いします。',
+      );
+    }
+  }
   /**
    * 車両操作を行う前に「どのテナントか」を確定させる
    * - DEVELOPER → 車両操作は不可（管理画面から見るだけ想定）
@@ -65,6 +89,9 @@ export class CarsService {
     },
   ) {
     const tenantId = this.ensureTenant(user);
+
+    // ★ 追加：TRIAL テナントなら車両 10 台まで
+    await this.ensureTrialCarLimit(tenantId);
 
     // 顧客が同じテナントに属しているか確認
     const customer = await this.prisma.customer.findFirst({

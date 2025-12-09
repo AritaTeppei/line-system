@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Tenant" ADD COLUMN     "trialEnd" TIMESTAMP(3),
+ALTER COLUMN "plan" DROP NOT NULL,
+ALTER COLUMN "plan" SET DEFAULT 'TRIAL';

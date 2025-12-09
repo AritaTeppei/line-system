@@ -79,6 +79,32 @@ function parseJapaneseDate(value: string | null | undefined): Date | null {
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
+    // ★ 追加：TRIAL テナントの顧客数上限チェック（最大 10 件）
+  private async ensureTrialCustomerLimit(tenantId: number): Promise<void> {
+    // テナントのプランを取得
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    // テナントが無い or TRIAL 以外 → 制限なし
+    if (!tenant || tenant.plan !== 'TRIAL') {
+      return;
+    }
+
+    // このテナントの顧客件数をカウント
+    const count = await this.prisma.customer.count({
+      where: { tenantId },
+    });
+
+    if (count >= 10) {
+      throw new BadRequestException(
+        'お試し期間中は顧客登録は最大10件までご利用いただけます。\n' +
+          '継続利用をご希望の場合はサブスク登録をお願いします。',
+      );
+    }
+  }
+
   // 顧客CSVインポート本体
   async importFromCsv(
     user: AuthPayload,
@@ -119,8 +145,34 @@ export class CustomersService {
 
     const tenantId = user.tenantId;
 
+    // ★ 追加：TRIAL テナントは CSV 取り込みを禁止
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    if (tenant?.plan === 'TRIAL') {
+      return {
+        totalRows: 0,
+        importedCount: 0,
+        skippedCount: 0,
+        errors: [
+          {
+            rowNumber: 0,
+            messages: [
+              'お試し期間中は CSV 取り込み機能はご利用いただけません。',
+              '顧客情報は画面から1件ずつ登録してください。',
+            ],
+            raw: {},
+          },
+        ] as CsvImportError[],
+      };
+    }
+
     // 1. CSVファイルの中身を文字列で取得
     let csvText: string;
+
+
     if (file.buffer) {
       csvText = file.buffer.toString('utf8');
     } else if (file.path) {
@@ -384,7 +436,7 @@ records.forEach((raw: Record<string, string>, index) => {
           errors: allErrors,
         };
       }
-    } else {
+        } else {
       // 4-2. エラー行だけスキップモード（デフォルト）
 
       // ★携帯番号ごとに 1 顧客にまとめるためのキャッシュ
@@ -396,7 +448,9 @@ records.forEach((raw: Record<string, string>, index) => {
           let customerId: number;
 
           if (!phone) {
-            // 携帯番号が無い行は毎回新規で作成
+            // 携帯番号が無い行は毎回新規で作成 → その前に TRIAL 上限チェック
+            await this.ensureTrialCustomerLimit(tenantId);
+
             const created = await this.prisma.customer.create({
               data: {
                 tenantId,
@@ -427,8 +481,12 @@ records.forEach((raw: Record<string, string>, index) => {
               });
 
               if (existed) {
+                // 既存顧客を使う → カウント増えないので上限チェック不要
                 customerId = existed.id;
               } else {
+                // 新規顧客を作る前に TRIAL 上限チェック
+                await this.ensureTrialCustomerLimit(tenantId);
+
                 const created = await this.prisma.customer.create({
                   data: {
                     tenantId,
@@ -464,7 +522,6 @@ records.forEach((raw: Record<string, string>, index) => {
               data: {
                 tenantId,
                 customerId,
-                // ★ Prisma 側が string 必須なので、空なら "" にする
                 registrationNumber: registrationNumber || '',
                 carName: carName || '',
                 chassisNumber: chassisNumber || '',
@@ -557,6 +614,8 @@ records.forEach((raw: Record<string, string>, index) => {
     if (!user.tenantId) {
       throw new Error('テナント情報が取得できませんでした。');
     }
+
+    await this.ensureTrialCustomerLimit(user.tenantId);
 
     return this.prisma.customer.create({
       data: {

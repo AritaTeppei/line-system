@@ -21,6 +21,55 @@ export class BookingsService {
     private readonly lineService: LineService,
   ) {}
 
+  // ★ 追加：TRIAL テナントでは LINE 送信をブロック（ダミー挙動用）
+  private async ensureLineAvailableForTenant(tenantId: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    // TRIAL なら実際の送信はさせない
+    if (tenant?.plan === 'TRIAL') {
+      throw new BadRequestException(
+        '現在はお試し期間中のため、このボタンから実際の LINE 送信は行われません。\n' +
+          '本番環境では、ここからお客様の LINE に予約確定メッセージが送信されます。\n' +
+          '引き続きご利用いただくには、サブスク登録をご検討ください。',
+      );
+    }
+  }
+
+    // ★ 追加：TRIAL テナントの予約数上限チェック（最大 3 件）
+  private async ensureTrialBookingLimit(tenantId: number): Promise<void> {
+    // まずテナントのプランを確認
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    // TRIAL 以外のプランなら制限なし
+    if (!tenant || tenant.plan !== 'TRIAL') {
+      return;
+    }
+
+    // 「キャンセルされていない予約」をカウント
+    const activeCount = await this.prisma.booking.count({
+      where: {
+        tenantId,
+        // status が CANCELED 以外を「有効な予約」とみなす
+        status: {
+          not: 'CANCELED',
+        },
+      },
+    });
+
+    if (activeCount >= 3) {
+      throw new BadRequestException(
+        'お試し期間中は、登録できる予約は最大3件までです。\n' +
+          '引き続きご利用いただく場合は、サブスク登録をご検討ください。',
+      );
+    }
+  }
+
   /**
    * 同じ車両(carId)が基準日 ±30日以内に予約されていないかチェック
    * CANCELED 以外が 1 件でもあれば BadRequestException
@@ -102,6 +151,9 @@ export class BookingsService {
   ) {
     const tenantId = this.ensureTenant(user);
     const prisma = this.prisma as any;
+
+    // ★ 追加：TRIAL テナントなら予約は 3 件まで
+    await this.ensureTrialBookingLimit(tenantId);
 
     // まず bookingDate を Date 型に変換しておく（string / Date 両対応）
     const raw = params.bookingDate;
@@ -364,6 +416,9 @@ export class BookingsService {
         '他テナントの予約には確定メッセージを送信できません。',
       );
     }
+
+    // ★ 追加：TRIAL テナントならここでブロックしてダミーメッセージを返す
+    await this.ensureLineAvailableForTenant(booking.tenantId);
 
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new BadRequestException(

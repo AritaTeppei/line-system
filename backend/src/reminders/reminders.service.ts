@@ -1,5 +1,5 @@
 // src/reminders/reminders.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
@@ -166,6 +166,27 @@ export class RemindersService {
       `&date=${dateStr}`;
 
     return `${baseUrl}?${query}`;
+  }
+
+  // ★ 追加：TRIAL テナントは LINE 実送信をブロック
+  private async ensureLineAvailableForTenant(tenantId: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+
+    if (!tenant) {
+      throw new BadRequestException('テナント情報が見つかりませんでした。');
+    }
+
+    // plan が TRIAL のときは LINE 送信 NG（プレビューだけ利用可）
+    if (tenant.plan === 'TRIAL') {
+      throw new BadRequestException(
+        '現在お試し期間中のため、LINE への自動送信はご利用いただけません。\n' +
+          'どのようなメッセージが送信されるかは、プレビュー画面でご確認いただけます。\n\n' +
+          '本番運用をご希望の場合は、サブスク登録をご検討ください。',
+      );
+    }
   }
 
   /**
@@ -999,6 +1020,9 @@ export class RemindersService {
       };
     }
 
+    // ★ 追加：TRIAL テナントは LINE 送信をブロック（プレビューだけ OK）
+    await this.ensureLineAvailableForTenant(tenantId);
+
     let sentCount = 0;
 
     // ★ ここで Prisma 用の型を明示
@@ -1122,6 +1146,9 @@ export class RemindersService {
         sent: false,
       };
     }
+
+    // ★ 追加：TRIAL テナントは LINE 実送信をブロック（プレビューだけ OK）
+    await this.ensureLineAvailableForTenant(tenantId);
 
     // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
     const allTargets = [
