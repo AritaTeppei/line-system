@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
@@ -280,8 +280,15 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-between px-4 py-6">
-      <div className="w-full max-w-md">
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center">
+          <p className="text-sm text-gray-600">読み込み中です...</p>
+        </main>
+      }
+    >
+      <main className="min-h-screen flex flex-col items-center justify-between px-4 py-6">
+            <div className="w-full max-w-md">
         {/* ロゴ・タイトル */}
         <div className="flex flex-col items-center mb-6">
           <div className="w-[200px] mx-auto mb-4">
@@ -442,5 +449,6 @@ export default function LoginPage() {
         © 556
       </footer>
     </main>
+    </Suspense>
   );
 }
