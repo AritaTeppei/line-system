@@ -1,5 +1,9 @@
 // backend/src/bookings/bookings.service.ts
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { LineService } from '../line/line.service';
@@ -100,25 +104,21 @@ export class BookingsService {
     const prisma = this.prisma as any;
 
     // まず bookingDate を Date 型に変換しておく（string / Date 両対応）
-const raw = params.bookingDate;
-const bookingDate =
-  raw instanceof Date ? raw : new Date(raw);
+    const raw = params.bookingDate;
+    const bookingDate = raw instanceof Date ? raw : new Date(raw);
 
-if (Number.isNaN(bookingDate.getTime())) {
-  throw new BadRequestException(
-    'bookingDate の形式が不正です。（YYYY-MM-DD 形式で送信してください）',
-  );
-}
-
+    if (Number.isNaN(bookingDate.getTime())) {
+      throw new BadRequestException(
+        'bookingDate の形式が不正です。（YYYY-MM-DD 形式で送信してください）',
+      );
+    }
 
     // 顧客チェック
     const customer = await prisma.customer.findFirst({
       where: { id: params.customerId, tenantId },
     });
     if (!customer) {
-      throw new Error(
-        '指定された顧客が見つからないか、他テナントのデータです',
-      );
+      throw new Error('指定された顧客が見つからないか、他テナントのデータです');
     }
 
     // 車両チェック
@@ -126,9 +126,7 @@ if (Number.isNaN(bookingDate.getTime())) {
       where: { id: params.carId, tenantId },
     });
     if (!car) {
-      throw new Error(
-        '指定された車両が見つからないか、他テナントのデータです',
-      );
+      throw new Error('指定された車両が見つからないか、他テナントのデータです');
     }
 
     // ★ 1か月以内の重複予約チェック
@@ -204,7 +202,7 @@ if (Number.isNaN(bookingDate.getTime())) {
       bookingDate?: string; // "YYYY-MM-DD"
       timeSlot?: string;
       note?: string;
-      carId?: number;  
+      carId?: number;
     },
   ) {
     const prisma = this.prisma as any;
@@ -221,23 +219,13 @@ if (Number.isNaN(bookingDate.getTime())) {
       throw new BadRequestException('予約が見つかりません。');
     }
 
-    if (
-      user.role !== 'DEVELOPER' &&
-      booking.tenantId !== user.tenantId
-    ) {
-      throw new BadRequestException(
-        '他テナントの予約は変更できません。',
-      );
+    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
+      throw new BadRequestException('他テナントの予約は変更できません。');
     }
 
     // 受付経路チェック（ADMIN / TENANT_MANUAL だけ許可）
-    if (
-      booking.source !== 'ADMIN' &&
-      booking.source !== 'TENANT_MANUAL'
-    ) {
-      throw new BadRequestException(
-        'この予約の日時は変更できない種別です。',
-      );
+    if (booking.source !== 'ADMIN' && booking.source !== 'TENANT_MANUAL') {
+      throw new BadRequestException('この予約の日時は変更できない種別です。');
     }
 
     const data: any = {};
@@ -308,8 +296,8 @@ if (Number.isNaN(bookingDate.getTime())) {
       carName && plate
         ? `対象のお車：${carName}（${plate}）`
         : carName
-        ? `対象のお車：${carName}`
-        : '';
+          ? `対象のお車：${carName}`
+          : '';
 
     let timeLabel = '';
     switch ((booking.timeSlot ?? '').toUpperCase()) {
@@ -327,8 +315,8 @@ if (Number.isNaN(bookingDate.getTime())) {
     const timeLine = timeLabel
       ? `ご希望時間帯：${timeLabel}（${booking.timeSlot}）`
       : booking.timeSlot
-      ? `ご希望時間帯：${booking.timeSlot}`
-      : '';
+        ? `ご希望時間帯：${booking.timeSlot}`
+        : '';
 
     const lines = [
       customerName ? `${customerName} 様` : '',
@@ -371,10 +359,7 @@ if (Number.isNaN(bookingDate.getTime())) {
       throw new BadRequestException('予約が見つかりません。');
     }
 
-    if (
-      user.role !== 'DEVELOPER' &&
-      booking.tenantId !== user.tenantId
-    ) {
+    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
       throw new BadRequestException(
         '他テナントの予約には確定メッセージを送信できません。',
       );

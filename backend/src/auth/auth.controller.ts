@@ -20,7 +20,7 @@ export class AuthController {
    * body: { email, password }
    * 戻り値: { token, email, tenantId, role }
    */
-    @Post('login')
+  @Post('login')
   async login(@Body() body: { email: string; password: string }) {
     const { email, password } = body;
 
@@ -47,7 +47,6 @@ export class AuthController {
       // name: (user as any).name ?? null,
     };
   }
-
 
   /**
    * 自分のパスワード変更
@@ -85,7 +84,7 @@ export class AuthController {
 
     return { ok: true };
   }
-    /**
+  /**
    * MANAGER が CLIENT のパスワードを強制変更する
    * POST /auth/manager/reset-client-password
    */
@@ -130,7 +129,7 @@ export class AuthController {
     return payload;
   }
 
-    @Post('logout')
+  @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {
     // JWT から payload を取り出す（トークンが無くてもエラーにはしない）
     const payload = this.auth.getPayloadFromRequest(req);

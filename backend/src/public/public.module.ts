@@ -13,12 +13,12 @@ import { PublicTenantsController } from './public.tenants.controller';
 @Module({
   imports: [PrismaModule],
   controllers: [
-    PublicController,        // ← 元からある
+    PublicController, // ← 元からある
     PublicTenantsController, // ← ★ 追加
   ],
   providers: [
-    PublicService,           // ← 元からある
-    PublicTenantsService,    // ← ★ 追加
+    PublicService, // ← 元からある
+    PublicTenantsService, // ← ★ 追加
   ],
 })
 export class PublicModule {}

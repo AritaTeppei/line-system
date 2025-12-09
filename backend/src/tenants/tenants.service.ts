@@ -33,31 +33,31 @@ export class TenantsService {
     return tenant ? [tenant] : [];
   }
 
-    /**
+  /**
    * MANAGER が自分のテナント配下の CLIENT ユーザー一覧を取得する
    * - MANAGER 以外（DEVELOPER / CLIENT）は空配列を返す（仕様を壊さないため）
    */
   // クラスの末尾にこれがいるか？
-async findClientsForManager(user: AuthPayload) {
-  if (user.role !== 'MANAGER') {
-    return [];
-  }
-  if (!user.tenantId) {
-    return [];
-  }
+  async findClientsForManager(user: AuthPayload) {
+    if (user.role !== 'MANAGER') {
+      return [];
+    }
+    if (!user.tenantId) {
+      return [];
+    }
 
-  return this.prisma.user.findMany({
-    where: {
-      tenantId: user.tenantId,
-      role: 'CLIENT',
-    },
-    select: {
-      id: true,
-      email: true,
-    },
-    orderBy: {
-      id: 'asc',
-    },
-  });
-}
+    return this.prisma.user.findMany({
+      where: {
+        tenantId: user.tenantId,
+        role: 'CLIENT',
+      },
+      select: {
+        id: true,
+        email: true,
+      },
+      orderBy: {
+        id: 'asc',
+      },
+    });
+  }
 }

@@ -51,16 +51,19 @@ export class CarsService {
    * - 車両は必ず同一テナント内の顧客に紐づく
    * - 車台番号（chassisNumber）は一意制約
    */
-  async createForUser(user: AuthPayload, data: {
-    customerId: number;
-    registrationNumber: string;
-    chassisNumber: string;
-    carName: string;
-    shakenDate?: string;
-    inspectionDate?: string;
-    customReminderDate?: string;
-    customDaysBefore?: number;
-  }) {
+  async createForUser(
+    user: AuthPayload,
+    data: {
+      customerId: number;
+      registrationNumber: string;
+      chassisNumber: string;
+      carName: string;
+      shakenDate?: string;
+      inspectionDate?: string;
+      customReminderDate?: string;
+      customDaysBefore?: number;
+    },
+  ) {
     const tenantId = this.ensureTenant(user);
 
     // 顧客が同じテナントに属しているか確認
@@ -72,7 +75,9 @@ export class CarsService {
     });
 
     if (!customer) {
-      throw new NotFoundException('顧客が見つかりません（または別テナントです）');
+      throw new NotFoundException(
+        '顧客が見つかりません（または別テナントです）',
+      );
     }
 
     try {
@@ -84,13 +89,13 @@ export class CarsService {
           chassisNumber: data.chassisNumber,
           carName: data.carName,
           shakenDate: data.shakenDate ? new Date(data.shakenDate) : undefined,
-        inspectionDate: data.inspectionDate
-          ? new Date(data.inspectionDate)
-          : undefined,
-        customReminderDate: data.customReminderDate
-          ? new Date(data.customReminderDate)
-          : undefined,
-        customDaysBefore: data.customDaysBefore ?? null,
+          inspectionDate: data.inspectionDate
+            ? new Date(data.inspectionDate)
+            : undefined,
+          customReminderDate: data.customReminderDate
+            ? new Date(data.customReminderDate)
+            : undefined,
+          customDaysBefore: data.customDaysBefore ?? null,
         },
         include: {
           customer: true, // ★ 作成直後の戻り値にも customer を含める
@@ -118,11 +123,11 @@ export class CarsService {
    * 車両更新（必要に応じて使う）
    * - 顧客を変更する場合は、その顧客も同一テナントかチェック
    */
-    /**
+  /**
    * 車両更新
    * - 顧客を変更する場合は、その顧客も同一テナントかチェック
    */
-    /**
+  /**
    * 車両更新
    * - 顧客を変更する場合は、その顧客も同一テナントかチェック
    * - 日付を空欄にした場合は null に更新できるようにする
@@ -189,8 +194,8 @@ export class CarsService {
       current: number | null,
     ): number | null => {
       if (value === undefined) return current; // 変更なし
-      if (value === null) return null;         // 空でクリア
-      return value;                            // 新しい数値
+      if (value === null) return null; // 空でクリア
+      return value; // 新しい数値
     };
 
     // 3. 更新本体
@@ -209,10 +214,7 @@ export class CarsService {
           },
 
           // ★ 日付系：undefined=そのまま / null or ''=null にクリア / それ以外は新しい日付
-          shakenDate: normalizeDate(
-            data.shakenDate,
-            existing.shakenDate,
-          ),
+          shakenDate: normalizeDate(data.shakenDate, existing.shakenDate),
           inspectionDate: normalizeDate(
             data.inspectionDate,
             existing.inspectionDate,
@@ -241,9 +243,7 @@ export class CarsService {
 
         // chassisNumber 一意制約エラー
         if (target.some((t) => t.includes('chassisNumber'))) {
-          throw new BadRequestException(
-            'この車台番号はすでに登録されています',
-          );
+          throw new BadRequestException('この車台番号はすでに登録されています');
         }
 
         throw new BadRequestException('一意制約エラーが発生しました');
@@ -252,12 +252,10 @@ export class CarsService {
     }
   }
 
-
-
   /**
    * 車両削除
    */
-    /**
+  /**
    * 車両削除
    * - 今日以降に「確定」ステータスの予約がある場合は削除NG
    */

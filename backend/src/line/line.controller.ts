@@ -55,7 +55,6 @@ export class LineController {
       }
 
       return { ok: true };
-
     } catch (e: any) {
       this.logger.error('handleWebhook 内でエラー', e);
 
@@ -66,6 +65,5 @@ export class LineController {
         stack: e?.stack ?? undefined,
       };
     }
-  }  // ← メソッド閉じ
-
-}  // ← class の閉じ（これが無かった）
+  } // ← メソッド閉じ
+} // ← class の閉じ（これが無かった）

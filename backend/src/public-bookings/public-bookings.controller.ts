@@ -124,7 +124,7 @@ export class PublicBookingsController {
       );
     }
 
-        // ★ ここから重複チェックを挿入する ★
+    // ★ ここから重複チェックを挿入する ★
 
     // ★ ここから「1か月以内の重複予約チェック（同じ車両）」★
 
@@ -165,8 +165,8 @@ export class PublicBookingsController {
         customerId,
         carId,
         bookingDate: date,
-        timeSlot: slotKey,          // schema.prisma の timeSlot(String?) に対応
-        status: 'PENDING',          // BookingStatus.PENDING
+        timeSlot: slotKey, // schema.prisma の timeSlot(String?) に対応
+        status: 'PENDING', // BookingStatus.PENDING
         source: 'LINE_PUBLIC_FORM', // 「どこから来たか」
         note: note ?? null,
       },
@@ -242,12 +242,9 @@ export class PublicBookingsController {
       }
 
       const slots = {
-        MORNING:
-          counts.MORNING >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
-        AFTERNOON:
-          counts.AFTERNOON >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
-        EVENING:
-          counts.EVENING >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+        MORNING: counts.MORNING >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+        AFTERNOON: counts.AFTERNOON >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+        EVENING: counts.EVENING >= SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
       } as const;
 
       days.push({

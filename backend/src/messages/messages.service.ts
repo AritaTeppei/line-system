@@ -25,14 +25,8 @@ export class MessagesService {
     customerIds: number[];
     target: BroadcastTarget;
   }) {
-    const {
-      tenantId,
-      message,
-      sentCount,
-      targetCount,
-      customerIds,
-      target,
-    } = params;
+    const { tenantId, message, sentCount, targetCount, customerIds, target } =
+      params;
 
     return this.prisma.broadcastLog.create({
       data: {
@@ -231,10 +225,7 @@ export class MessagesService {
    * - 顧客管理画面：target = CUSTOMER
    * - 車両管理画面：target = CAR
    */
-  async getBroadcastLogsForUser(
-    user: AuthPayload,
-    target?: BroadcastTarget,
-  ) {
+  async getBroadcastLogsForUser(user: AuthPayload, target?: BroadcastTarget) {
     const tenantId = this.ensureTenant(user);
 
     const threeMonthsAgo = new Date();

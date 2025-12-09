@@ -22,9 +22,7 @@ export class LineService {
         process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
     }
 
-    this.logger.log(
-      `[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`,
-    );
+    this.logger.log(`[LineService] frontendBaseUrl = ${this.frontendBaseUrl}`);
   }
 
   /**
@@ -38,14 +36,13 @@ export class LineService {
   /**
    * パブリックな登録用 URL を生成
    */
- private generatePublicRegisterUrl(token: string): string {
-  // constructor で決めた frontendBaseUrl を使う
-  const normalizedBaseUrl = this.frontendBaseUrl.replace(/\/$/, '');
-  const encodedToken = encodeURIComponent(token);
+  private generatePublicRegisterUrl(token: string): string {
+    // constructor で決めた frontendBaseUrl を使う
+    const normalizedBaseUrl = this.frontendBaseUrl.replace(/\/$/, '');
+    const encodedToken = encodeURIComponent(token);
 
-  return `${normalizedBaseUrl}/public/register-customer?token=${encodedToken}`;
-}
-
+    return `${normalizedBaseUrl}/public/register-customer?token=${encodedToken}`;
+  }
 
   /**
    * 顧客を LINE UID で検索する
@@ -111,10 +108,7 @@ export class LineService {
   /**
    * 友だち登録時などに登録フォームURLを送る
    */
-  async sendRegisterFormLink(
-    tenantId: number,
-    lineUid: string,
-  ): Promise<void> {
+  async sendRegisterFormLink(tenantId: number, lineUid: string): Promise<void> {
     if (!lineUid) {
       this.logger.warn(
         `sendRegisterFormLink called without lineUid (tenantId=${tenantId})`,
@@ -204,7 +198,7 @@ export class LineService {
 
     const customerIds = Array.from(
       new Set(cars.map((c) => c.customerId).filter((id) => id != null)),
-    ) as number[];
+    );
 
     if (!customerIds.length) return [];
 
@@ -290,9 +284,7 @@ export class LineService {
     });
 
     if (!customer) {
-      this.logger.warn(
-        `sendText: customer not found for lineUid=${lineUid}`,
-      );
+      this.logger.warn(`sendText: customer not found for lineUid=${lineUid}`);
       return;
     }
 
@@ -440,12 +432,11 @@ export class LineService {
     });
   }
 
-
-    /**
+  /**
    * LINE Webhook の各イベントを処理する
    * ひとまずはログを出すだけの安全な実装にしておく
    */
-    /**
+  /**
    * LINE Webhook の各イベントを処理する
    * - ここで follow / message / unfollow などを振り分ける
    */
@@ -497,21 +488,23 @@ export class LineService {
    * - destination: LINE 側のボットユーザーID（チャネルごとに固有）
    * - LineSettings 側に channelId として保存されている想定
    */
-  async resolveTenantIdFromDestination(destination: string): Promise<number | null> {
-  this.logger.log(
-    `resolveTenantIdFromDestination: destination=${destination}`,
-  );
+  async resolveTenantIdFromDestination(
+    destination: string,
+  ): Promise<number | null> {
+    this.logger.log(
+      `resolveTenantIdFromDestination: destination=${destination}`,
+    );
 
-  const settings = await this.prisma.lineSettings.findFirst({
-    where: {
-      destination,
-      isActive: true,    // ← これだけで十分
-      // tenant: { isActive: true } ← 削除（これが原因）
-    },
-    select: {
-      tenantId: true,
-    },
-  });
+    const settings = await this.prisma.lineSettings.findFirst({
+      where: {
+        destination,
+        isActive: true, // ← これだけで十分
+        // tenant: { isActive: true } ← 削除（これが原因）
+      },
+      select: {
+        tenantId: true,
+      },
+    });
 
     if (!settings?.tenantId) {
       this.logger.error(

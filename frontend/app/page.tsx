@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
@@ -33,7 +33,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const searchParams = useSearchParams(); 
 
   // ★ サブスク関連エラー用の情報（billingError はやめて一本化）
   const [tenantErrorInfo, setTenantErrorInfo] = useState<{
@@ -47,27 +46,32 @@ export default function LoginPage() {
 
 
   // すでにトークンがある場合は自動遷移
-    useEffect(() => {
+      useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedEmail = window.localStorage.getItem(SAVED_EMAIL_KEY);
       if (savedEmail) {
         setEmail(savedEmail);
         setRememberEmail(true);
       }
-    }
 
-    // ★ ここで Stripe 決済の戻りクエリをチェック
-    const billingStatus = searchParams.get('billing');
-    if (billingStatus === 'success') {
-      setInfoMessage(
-        'サブスク登録・お支払いが完了しました。\nありがとうございました。\n再度ログインしてご利用を開始してください。',
-      );
-    } else if (billingStatus === 'cancel') {
-      setInfoMessage(
-        '決済がキャンセルされました。\n必要に応じて、もう一度サブスク登録をお試しください。',
-      );
+      // ★ Stripe 決済の戻りクエリを window.location.search から読む
+      const qs = new URLSearchParams(window.location.search);
+      const billingStatus = qs.get('billing');
+
+      if (billingStatus === 'success') {
+        setInfoMessage(
+          'サブスク登録・お支払いが完了しました。\nありがとうございました。\n再度ログインしてご利用を開始してください。',
+        );
+      } else if (billingStatus === 'cancel') {
+        setInfoMessage(
+          '決済がキャンセルされました。\n必要に応じて、もう一度サブスク登録をお試しください。',
+        );
+      } else {
+        // クエリが無ければメッセージはクリア
+        setInfoMessage(null);
+      }
     } else {
-      // クエリが無ければメッセージはクリア
+      // SSR中など window がないときは一旦クリア
       setInfoMessage(null);
     }
 
@@ -96,8 +100,7 @@ export default function LoginPage() {
     };
 
     run();
-  }, [router, searchParams]); // ★ 依存配列に searchParams を追加
-
+  }, [router]); // ★ searchParams を依存配列から削除
 
 
   const handleSubmit = async (e: FormEvent) => {

@@ -6,9 +6,9 @@ import {
   Query,
   Req,
   UseGuards,
-  Body,   // ★ 追加
+  Body, // ★ 追加
   Put,
-  BadRequestException // ★ ついでに追加（tenantId 無い場合用）
+  BadRequestException, // ★ ついでに追加（tenantId 無い場合用）
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { RemindersService } from './reminders.service';
@@ -23,7 +23,7 @@ export class RemindersController {
   constructor(
     private readonly remindersService: RemindersService,
     private readonly authService: AuthService, // ★ これを追加
-) {}
+  ) {}
 
   private getUser(req: Request): AuthPayload {
     return (req as any).authUser as AuthPayload;
@@ -51,14 +51,14 @@ export class RemindersController {
     return this.remindersService.previewForDate(user, baseDate, tenantId);
   }
 
-    /**
+  /**
    * 指定月のリマインド対象件数を取得する
    * GET /reminders/preview-month?month=YYYY-MM&tenantId=1
    * - month を省略した場合は「今月」を使う
    * - DEVELOPER のときだけ tenantId クエリが必須（中身の ensureTenant ロジックは既存どおり）
    */
   // ✅ 修正版
-    @Get('preview-month')
+  @Get('preview-month')
   async previewMonth(
     @Req() req: Request,
     @Query('month') monthStr: string,
@@ -71,7 +71,7 @@ export class RemindersController {
     const tenantId = tenantIdFromQuery ? Number(tenantIdFromQuery) : undefined;
 
     return this.remindersService.previewForMonth(
-      user,       // ← ここでもう undefined じゃない
+      user, // ← ここでもう undefined じゃない
       monthStr,
       tenantId,
     );
@@ -101,7 +101,7 @@ export class RemindersController {
     );
   }
 
-@Get('templates')
+  @Get('templates')
   async getTemplates(@Req() req: Request) {
     // AuthService を使って、今ログイン中のユーザー情報を取る
     const user = this.getUser(req);

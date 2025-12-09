@@ -20,7 +20,9 @@ export class LineWebhookController {
           `### DEBUG LINE EVENT: type=${type}, userId=${userId}, destination=${destination}`,
         );
       } else {
-        console.log(`### DEBUG LINE EVENT: type=${type}, userId=(なし), destination=${destination}`);
+        console.log(
+          `### DEBUG LINE EVENT: type=${type}, userId=(なし), destination=${destination}`,
+        );
       }
     }
 

@@ -9,7 +9,7 @@ import {
   Patch,
   Post,
   Req,
-  ParseIntPipe,   // ★ これを追加
+  ParseIntPipe, // ★ これを追加
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { BookingsService, BookingStatus } from './bookings.service';
@@ -25,8 +25,7 @@ export class BookingsController {
 
   @Get()
   async list(@Req() req: Request) {
-    const payload =
-      await this.auth.getPayloadFromRequestWithTenantCheck(req);
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
     return this.bookingsService.listBookings(payload);
   }
 
@@ -42,8 +41,7 @@ export class BookingsController {
       note?: string;
     },
   ) {
-    const payload =
-      await this.auth.getPayloadFromRequestWithTenantCheck(req);
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
     const { customerId, carId, bookingDate, timeSlot, note } = body;
 
@@ -67,8 +65,7 @@ export class BookingsController {
     @Param('id') idParam: string,
     @Body() body: { status: BookingStatus | string },
   ) {
-    const payload =
-      await this.auth.getPayloadFromRequestWithTenantCheck(req);
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
     const id = Number(idParam);
     if (!id || Number.isNaN(id)) {
@@ -90,30 +87,25 @@ export class BookingsController {
       throw new BadRequestException('ステータスの値が不正です。');
     }
 
-    return this.bookingsService.updateStatus(
-      payload,
-      id,
-      statusValue,
-    );
+    return this.bookingsService.updateStatus(payload, id, statusValue);
   }
 
   @Patch(':id')
-async updateBooking(
-  @Req() req: Request,
-  @Param('id', ParseIntPipe) id: number,
-  @Body()
-  body: {
-    bookingDate?: string; // "YYYY-MM-DD"
-    timeSlot?: string;
-    note?: string;
-    carId?: number;       // ★ 追加！
-  },
-) {
-  const payload =
-    await this.auth.getPayloadFromRequestWithTenantCheck(req);
+  async updateBooking(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      bookingDate?: string; // "YYYY-MM-DD"
+      timeSlot?: string;
+      note?: string;
+      carId?: number; // ★ 追加！
+    },
+  ) {
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
-  return this.bookingsService.updateBooking(payload, id, body);
-}
+    return this.bookingsService.updateBooking(payload, id, body);
+  }
 
   /**
    * 確定LINEを送る（任意メッセージも指定可能）
@@ -126,29 +118,23 @@ async updateBooking(
     @Param('id') idParam: string,
     @Body() body: { message?: string },
   ) {
-    const payload =
-      await this.auth.getPayloadFromRequestWithTenantCheck(req);
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
     const id = Number(idParam);
     if (!id || Number.isNaN(id)) {
       throw new BadRequestException('予約IDが不正です。');
     }
 
-    return this.bookingsService.sendConfirmationLine(
-      payload,
-      id,
-      body.message,
-    );
+    return this.bookingsService.sendConfirmationLine(payload, id, body.message);
   }
 
-@Delete(':id')
+  @Delete(':id')
   async deleteBooking(
     @Req() req: Request,
     @Param('id', ParseIntPipe) idParam: number,
   ) {
     // ログイン情報（テナント情報つき）を取得
-    const payload =
-      await this.auth.getPayloadFromRequestWithTenantCheck(req);
+    const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
     const id = Number(idParam);
     if (!id || Number.isNaN(id)) {

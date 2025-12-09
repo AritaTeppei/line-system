@@ -125,18 +125,17 @@ export class AdminTenantUsersController {
 
     const passwordHash = await bcrypt.hash(body.initialPassword, 10);
 
-const created = await this.prisma.user.create({
-  data: {
-    email: body.email.trim(),
-    // ★ Prisma の User モデルの password フィールドに、ハッシュ済み文字列をセット
-    password: passwordHash,
-    name: body.name?.trim() || null,
-    role: body.role,
-    tenantId,
-    ...(body.phone ? { phone: body.phone.trim() } : {}),
-  },
-});
-
+    const created = await this.prisma.user.create({
+      data: {
+        email: body.email.trim(),
+        // ★ Prisma の User モデルの password フィールドに、ハッシュ済み文字列をセット
+        password: passwordHash,
+        name: body.name?.trim() || null,
+        role: body.role,
+        tenantId,
+        ...(body.phone ? { phone: body.phone.trim() } : {}),
+      },
+    });
 
     const result: TenantUserListItem = {
       id: created.id,
@@ -191,8 +190,8 @@ const created = await this.prisma.user.create({
     return { success: true };
   }
 
-    // ★ テナント配下ユーザーの削除
-    // ★ テナント配下ユーザーの削除
+  // ★ テナント配下ユーザーの削除
+  // ★ テナント配下ユーザーの削除
   @Delete(':tenantId/users/:userId')
   async deleteUser(
     @Param('tenantId') tenantIdParam: string,
@@ -221,7 +220,7 @@ const created = await this.prisma.user.create({
     // フロントは success を見てトースト表示
     return { success: true };
   }
-  
+
   // ★ 追加：テナント単位で customers / cars / bookings / reminders logs をリセット
   @Delete(':id/reset')
   async resetTenantData(@Param('id') id: string) {

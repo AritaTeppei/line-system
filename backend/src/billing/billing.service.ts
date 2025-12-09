@@ -10,20 +10,20 @@ export class BillingService {
 
   // backend/src/billing/billing.service.ts の constructor 内
 
-constructor(private readonly prisma: PrismaService) {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    this.logger.warn(
-      'STRIPE_SECRET_KEY が設定されていません。BillingService はまだ本番動作しません。',
-    );
-    // apiVersion を指定せずに初期化
-    this.stripe = new Stripe('sk_test_dummy');
-  } else {
-    this.stripe = new Stripe(secretKey);
+  constructor(private readonly prisma: PrismaService) {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      this.logger.warn(
+        'STRIPE_SECRET_KEY が設定されていません。BillingService はまだ本番動作しません。',
+      );
+      // apiVersion を指定せずに初期化
+      this.stripe = new Stripe('sk_test_dummy');
+    } else {
+      this.stripe = new Stripe(secretKey);
+    }
   }
-}
 
-    /**
+  /**
    * Stripe の Checkout セッションを作成して URL を返す
    */
   async createCheckoutSession(
@@ -109,8 +109,7 @@ constructor(private readonly prisma: PrismaService) {
     };
   }
 
-
-    /**
+  /**
    * テナントの現在の課金状態を返す（読み取り専用）
    */
   async getBillingStatus(tenantId: number) {
@@ -152,7 +151,7 @@ constructor(private readonly prisma: PrismaService) {
   /**
    * Webhook 受け取り（今はログ出しだけ）
    */
-    /**
+  /**
    * Webhook 受け取り
    */
   async handleStripeWebhook(event: any) {
@@ -176,18 +175,17 @@ constructor(private readonly prisma: PrismaService) {
         }
 
         // createCheckoutSession で埋め込んだ metadata.plan
-        const planFromMetadata =
-          (session.metadata?.plan as string | undefined) ?? null;
+        const planFromMetadata = session.metadata?.plan ?? null;
 
         const customerId =
           typeof session.customer === 'string'
             ? session.customer
-            : session.customer?.id ?? null;
+            : (session.customer?.id ?? null);
 
         const subscriptionId =
           typeof session.subscription === 'string'
             ? session.subscription
-            : session.subscription?.id ?? null;
+            : (session.subscription?.id ?? null);
 
         this.logger.log(
           `checkout.session.completed for tenantId=${tenantId}, customer=${customerId}, subscription=${subscriptionId}, plan=${planFromMetadata}`,
@@ -207,7 +205,7 @@ constructor(private readonly prisma: PrismaService) {
 
         break;
       }
-            // ② 支払い成功 → そのサイクルの終了日で有効期限を更新
+      // ② 支払い成功 → そのサイクルの終了日で有効期限を更新
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
 
@@ -216,7 +214,7 @@ constructor(private readonly prisma: PrismaService) {
         const customerId =
           typeof rawCustomer === 'string'
             ? rawCustomer
-            : rawCustomer?.id ?? null;
+            : (rawCustomer?.id ?? null);
 
         // 今回の請求サイクル（最初の行）の period.end（Unix秒）
         const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
@@ -240,13 +238,12 @@ constructor(private readonly prisma: PrismaService) {
           data: {
             currentPeriodEnd: periodEnd,
             validUntil: periodEnd, // ← ダッシュボードの「有効期限」と揃える
-            isActive: true,        // ← 支払い成功なので有効化
+            isActive: true, // ← 支払い成功なので有効化
           },
         });
 
         break;
       }
-
 
       // ③ サブスクのライフサイクルイベント（とりあえずログ＋ステータス更新）
       case 'customer.subscription.created':
@@ -299,4 +296,3 @@ constructor(private readonly prisma: PrismaService) {
     }
   }
 }
-

@@ -1,5 +1,16 @@
 // src/cars/cars.controller.ts
-import { Patch, Body, Controller, Get, Post, Delete, Param, ParseIntPipe, Req, UseGuards } from '@nestjs/common';
+import {
+  Patch,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  ParseIntPipe,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { CarsService } from './cars.service';
 import { JwtAuthGuard } from '../jwt.guard';
@@ -18,13 +29,13 @@ export class CarsController {
   }
 
   @Post()
-create(@Req() req: Request, @Body() dto: CreateCarDto) {
-  const user = (req as any).authUser as AuthPayload;
-  return this.carsService.createForUser(user, {
-    ...dto,
-    customerId: Number(dto.customerId),
-  });
-}
+  create(@Req() req: Request, @Body() dto: CreateCarDto) {
+    const user = (req as any).authUser as AuthPayload;
+    return this.carsService.createForUser(user, {
+      ...dto,
+      customerId: Number(dto.customerId),
+    });
+  }
 
   // ★ 追加：車両の更新
   @Patch(':id')
@@ -44,11 +55,8 @@ create(@Req() req: Request, @Body() dto: CreateCarDto) {
     });
   }
 
-@Delete(':id')
-  async remove(
-    @Req() req: Request,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  @Delete(':id')
+  async remove(@Req() req: Request, @Param('id', ParseIntPipe) id: number) {
     const user = (req as any).authUser as AuthPayload;
     return this.carsService.removeForUser(user, id);
   }

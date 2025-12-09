@@ -25,14 +25,13 @@ export interface MonthReminderItemDto {
   carName?: string | null;
   plateNumber?: string | null;
 
-    // ★ ここからフロントのモーダル用に追加
+  // ★ ここからフロントのモーダル用に追加
   customerPhone?: string | null;
   customerAddress?: string | null;
 
   shakenDate?: string | null;
   inspectionDate?: string | null;
   // ★ ここまで
-  
 }
 
 export interface PreviewMonthResponseDto {

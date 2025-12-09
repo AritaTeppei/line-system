@@ -4,8 +4,8 @@ export class CreateCarDto {
   registrationNumber!: string;
   chassisNumber!: string;
   carName!: string;
-  shakenDate?: string;         // 車検日
-  inspectionDate?: string;     // 点検日
+  shakenDate?: string; // 車検日
+  inspectionDate?: string; // 点検日
   customReminderDate?: string; // 任意日付
-  customDaysBefore?: number;   // 任意何日前
+  customDaysBefore?: number; // 任意何日前
 }

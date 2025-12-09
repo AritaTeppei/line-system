@@ -62,11 +62,7 @@ export class MessagesController {
     const user = (req as any).authUser as AuthPayload;
     const { carIds, message } = body;
 
-    const result = await this.messagesService.sendToCars(
-      user,
-      carIds,
-      message,
-    );
+    const result = await this.messagesService.sendToCars(user, carIds, message);
 
     return result; // { sentCount, targetCount }
   }

@@ -284,14 +284,14 @@ export class RemindersService {
     const dateForDisplay =
       mainDate && /^\d{4}-\d{2}-\d{2}$/.test(mainDate)
         ? mainDate.replace(/-/g, '/')
-        : mainDate ?? '';
+        : (mainDate ?? '');
 
     const carLine =
       carName && registrationNumber
         ? `対象のお車：${carName}（${registrationNumber}）`
         : carName
-        ? `対象のお車：${carName}`
-        : '';
+          ? `対象のお車：${carName}`
+          : '';
 
     const urlLine = bookingUrl ? `\n▼ご予約はこちら\n${bookingUrl}` : '';
 
@@ -442,7 +442,7 @@ export class RemindersService {
     const birthdayTargets = customers
       .filter((c) => {
         if (!c.birthday) return false;
-        const b = c.birthday as Date;
+        const b = c.birthday;
         return (
           b.getUTCMonth() === targetDate.getUTCMonth() &&
           b.getUTCDate() === targetDate.getUTCDate()
@@ -492,12 +492,12 @@ export class RemindersService {
         customerId: customer.id,
         customerName: `${customer.lastName} ${customer.firstName}`,
         lineUid: customer.lineUid ?? null,
-        customerPhone: (customer as any).mobilePhone ?? null,
+        customerPhone: customer.mobilePhone ?? null,
         customerAddress: this.buildCustomerAddress(customer),
       };
 
       if (car.shakenDate) {
-        const shakenDate = car.shakenDate as Date;
+        const shakenDate = car.shakenDate;
         const diff = this.diffInDays(targetDate, shakenDate);
         const shakenDateStr = shakenDate.toISOString().slice(0, 10);
 
@@ -585,7 +585,7 @@ export class RemindersService {
       }
 
       if (car.inspectionDate) {
-        const inspectionDate = car.inspectionDate as Date;
+        const inspectionDate = car.inspectionDate;
         const diff = this.diffInDays(targetDate, inspectionDate);
         const inspectionDateStr = inspectionDate.toISOString().slice(0, 10);
 
@@ -632,7 +632,7 @@ export class RemindersService {
       }
 
       if (car.customReminderDate && car.customDaysBefore != null) {
-        const customDate = car.customReminderDate as Date;
+        const customDate = car.customReminderDate;
         const diff = this.diffInDays(targetDate, customDate);
         const customDateStr = customDate.toISOString().slice(0, 10);
 
@@ -815,7 +815,7 @@ export class RemindersService {
         });
       }
 
-      for (const t of preview.shakenTwoMonths as any[]) {
+      for (const t of preview.shakenTwoMonths) {
         allItems.push({
           id: nextItemId++,
           date: dateStr,
@@ -835,7 +835,7 @@ export class RemindersService {
         });
       }
 
-      for (const t of preview.shakenOneWeek as any[]) {
+      for (const t of preview.shakenOneWeek) {
         allItems.push({
           id: nextItemId++,
           date: dateStr,
@@ -855,7 +855,7 @@ export class RemindersService {
         });
       }
 
-      for (const t of preview.inspectionOneMonth as any[]) {
+      for (const t of preview.inspectionOneMonth) {
         allItems.push({
           id: nextItemId++,
           date: dateStr,
@@ -875,7 +875,7 @@ export class RemindersService {
         });
       }
 
-      for (const t of preview.custom as any[]) {
+      for (const t of preview.custom) {
         allItems.push({
           id: nextItemId++,
           date: dateStr,
@@ -937,7 +937,7 @@ export class RemindersService {
   // ------------------------------
   // 月別一括送信
   // ------------------------------
-    /**
+  /**
    * 月別プレビューで選択された行だけまとめて送る
    * - monthStr: "YYYY-MM"
    * - itemIds: previewForMonth が返した items の id 配列
@@ -1083,7 +1083,6 @@ export class RemindersService {
     };
   }
 
-
   // ------------------------------
   // 指定日一括送信 (/reminders/run)
   // ------------------------------
@@ -1124,7 +1123,7 @@ export class RemindersService {
       };
     }
 
-       // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
+    // 実際の送信処理：preview 内の lineUid / messageText をそのまま使う
     const allTargets = [
       ...preview.birthdayTargets,
       ...preview.shakenTwoMonths,
@@ -1171,16 +1170,15 @@ export class RemindersService {
 
     // 各グループごとにログを積む
     pushLogs(preview.birthdayTargets as any[], 'BIRTHDAY');
-    pushLogs(preview.shakenTwoMonths as any[], 'SHAKEN_2M');
-    pushLogs(preview.shakenOneWeek as any[], 'SHAKEN_1W');
-    pushLogs(preview.inspectionOneMonth as any[], 'INSPECTION_1M');
-    pushLogs(preview.custom as any[], 'CUSTOM');
+    pushLogs(preview.shakenTwoMonths, 'SHAKEN_2M');
+    pushLogs(preview.shakenOneWeek, 'SHAKEN_1W');
+    pushLogs(preview.inspectionOneMonth, 'INSPECTION_1M');
+    pushLogs(preview.custom, 'CUSTOM');
 
     // ここから実際の LINE 送信ループ（元の挙動そのまま）
     for (const t of allTargets) {
-      const lineUid: string | null =
-        (t as any).lineUid ?? (t as any).lineUserId ?? (t as any).uid ?? null;
-      const message: string | undefined = (t as any).messageText;
+      const lineUid: string | null = t.lineUid ?? t.lineUserId ?? t.uid ?? null;
+      const message: string | undefined = t.messageText;
 
       if (!lineUid || !message) {
         continue;

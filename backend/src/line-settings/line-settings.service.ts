@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateLineSettingsDto } from './dto/update-line-settings.dto';
 import { HttpService } from '@nestjs/axios';
@@ -7,10 +12,10 @@ import { SendLineTestDto } from './dto/send-line-test.dto';
 
 @Injectable()
 export class LineSettingsService {
-    private readonly logger = new Logger(LineSettingsService.name);  // ★追加
+  private readonly logger = new Logger(LineSettingsService.name); // ★追加
 
   private readonly WEBHOOK_URL =
-    'https://line-system.onrender.com/line/webhook';               // ★追加
+    'https://line-system.onrender.com/line/webhook'; // ★追加
 
   constructor(
     private readonly prisma: PrismaService,
@@ -41,97 +46,94 @@ export class LineSettingsService {
   }
 
   async upsertByTenantId(tenantId: number, dto: UpdateLineSettingsDto) {
-  const tenant = await this.prisma.tenant.findUnique({
-    where: { id: tenantId },
-  });
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
 
-  if (!tenant) {
-    throw new NotFoundException('テナントが見つかりません');
-  }
+    if (!tenant) {
+      throw new NotFoundException('テナントが見つかりません');
+    }
 
-  const existing = await this.prisma.lineSettings.findUnique({
-    where: { tenantId },
-  });
+    const existing = await this.prisma.lineSettings.findUnique({
+      where: { tenantId },
+    });
 
-  // 共通 webhook URL を強制適用（管理画面では非表示）
-  const WEBHOOK_URL = this.WEBHOOK_URL;
+    // 共通 webhook URL を強制適用（管理画面では非表示）
+    const WEBHOOK_URL = this.WEBHOOK_URL;
 
-  // ----------------------------
-  // ★ accessToken が変わったら destination を自動更新する
-  // ----------------------------
+    // ----------------------------
+    // ★ accessToken が変わったら destination を自動更新する
+    // ----------------------------
 
-  let destination = existing?.destination ?? null;
+    let destination = existing?.destination ?? null;
 
-  const newAccessToken = dto.accessToken?.trim() ?? '';
-  const oldAccessToken = existing?.accessToken ?? '';
+    const newAccessToken = dto.accessToken?.trim() ?? '';
+    const oldAccessToken = existing?.accessToken ?? '';
 
-  const accessTokenChanged =
-    newAccessToken !== '' && newAccessToken !== oldAccessToken;
+    const accessTokenChanged =
+      newAccessToken !== '' && newAccessToken !== oldAccessToken;
 
-  if (accessTokenChanged) {
-    try {
-      const res = await firstValueFrom(
-        this.http.get('https://api.line.me/v2/bot/info', {
-          headers: {
-            Authorization: `Bearer ${newAccessToken}`,
-          },
-        }),
-      );
-
-      if (res?.data?.userId) {
-        destination = res.data.userId;
-        this.logger.log(
-          `destination auto-updated. tenantId=${tenantId}, value=${destination}`,
+    if (accessTokenChanged) {
+      try {
+        const res = await firstValueFrom(
+          this.http.get('https://api.line.me/v2/bot/info', {
+            headers: {
+              Authorization: `Bearer ${newAccessToken}`,
+            },
+          }),
         );
-      } else {
-        this.logger.warn(
-          `getBotInfo success but no userId. tenantId=${tenantId}`,
+
+        if (res?.data?.userId) {
+          destination = res.data.userId;
+          this.logger.log(
+            `destination auto-updated. tenantId=${tenantId}, value=${destination}`,
+          );
+        } else {
+          this.logger.warn(
+            `getBotInfo success but no userId. tenantId=${tenantId}`,
+          );
+        }
+      } catch (e: any) {
+        this.logger.error(
+          `getBotInfo error tenantId=${tenantId}`,
+          e?.response?.data ?? e,
         );
       }
-    } catch (e: any) {
-      this.logger.error(
-        `getBotInfo error tenantId=${tenantId}`,
-        e?.response?.data ?? e,
-      );
     }
-  }
 
-  // ----------------------------
-  // ここから upsert 本体
-  // ----------------------------
+    // ----------------------------
+    // ここから upsert 本体
+    // ----------------------------
 
-  if (!existing) {
-    // 新規作成
-    return this.prisma.lineSettings.create({
+    if (!existing) {
+      // 新規作成
+      return this.prisma.lineSettings.create({
+        data: {
+          tenantId,
+          channelId: dto.channelId ?? null,
+          channelSecret: dto.channelSecret ?? null,
+          accessToken: dto.accessToken ?? null,
+          webhookUrl: WEBHOOK_URL,
+          isActive: dto.isActive ?? false,
+          destination, // ★自動取得した destination
+        },
+      });
+    }
+
+    // 更新
+    return this.prisma.lineSettings.update({
+      where: { tenantId },
       data: {
-        tenantId,
-        channelId: dto.channelId ?? null,
-        channelSecret: dto.channelSecret ?? null,
-        accessToken: dto.accessToken ?? null,
+        channelId: dto.channelId ?? existing.channelId,
+        channelSecret: dto.channelSecret ?? existing.channelSecret,
+        accessToken: dto.accessToken ?? existing.accessToken,
         webhookUrl: WEBHOOK_URL,
-        isActive: dto.isActive ?? false,
-        destination, // ★自動取得した destination
+        isActive:
+          typeof dto.isActive === 'boolean' ? dto.isActive : existing.isActive,
+        destination, // ★ここも自動更新
       },
     });
   }
-
-  // 更新
-  return this.prisma.lineSettings.update({
-    where: { tenantId },
-    data: {
-      channelId: dto.channelId ?? existing.channelId,
-      channelSecret: dto.channelSecret ?? existing.channelSecret,
-      accessToken: dto.accessToken ?? existing.accessToken,
-      webhookUrl: WEBHOOK_URL,
-      isActive:
-        typeof dto.isActive === 'boolean'
-          ? dto.isActive
-          : existing.isActive,
-      destination, // ★ここも自動更新
-    },
-  });
-}
-
 
   async sendTestMessage(tenantId: number, dto: SendLineTestDto) {
     const settings = await this.prisma.lineSettings.findUnique({
@@ -139,11 +141,15 @@ export class LineSettingsService {
     });
 
     if (!settings || !settings.accessToken) {
-      throw new BadRequestException('このテナントにはLINEアクセストークンが設定されていません');
+      throw new BadRequestException(
+        'このテナントにはLINEアクセストークンが設定されていません',
+      );
     }
 
     if (!settings.isActive) {
-      throw new BadRequestException('このテナントではLINE連携が無効になっています');
+      throw new BadRequestException(
+        'このテナントではLINE連携が無効になっています',
+      );
     }
 
     const url = 'https://api.line.me/v2/bot/message/push';
@@ -169,7 +175,7 @@ export class LineSettingsService {
       await firstValueFrom(res$);
 
       return { success: true };
-        } catch (e: any) {
+    } catch (e: any) {
       const lineError = e?.response?.data ?? e?.message ?? e;
 
       console.error('LINE push error:', lineError);
@@ -180,7 +186,5 @@ export class LineSettingsService {
         lineError,
       });
     }
-
   }
-
 }

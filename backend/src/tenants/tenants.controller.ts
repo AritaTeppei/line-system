@@ -18,7 +18,7 @@ export class TenantsController {
     return this.tenantsService.findForUser(user);
   }
 
-    /**
+  /**
    * MANAGER 用: 自分のテナント配下の CLIENT 一覧
    * GET /tenants/clients
    */

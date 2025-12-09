@@ -215,10 +215,7 @@ export class AdminTenantsController {
 
   // ★追加：既存テナントの編集
   @Patch(':id')
-  async updateTenant(
-    @Param('id') id: string,
-    @Body() body: UpdateTenantDto,
-  ) {
+  async updateTenant(@Param('id') id: string, @Body() body: UpdateTenantDto) {
     const tenantId = Number(id);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('ID が不正です');
@@ -287,7 +284,7 @@ export class AdminTenantsController {
       data,
     });
 
-        // ★ ここから追記：プランに応じて MANAGER の maxConcurrentSessions を更新
+    // ★ ここから追記：プランに応じて MANAGER の maxConcurrentSessions を更新
     let maxSessionsForManager: number | null = null;
 
     // tenant.plan は String 型（"BASIC" / "STANDARD" / "PRO"）想定
@@ -389,9 +386,7 @@ export class AdminTenantsController {
   }
 
   @Post(':tenantId/reset-data')
-  async resetTenantData(
-    @Param('tenantId', ParseIntPipe) tenantId: number,
-  ) {
+  async resetTenantData(@Param('tenantId', ParseIntPipe) tenantId: number) {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });

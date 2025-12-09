@@ -1,5 +1,10 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as jwt from 'jsonwebtoken';
 import type { Request } from 'express';
@@ -14,8 +19,8 @@ export interface AuthPayload {
   id: number;
   email: string;
   name: string | null;
-  tenantId: number | null;  // 開発者は null
-  role: UserRole;           // 'DEVELOPER' | 'MANAGER' | 'CLIENT'
+  tenantId: number | null; // 開発者は null
+  role: UserRole; // 'DEVELOPER' | 'MANAGER' | 'CLIENT'
 
   // ★ ここから追加（あとで使う用のテナント情報）
   tenantStatus?: TenantStatus;
@@ -41,7 +46,6 @@ function calcTenantStatus(
   return 'ACTIVE';
 }
 
-
 @Injectable()
 export class AuthService {
   // 本番では必ず環境変数に逃がすこと！
@@ -50,7 +54,7 @@ export class AuthService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-    /**
+  /**
    * ログアウト時に、このユーザーの有効なセッションをすべて無効化する
    * （同一アカウントの同時ログイン制限のため）
    */
@@ -66,7 +70,7 @@ export class AuthService {
     });
   }
 
-    // ★ 追加：プラン＆ロールから同時ログイン上限を返す
+  // ★ 追加：プラン＆ロールから同時ログイン上限を返す
   private getMaxSessionsForUser(
     role: UserRole,
     tenantPlan: string | null,
@@ -101,19 +105,23 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: {
-    tenant: true,        // ★ これを追加
-  },
+        tenant: true, // ★ これを追加
+      },
     });
 
     if (!user) {
-      throw new UnauthorizedException('メールアドレスまたはパスワードが違います');
+      throw new UnauthorizedException(
+        'メールアドレスまたはパスワードが違います',
+      );
     }
 
     // 既存（平文）と新規（ハッシュ済み）の両方に対応したパスワードチェック
     const { ok, hashed } = await this.verifyPassword(password, user.password);
 
     if (!ok) {
-      throw new UnauthorizedException('メールアドレスまたはパスワードが違います');
+      throw new UnauthorizedException(
+        'メールアドレスまたはパスワードが違います',
+      );
     }
 
     // 旧データ（平文保存）の場合は、このタイミングでハッシュ化に移行する
@@ -128,14 +136,17 @@ export class AuthService {
     return user;
   }
 
-    /**
+  /**
    * ログイン用:
    * - メール＋パスワードでユーザーを検証
    * - AuthPayload を組み立て（テナント状態つき）
    * - MANAGER / CLIENT の場合はテナントの有効状態もチェック
    * - 問題なければ { user, payload } を返す
    */
-  async validateUserWithTenantCheck(email: string, password: string): Promise<{
+  async validateUserWithTenantCheck(
+    email: string,
+    password: string,
+  ): Promise<{
     user: any;
     payload: AuthPayload;
   }> {
@@ -176,7 +187,7 @@ export class AuthService {
 
     return { user, payload };
   }
-  
+
   /**
    * JWT を発行する
    */
@@ -239,13 +250,15 @@ export class AuthService {
     return { ok, hashed: false };
   }
 
-    /**
+  /**
    * /auth/me 用：
    * - JWT を検証して payload を取り出す
    * - MANAGER / CLIENT の場合はテナントの有効状態もチェックする
    * - DEVELOPER はテナント状態に関係なく通す
    */
-  async getPayloadFromRequestWithTenantCheck(req: Request): Promise<AuthPayload> {
+  async getPayloadFromRequestWithTenantCheck(
+    req: Request,
+  ): Promise<AuthPayload> {
     const payload = this.getPayloadFromRequest(req);
 
     if (!payload) {
@@ -260,71 +273,70 @@ export class AuthService {
     return payload;
   }
 
-   private async ensureTenantActive(payload: AuthPayload): Promise<void> {
-  // 開発者はテナント状態に関係なく通す
-  if (payload.role === UserRole.DEVELOPER) {
-    return;
-  }
+  private async ensureTenantActive(payload: AuthPayload): Promise<void> {
+    // 開発者はテナント状態に関係なく通す
+    if (payload.role === UserRole.DEVELOPER) {
+      return;
+    }
 
-  // tenantId が無いのはそもそもおかしい
-  if (payload.tenantId == null) {
-    throw new UnauthorizedException(
-      'テナント情報が不正です。管理者にお問い合わせください。',
-    );
-  }
+    // tenantId が無いのはそもそもおかしい
+    if (payload.tenantId == null) {
+      throw new UnauthorizedException(
+        'テナント情報が不正です。管理者にお問い合わせください。',
+      );
+    }
 
-  // DB からテナントを取得
-  const tenant = await this.prisma.tenant.findUnique({
-    where: { id: payload.tenantId },
-  });
-
-  if (!tenant) {
-    throw new UnauthorizedException(
-      'テナント情報が見つかりません。管理者にお問い合わせください。',
-    );
-  }
-
-  // 共通で返すテナント情報（フロントで使えるように）
-  const baseTenantInfo = {
-    tenantId: tenant.id,
-    tenantName: tenant.name,
-    plan: tenant.plan,
-    validUntil: tenant.validUntil,
-    isActive: tenant.isActive,
-  };
-
-  // ★① isActive=false → サブスク停止中
-  if (!tenant.isActive) {
-    throw new ForbiddenException({
-      statusCode: 403,
-      error: 'TENANT_INACTIVE', // ← フロントが見る用コード
-      message:
-        'このテナントは現在ご利用停止中です。サブスク登録・再開すると利用できます。',
-      reason: 'INACTIVE',
-      ...baseTenantInfo,
+    // DB からテナントを取得
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
     });
-  }
 
-  // ★② validUntil が過去 → 期限切れ
-  if (tenant.validUntil) {
-    const now = new Date();
-    if (tenant.validUntil.getTime() < now.getTime()) {
+    if (!tenant) {
+      throw new UnauthorizedException(
+        'テナント情報が見つかりません。管理者にお問い合わせください。',
+      );
+    }
+
+    // 共通で返すテナント情報（フロントで使えるように）
+    const baseTenantInfo = {
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      plan: tenant.plan,
+      validUntil: tenant.validUntil,
+      isActive: tenant.isActive,
+    };
+
+    // ★① isActive=false → サブスク停止中
+    if (!tenant.isActive) {
       throw new ForbiddenException({
         statusCode: 403,
-        error: 'TENANT_EXPIRED', // ← 期限切れコード
+        error: 'TENANT_INACTIVE', // ← フロントが見る用コード
         message:
-          'このテナントの有効期限が切れています。サブスク登録を行うと再度利用できます。',
-        reason: 'EXPIRED',
+          'このテナントは現在ご利用停止中です。サブスク登録・再開すると利用できます。',
+        reason: 'INACTIVE',
         ...baseTenantInfo,
       });
     }
+
+    // ★② validUntil が過去 → 期限切れ
+    if (tenant.validUntil) {
+      const now = new Date();
+      if (tenant.validUntil.getTime() < now.getTime()) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'TENANT_EXPIRED', // ← 期限切れコード
+          message:
+            'このテナントの有効期限が切れています。サブスク登録を行うと再度利用できます。',
+          reason: 'EXPIRED',
+          ...baseTenantInfo,
+        });
+      }
+    }
+
+    // すべてOKなら何も投げずに終了（従来どおり）
   }
 
-  // すべてOKなら何も投げずに終了（従来どおり）
-}
-
-
-    // ★ 追加：同時ログイン数の上限チェック
+  // ★ 追加：同時ログイン数の上限チェック
   private async ensureSessionLimit(payload: AuthPayload): Promise<void> {
     // 開発者は同時ログイン制限なし
     if (payload.role === UserRole.DEVELOPER) {
@@ -376,7 +388,7 @@ export class AuthService {
     });
   }
 
-    /**
+  /**
    * 自分自身のパスワード変更
    * - 現在のパスワードをチェック
    * - 新パスワードと確認用の一致チェック
@@ -429,7 +441,7 @@ export class AuthService {
     });
   }
 
-    /**
+  /**
    * MANAGER が CLIENT のパスワードを強制変更する
    * - manager.role が MANAGER 以外なら Forbidden
    * - manager.tenantId 配下の CLIENT 以外は対象外
@@ -504,5 +516,4 @@ export class AuthService {
       },
     });
   }
-
 }

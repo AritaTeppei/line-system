@@ -44,7 +44,7 @@ export class PublicService {
   /**
    * トークン＋入力情報から顧客を作成 or 更新
    */
-    /**
+  /**
    * トークン＋入力情報から顧客を作成 or 更新
    * - まず lineUid で既存顧客がいないか確認
    * - いなければ「tenantId + mobilePhone」で既存顧客を探してマージ
@@ -156,14 +156,10 @@ export class PublicService {
       ) {
         const target = (e.meta?.target as string[]) ?? [];
         if (target.includes('mobilePhone')) {
-          throw new BadRequestException(
-            'この携帯番号は既に登録されています',
-          );
+          throw new BadRequestException('この携帯番号は既に登録されています');
         }
         if (target.includes('lineUid')) {
-          throw new BadRequestException(
-            'このLINE UIDは既に登録されています',
-          );
+          throw new BadRequestException('このLINE UIDは既に登録されています');
         }
       }
       throw e;

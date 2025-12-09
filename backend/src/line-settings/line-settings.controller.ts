@@ -27,9 +27,7 @@ export class LineSettingsController {
   // 🔽 ここも後で戻す
   // @Roles(Role.DEVELOPER)
   @Get()
-  async getLineSettings(
-    @Param('tenantId', ParseIntPipe) tenantId: number,
-  ) {
+  async getLineSettings(@Param('tenantId', ParseIntPipe) tenantId: number) {
     return this.lineSettingsService.getByTenantId(tenantId);
   }
 
@@ -42,7 +40,7 @@ export class LineSettingsController {
     return this.lineSettingsService.upsertByTenantId(tenantId, dto);
   }
 
-    // 🧪 テスト送信用
+  // 🧪 テスト送信用
   // @Roles(Role.DEVELOPER)
   @Post('test-message')
   async sendTestMessage(
