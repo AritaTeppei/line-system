@@ -5,7 +5,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const apiBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 export default function SignupPage() {
   const router = useRouter();
