@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
@@ -32,8 +32,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const searchParams = useSearchParams(); 
 
   // ★ サブスク関連エラー用の情報（billingError はやめて一本化）
   const [tenantErrorInfo, setTenantErrorInfo] = useState<{
@@ -47,28 +45,13 @@ export default function LoginPage() {
 
 
   // すでにトークンがある場合は自動遷移
-    useEffect(() => {
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedEmail = window.localStorage.getItem(SAVED_EMAIL_KEY);
       if (savedEmail) {
         setEmail(savedEmail);
         setRememberEmail(true);
       }
-    }
-
-    // ★ ここで Stripe 決済の戻りクエリをチェック
-    const billingStatus = searchParams.get('billing');
-    if (billingStatus === 'success') {
-      setInfoMessage(
-        'サブスク登録・お支払いが完了しました。\nありがとうございました。\n再度ログインしてご利用を開始してください。',
-      );
-    } else if (billingStatus === 'cancel') {
-      setInfoMessage(
-        '決済がキャンセルされました。\n必要に応じて、もう一度サブスク登録をお試しください。',
-      );
-    } else {
-      // クエリが無ければメッセージはクリア
-      setInfoMessage(null);
     }
 
     const token =
@@ -96,9 +79,7 @@ export default function LoginPage() {
     };
 
     run();
-  }, [router, searchParams]); // ★ 依存配列に searchParams を追加
-
-
+  }, [router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -276,6 +257,7 @@ export default function LoginPage() {
     }
   };
 
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-between px-4 py-6">
       <div className="w-full max-w-md">
@@ -301,28 +283,6 @@ export default function LoginPage() {
           <h1 className="text-lg font-bold mb-4 text-center text-gray-800">
             ログイン
           </h1>
-
-           {/* ★ 追加：サブスク完了/キャンセルのお知らせ */}
-          {infoMessage && (
-            <div className="mb-4 border border-blue-300 bg-blue-50 text-xs text-blue-900 rounded px-3 py-3 whitespace-pre-wrap">
-              <div className="font-semibold text-[13px] mb-2">
-                サブスク登録手続きの結果
-              </div>
-              <p className="mb-3">{infoMessage}</p>
-
-              <button
-                type="button"
-                className="w-full border border-blue-400 text-blue-700 rounded-lg py-2 text-xs font-semibold hover:bg-blue-100 transition-colors"
-                onClick={() => {
-                  // クエリを消して「素のログイン画面」に戻す
-                  setInfoMessage(null);
-                  router.replace('/');
-                }}
-              >
-                ログイン画面に戻る
-              </button>
-            </div>
-          )}
 
                     {tenantErrorInfo && (
             <div className="mb-4 border border-yellow-300 bg-yellow-50 text-xs text-gray-800 rounded px-3 py-2 whitespace-pre-wrap">

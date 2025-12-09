@@ -23,12 +23,16 @@ constructor(private readonly prisma: PrismaService) {
   }
 }
 
-  /**
+    /**
    * Stripe の Checkout セッションを作成して URL を返す
    */
-  async createCheckoutSession(tenantId: number, plan: string) {
+  async createCheckoutSession(
+    tenantId: number,
+    plan: string,
+    fromLogin = false, // ★ 追加：ログイン画面からかどうか
+  ) {
     this.logger.log(
-      `createCheckoutSession called. tenantId=${tenantId}, plan=${plan}`,
+      `createCheckoutSession called. tenantId=${tenantId}, plan=${plan}, fromLogin=${fromLogin}`,
     );
 
     const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -65,7 +69,11 @@ constructor(private readonly prisma: PrismaService) {
 
     const clientReferenceId = String(tenantId);
 
-    // 実際に Stripe Checkout セッションを作成
+    // ★ ログイン画面からかどうかで戻り先を変える
+    const successPath = fromLogin ? '/' : '/billing/success';
+    const cancelPath = fromLogin ? '/' : '/billing/cancel';
+
+    // 実際に Stripe Checkout セッションを作成（ここで1回だけ呼ぶ）
     const session = await this.stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -75,9 +83,14 @@ constructor(private readonly prisma: PrismaService) {
           quantity: 1,
         },
       ],
-      success_url: `${frontendBaseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendBaseUrl}/billing/cancel`,
+      success_url: `${frontendBaseUrl}${successPath}?billing=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${frontendBaseUrl}${cancelPath}?billing=cancel`,
       client_reference_id: clientReferenceId,
+      metadata: {
+        tenantId: clientReferenceId,
+        plan, // BASIC / STANDARD / PRO がそのまま入る
+        fromLogin: fromLogin ? '1' : '0',
+      },
     });
 
     if (!session.url) {
@@ -95,6 +108,7 @@ constructor(private readonly prisma: PrismaService) {
       url: session.url,
     };
   }
+
 
     /**
    * テナントの現在の課金状態を返す（読み取り専用）
@@ -138,69 +152,151 @@ constructor(private readonly prisma: PrismaService) {
   /**
    * Webhook 受け取り（今はログ出しだけ）
    */
+    /**
+   * Webhook 受け取り
+   */
   async handleStripeWebhook(event: any) {
     this.logger.log(
       `Stripe webhook received. id=${event.id}, type=${event.type}`,
     );
 
     switch (event.type) {
-    case 'checkout.session.completed': {
-      // Checkout セッション
-      const session = event.data.object as Stripe.Checkout.Session;
+      // ① Stripe Checkout セッション完了
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
 
-      const clientRef = session.client_reference_id;
-      const tenantId = clientRef ? Number(clientRef) : NaN;
+        const clientRef = session.client_reference_id;
+        const tenantId = clientRef ? Number(clientRef) : NaN;
 
-      if (!tenantId || Number.isNaN(tenantId)) {
-        this.logger.error(
-          `checkout.session.completed だが tenantId が取得できません。client_reference_id=${clientRef}`,
+        if (!tenantId || Number.isNaN(tenantId)) {
+          this.logger.error(
+            `checkout.session.completed だが tenantId が取得できません。client_reference_id=${clientRef}`,
+          );
+          break;
+        }
+
+        // createCheckoutSession で埋め込んだ metadata.plan
+        const planFromMetadata =
+          (session.metadata?.plan as string | undefined) ?? null;
+
+        const customerId =
+          typeof session.customer === 'string'
+            ? session.customer
+            : session.customer?.id ?? null;
+
+        const subscriptionId =
+          typeof session.subscription === 'string'
+            ? session.subscription
+            : session.subscription?.id ?? null;
+
+        this.logger.log(
+          `checkout.session.completed for tenantId=${tenantId}, customer=${customerId}, subscription=${subscriptionId}, plan=${planFromMetadata}`,
         );
+
+        // テナントに Stripe の基本情報を書き込む
+        await this.prisma.tenant.update({
+          where: { id: tenantId },
+          data: {
+            stripeCustomerId: customerId ?? undefined,
+            stripeSubscriptionId: subscriptionId ?? undefined,
+            subscriptionStatus: subscriptionId ? 'active' : undefined,
+            plan: planFromMetadata ?? undefined,
+            isActive: subscriptionId ? true : undefined,
+          },
+        });
+
         break;
       }
-    // customer / subscription は string or object のどちらか
-      const customerId =
-        typeof session.customer === 'string'
-          ? session.customer
-          : session.customer?.id ?? null;
+            // ② 支払い成功 → そのサイクルの終了日で有効期限を更新
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice;
 
-      const subscriptionId =
-        typeof session.subscription === 'string'
-          ? session.subscription
-          : session.subscription?.id ?? null;
+        // ★ ここを customer ベースに変更
+        const rawCustomer = (invoice as any).customer;
+        const customerId =
+          typeof rawCustomer === 'string'
+            ? rawCustomer
+            : rawCustomer?.id ?? null;
 
-      this.logger.log(
-        `checkout.session.completed for tenantId=${tenantId}, customer=${customerId}, subscription=${subscriptionId}`,
-      );
+        // 今回の請求サイクル（最初の行）の period.end（Unix秒）
+        const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
+        const periodEnd =
+          periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
 
-      // テナントに Stripe の情報を書き込む
-      await this.prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          stripeCustomerId: customerId ?? undefined,
-          stripeSubscriptionId: subscriptionId ?? undefined,
-          // とりあえずステータスは "active" 固定で入れておく（後で subscription.updated で上書き）
-          subscriptionStatus: subscriptionId ? 'active' : undefined,
-        },
-      });
+        this.logger.log(
+          `invoice.payment_succeeded for customer=${customerId}, periodEnd=${periodEnd?.toISOString()}`,
+        );
 
-      break;
+        if (!customerId || !periodEnd) {
+          this.logger.warn(
+            'invoice.payment_succeeded だが customerId または periodEnd が取得できません。',
+          );
+          break;
+        }
+
+        // ★ checkout.session.completed で保存した stripeCustomerId と紐付ける
+        await this.prisma.tenant.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: {
+            currentPeriodEnd: periodEnd,
+            validUntil: periodEnd, // ← ダッシュボードの「有効期限」と揃える
+            isActive: true,        // ← 支払い成功なので有効化
+          },
+        });
+
+        break;
+      }
+
+
+      // ③ サブスクのライフサイクルイベント（とりあえずログ＋ステータス更新）
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
+
+        const currentPeriodEndUnix =
+          (subscription as any).current_period_end ?? null;
+        const currentPeriodEndDate = currentPeriodEndUnix
+          ? new Date(currentPeriodEndUnix * 1000)
+          : null;
+
+        this.logger.log(
+          `${event.type}: subId=${subscription.id}, status=${subscription.status}, current_period_end(unix)=${currentPeriodEndUnix}, date=${currentPeriodEndDate?.toISOString()}`,
+        );
+
+        const subscriptionId = subscription.id;
+
+        const tenant = await this.prisma.tenant.findFirst({
+          where: { stripeSubscriptionId: subscriptionId },
+        });
+
+        if (!tenant) {
+          this.logger.warn(
+            `${event.type}: tenant not found for subscriptionId=${subscriptionId}`,
+          );
+          break;
+        }
+
+        await this.prisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            subscriptionStatus: subscription.status,
+            // ここは「とりあえず Stripe 側の状態を反映」くらいの役割
+            currentPeriodEnd: currentPeriodEndDate ?? undefined,
+            // 必要なら validUntil もここで書き換えられる
+            // validUntil: currentPeriodEndDate ?? undefined,
+            isActive: subscription.status === 'active',
+          },
+        });
+
+        break;
+      }
+
+      default: {
+        this.logger.log(`Unhandled Stripe event type: ${event.type}`);
+        break;
+      }
     }
-
-    // ここは将来使う用（とりあえずログだけ）
-    case 'customer.subscription.created':
-    case 'customer.subscription.updated':
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription;
-      this.logger.log(
-        `${event.type}: subId=${subscription.id}, status=${subscription.status}`,
-      );
-      // 次のターンで、ここから currentPeriodEnd などを Tenant に反映させる。
-      break;
-    }
-
-    default:
-      this.logger.log(`Unhandled Stripe event type: ${event.type}`);
   }
-}
 }
 
