@@ -26,6 +26,8 @@ type MeResponse = {
   tenantId: number | null;
   role: Role;
   tenantName?: string | null;
+  tenantPlan?: string | null; 
+  trialEnd?: string | null;
   tenant?: {
     name?: string | null;
     displayName?: string | null;
@@ -57,7 +59,7 @@ const managerSettingLinks = [
   { href: '/settings/messages', label: 'メッセージ設定' },
   { href: '/settings/change-password', label: '設定パスワード' },
   { href: '/onboarding/line', label: 'LINE連携' },
-  { href: '/billing', label: 'サブスク登録' },
+  { href: '/billing', label: 'サブスク登録・プラン管理' }, 
 ];
 
 const apiBase =
@@ -166,7 +168,7 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
           </button>
           <button
             type="button"
-            className="px-3 py-1 rounded-md border border-blue-500 bg-white text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+            className="px-3 py-1 rounded-md bg-blue-600 text-[11px] font-semibold text-white hover:bg-blue-700 shadow-sm"
             onClick={() => router.push('/billing')}
           >
             サブスク登録・プラン管理
@@ -182,6 +184,59 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
     </section>
   );
 }
+
+// ★ TRIAL テナント専用バナー（サイドバー用）
+function TrialBanner({ me }: { me: MeResponse | null }) {
+  // me がない場合は表示しない
+  if (!me) return null;
+
+  // MANAGER 以外には出さない
+  if (me.role !== 'MANAGER') return null;
+
+  // プランが TRIAL 以外なら表示しない
+  const rawPlan = me.tenantPlan ?? '';
+  if (!rawPlan || rawPlan.toUpperCase() !== 'TRIAL') {
+    return null;
+  }
+
+  // ★ 残り日数を計算
+  let remainingDays: number | null = null;
+  if (me.trialEnd) {
+    const end = new Date(me.trialEnd); // trialEnd は string | null | undefined なので if で絞り込み
+    const now = new Date();
+    const diffMs = end.getTime() - now.getTime();
+    remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  }
+
+  return (
+    <div className="mt-2 w-full rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-center">
+      <p className="text-[11px] font-bold text-orange-700">
+        お試しプランをご利用中です
+      </p>
+
+      {remainingDays !== null && (
+        <p className="mt-1 text-[11px] text-orange-700 font-semibold">
+          残り {remainingDays} 日
+        </p>
+      )}
+
+      <p className="mt-1 text-[10px] text-orange-700 leading-tight">
+        顧客・車両・予約の件数に
+        <br />
+        制限があります。
+      </p>
+
+      <Link
+        href="/billing"
+        className="mt-2 inline-block w-full rounded-md bg-orange-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
+      >
+        サブスク登録して制限を解除
+      </Link>
+    </div>
+  );
+}
+
+
 
 export default function TenantLayout({ children }: Props) {
   const pathname = usePathname();
@@ -339,6 +394,9 @@ export default function TenantLayout({ children }: Props) {
               <span className="font-medium">{tenantName}</span>
             </div>
           )}
+
+          {/* ★ TRIAL プラン用バナー（テナント名の下） */}
+          <TrialBanner me={me} />
 
           {/* ログアウトボタン */}
           <button

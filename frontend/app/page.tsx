@@ -379,19 +379,33 @@ export default function LoginPage() {
             </div>
           )}
 
+                    {/* ★ 通常のログインエラー表示 */}
+          {error && (
+            <div className="mb-4 border border-red-300 bg-red-50 text-xs text-red-800 rounded px-3 py-2 whitespace-pre-wrap">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm mb-1">メールアドレス</label>
-              <input
-                type="email"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00C300]"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username"
-                required
-              />
-            </div>
+  <label className="block text-sm mb-1">メールアドレス</label>
+  <input
+    type="email"
+    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00C300]"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    autoComplete="username"
+    // ★ ここから追加
+    inputMode="email"          // モバイルなどで英数キーボードを優先
+    autoCapitalize="off"       // 自動で大文字にしない
+    autoCorrect="off"          // 自動補正しない
+    lang="en"                  // フィールドとして英語扱い
+    style={{ imeMode: 'disabled' }} // IME 無効のヒント（対応ブラウザで有効）
+    // ★ ここまで追加
+    required
+  />
+</div>
+
 
             <div>
               <label className="block text-sm mb-1">パスワード</label>
