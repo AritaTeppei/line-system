@@ -26,6 +26,7 @@ export interface AuthPayload {
   tenantStatus?: TenantStatus;
   tenantValidUntil?: Date | null;
   tenantIsActive?: boolean;
+  trialEnd?: Date | null;
 }
 
 // テナントの状態を判定する共通関数
@@ -93,6 +94,7 @@ export class AuthService {
         return 2;
       case 'PRO':
         return 3;
+      case 'TRIAL': 
       case 'BASIC':
       default:
         return 1;
@@ -170,10 +172,12 @@ export class AuthService {
       name: (user as any).name ?? null,
       tenantId: user.tenantId ?? null,
       role: user.role,
-
+      
       tenantStatus,
       tenantValidUntil: user.tenant?.validUntil ?? null,
       tenantIsActive: user.tenant?.isActive ?? false,
+
+      trialEnd: user.tenant?.trialEnd ?? null,
     };
 
     // テナント状態チェック（DEVELOPER は ensureTenantActive の中でスルーされる）

@@ -18,6 +18,9 @@ model Tenant {
   lineSecret      String?
   lineAccessToken String?
 
+  trialEndNotifiedAt DateTime?
+  trialEnd   DateTime?   // ★追加：お試し終了日
+
   // === ここからサブスク/Billing 管理用フィールド ===
   stripeCustomerId     String? // Stripe 上の Customer ID
   stripeSubscriptionId String? // Stripe 上の Subscription ID
@@ -27,7 +30,7 @@ model Tenant {
   lineSettings             LineSettings?
   reminderMessageTemplates ReminderMessageTemplate[]
 
-  trialEnd   DateTime?   // ★追加：お試し終了日
+
 
   users                  User[]
   customers              Customer[] // ★ 追加

@@ -13,6 +13,8 @@ import { TenantsModule } from './tenants/tenants.module'; // ★ 追加
 import { PublicBookingsModule } from './public-bookings/public-bookings.module';
 import { BillingModule } from './billing/billing.module'; // ★ ここ追加
 import { OnboardingModule } from './onboarding/onboarding.module'; // ★追加
+import { TrialMonitorService } from './tenants/trial-monitor.service'; // ★ 追加
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -28,10 +30,10 @@ import { OnboardingModule } from './onboarding/onboarding.module'; // ★追加
     TenantsModule,
     BillingModule,
     OnboardingModule,
-
-    // ★ これが無いから /admin/tenants が 404 になってた
     AdminModule,
-    PublicBookingsModule, // ★ これを追加
+    PublicBookingsModule, 
+    MailModule
   ],
+  providers: [TrialMonitorService], // ★ 追加
 })
 export class AppModule {}

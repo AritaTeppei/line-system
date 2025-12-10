@@ -336,7 +336,7 @@ export class AdminTenantsController {
     };
   }
 
-    // ★既存テナントの削除（関連データもまとめて削除）
+  // ★追加：既存テナントの削除
   @Delete(':id')
   async deleteTenant(@Param('id') id: string) {
     const tenantId = Number(id);
@@ -344,63 +344,32 @@ export class AdminTenantsController {
       throw new BadRequestException('ID が不正です');
     }
 
-    // まずテナントが存在するかチェック（なければ 404）
-    const existingTenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-    });
-
-    if (!existingTenant) {
-      throw new NotFoundException('テナントが見つかりません');
-    }
-
-    // ★ 関連データをまとめて削除するトランザクション
-    const deletedTenant = await this.prisma.$transaction(async (tx) => {
-      // 1) このテナントに属するユーザー一覧を取得
-      const users = await tx.user.findMany({
-        where: { tenantId },
-        select: { id: true },
-      });
-      const userIds = users.map((u) => u.id);
-
-      // 2) ユーザーセッションを削除
-      //    ※ モデル名は schema.prisma に合わせて修正してください
-      if (userIds.length > 0) {
-        await tx.userSession.deleteMany({
-          where: {
-            userId: { in: userIds },
-          },
-        });
-      }
-
-      // 3) このテナントに紐づく各種データを削除
-      await tx.reminderSentLog.deleteMany({ where: { tenantId } });
-      await tx.booking.deleteMany({ where: { tenantId } });
-      await tx.car.deleteMany({ where: { tenantId } });
-      await tx.customer.deleteMany({ where: { tenantId } });
-      await tx.lineSettings.deleteMany({ where: { tenantId } });
-
-      // 4) ユーザー本体を削除
-      await tx.user.deleteMany({
+    // ★ ここをトランザクションに変更
+    const tenant = await this.prisma.$transaction(async (tx) => {
+      // ① 先に LineSettings を削除（無ければ0件で何も起きない）
+      await tx.lineSettings.deleteMany({
         where: { tenantId },
       });
 
-      // 5) 最後にテナント本体を削除
-      const t = await tx.tenant.delete({
+      // 必要なら他のテーブルもここに足していける
+      // await tx.reminderSentLog.deleteMany({ where: { tenantId } });
+      // await tx.booking.deleteMany({ where: { tenantId } });
+      // ...など
+
+      // ② 最後にテナント本体を削除
+      return tx.tenant.delete({
         where: { id: tenantId },
       });
-
-      return t;
     });
 
-    // 削除したテナント情報を返す形はこれまでとほぼ同じ
+    // 削除したテナント情報を返すのはそのまま
     return {
-      id: deletedTenant.id,
-      name: deletedTenant.name,
-      email: deletedTenant.email ?? null,
-      plan: deletedTenant.plan ?? null,
+      id: tenant.id,
+      name: tenant.name,
+      email: tenant.email ?? null,
+      plan: tenant.plan ?? null,
     };
   }
-
 
 
   // ▼ ここのメソッド群は元のまま（挙動変えたくないのでそのまま残してる）

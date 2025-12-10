@@ -31,6 +31,11 @@ export class PublicTenantsService {
     // パスワードハッシュ化
     const hashed = await bcrypt.hash(password, 10);
 
+        // ▼ 共通の LINE Webhook URL（env 優先、なければ固定値）
+    const defaultWebhookUrl =
+      process.env.LINE_WEBHOOK_URL ||
+      'https://line-system.onrender.com/line/webhook';
+
     // テナント＋ユーザーをトランザクションで作成
     const [tenant, user] = await this.prisma
       .$transaction([
@@ -53,7 +58,7 @@ export class PublicTenantsService {
 
         // user は tenant を作ってから
       ])
-      .then(async ([tenant]) => {
+            .then(async ([tenant]) => {
         const user = await this.prisma.user.create({
           data: {
             tenantId: tenant.id,
@@ -65,6 +70,16 @@ export class PublicTenantsService {
             plan: null, // 必要なら Plan.BASIC などにする
           },
         });
+
+        // 3) LineSettings を自動作成（webhookUrl を事前にセット）
+        await this.prisma.lineSettings.create({
+          data: {
+            tenantId: tenant.id,
+            webhookUrl: defaultWebhookUrl,
+            isActive: false, // 初期状態は無効のまま
+          },
+        });
+
         return [tenant, user] as const;
       });
 

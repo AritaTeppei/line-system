@@ -9,10 +9,16 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express'; // ★ TS1272 対策で type import
 import { AuthService, AuthPayload } from './auth.service';
+import { PrismaService } from '../prisma/prisma.service';
+
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    // ★ 追加
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * ログインAPI
@@ -121,13 +127,67 @@ export class AuthController {
    * 誰がログインしているか（JWTから復元）
    * GET /auth/me
    */
-  @Get('me')
+    @Get('me')
   async me(@Req() req: Request) {
+    // まずは今まで通り payload を取得
     const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
-    // 返す形（AuthPayload）は今まで通り
-    return payload;
+    // tenant 情報を取得（plan / validUntil / isActive）
+    const tenant = payload.tenantId
+      ? await this.prisma.tenant.findUnique({
+          where: { id: payload.tenantId },
+          select: {
+            plan: true,
+            validUntil: true,
+            isActive: true,
+          },
+        })
+      : null;
+
+    let tenantPlan: string | null = tenant?.plan ?? null;
+    let trialRemainingDays: number | null = null;
+    let trialExpired = false;
+
+    // ★ TRIAL のときだけ残り日数など計算
+    if (tenant && tenant.plan === 'TRIAL') {
+      tenantPlan = 'TRIAL';
+
+      if (tenant.validUntil) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const until = new Date(tenant.validUntil);
+        until.setHours(0, 0, 0, 0);
+
+        const diffMs = until.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        trialRemainingDays = Math.max(0, diffDays);
+        // 0 日以下 or isActive=false → 期限切れ扱い
+        trialExpired = diffDays <= 0 || tenant.isActive === false;
+      } else {
+        // plan=TRIAL なのに validUntil 無し → 安全側で「期限切れ」
+        trialRemainingDays = 0;
+        trialExpired = true;
+      }
+    }
+
+    // ★ フロントで使いやすい形で返す
+    return {
+      // もともとの payload 情報
+      id: payload.id,
+      email: payload.email,
+      name: (payload as any).name ?? null,
+      tenantId: payload.tenantId ?? null,
+      role: payload.role,
+
+      // 追加情報
+      tenantPlan,
+      trialRemainingDays,
+      trialExpired,
+    };
   }
+
 
   @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {
