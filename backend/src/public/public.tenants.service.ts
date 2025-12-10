@@ -12,7 +12,20 @@ export class PublicTenantsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async registerTenant(dto: RegisterTenantDto) {
-    const { companyName, adminName, email, password, phone } = dto;
+    const {
+  companyName,
+  adminName,
+  email,
+  password,
+  phone,
+  tenantName,
+  companyAddress1,
+  companyAddress2,
+  representativeName,
+  contactPhone,
+  contactMobile,
+} = dto;
+
 
     // ★ ここを追加：今から7日後を trialEnd にする
     const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -40,36 +53,49 @@ export class PublicTenantsService {
     const [tenant, user] = await this.prisma
       .$transaction([
           this.prisma.tenant.create({
-          data: {
-            name: companyName,
-            email,
-            // ★ 新規登録は TRIAL プランで開始
-            plan: 'TRIAL',
-            isActive: true,
-            contactPhone: phone ?? null,
-            representativeName: adminName ?? null,
+  data: {
+    // ★ テナント名の優先順位
+    // 1) tenantName があればそれ
+    // 2) なければ companyName（会社名）
+    // 3) それもなければ adminName（代表者名）
+    name: tenantName || companyName || adminName,
 
-            // ★ お試し終了日（7日後）
-            trialEnd,
-            // ★ ログイン制御で使っている validUntil も trialEnd に揃える
-            validUntil: trialEnd,
-          },
-        }),
+    email,
+    // ★ 新規登録は TRIAL プランで開始（既存の挙動そのまま）
+    plan: 'TRIAL',
+    isActive: true,
+
+    // ★ 契約者情報を保存
+    companyName: companyName ?? null,
+    companyAddress1: companyAddress1 ?? null,
+    companyAddress2: companyAddress2 ?? null,
+    representativeName: representativeName ?? adminName ?? null,
+    contactPhone: contactPhone ?? phone ?? null,
+    contactMobile: contactMobile ?? null,
+
+    // ★ お試し終了日（7日後）
+    trialEnd,
+    // ★ ログイン制御で使っている validUntil も trialEnd に揃える
+    validUntil: trialEnd,
+  },
+}),
 
         // user は tenant を作ってから
       ])
             .then(async ([tenant]) => {
         const user = await this.prisma.user.create({
-          data: {
-            tenantId: tenant.id,
-            email,
-            name: adminName ?? companyName,
-            password: hashed,
-            role: UserRole.MANAGER,
-            isActive: true,
-            plan: null, // 必要なら Plan.BASIC などにする
-          },
-        });
+  data: {
+    tenantId: tenant.id,
+    email,
+    // ★ 管理者ユーザー名の優先順位
+    name: adminName ?? companyName ?? tenantName ?? null,
+    password: hashed,
+    role: UserRole.MANAGER,
+    isActive: true,
+    plan: null, // 必要なら Plan.BASIC などにする
+  },
+});
+
 
         // 3) LineSettings を自動作成（webhookUrl を事前にセット）
         await this.prisma.lineSettings.create({
