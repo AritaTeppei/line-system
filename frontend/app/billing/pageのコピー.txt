@@ -130,7 +130,7 @@ export default function BillingPage() {
     fetchStatus();
   }, [me]);
 
-  // サブスク開始ボタン押下時の処理（※挙動はそのまま）
+  // サブスク開始ボタン押下時の処理
   const handleStartSubscription = async (
     plan: 'BASIC' | 'STANDARD' | 'PRO',
   ) => {
@@ -188,7 +188,7 @@ export default function BillingPage() {
     }
   };
 
-  // ★ 追加：サブスク解約・支払い方法変更用ポータルを開く（別タブ）
+    // ★ 追加：サブスク解約・支払い方法変更用ポータルを開く
   const handleOpenPortal = async () => {
     const token = getAuthToken();
     if (!token) {
@@ -227,13 +227,8 @@ export default function BillingPage() {
         return;
       }
 
-      // ★ 別タブで開く（ポップアップブロックされたらフォールバックで同タブ）
-      const win = window.open(data.url, '_blank', 'noopener,noreferrer');
-      if (!win) {
-        window.location.href = data.url;
-      }
-
-      setPortalLoading(false);
+      // Stripe のカスタマーポータルへ遷移
+      window.location.href = data.url;
     } catch (e) {
       console.error(e);
       setError('サブスク管理画面への遷移中にエラーが発生しました。');
@@ -271,12 +266,6 @@ export default function BillingPage() {
     if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString('ja-JP');
   };
-
-  // ★ 追加：今サブスクが「active」かどうかを判定
-  const isSubscriptionActive =
-    !!billingStatus &&
-    billingStatus.subscriptionStatus === 'active' &&
-    !!billingStatus.stripeSubscriptionId;
 
   return (
     <TenantLayout>
@@ -332,27 +321,13 @@ export default function BillingPage() {
           )}
         </div>
 
-        {/* ★ 追加：すでに契約中の場合の注意メッセージ */}
-        {isSubscriptionActive && (
-          <div className="border rounded-lg p-3 bg-yellow-50 text-xs text-yellow-800">
-            <p className="font-semibold mb-1">
-              現在、Stripe でサブスク契約中のため、この画面から新しいプランを直接申し込むことはできません。
-            </p>
-            <p>
-              プラン変更や解約、お支払い方法の変更は、ページ下部の「サブスクの解約・お支払い情報を変更する」ボタンから
-              Stripe の管理画面（カスタマーポータル）で行ってください。
-            </p>
-          </div>
-        )}
-
         {/* プラン一覧 */}
         <div className="grid gap-4 md:grid-cols-3">
           <PlanCard
             name="BASIC"
             priceLabel="月額 9,800円（例）"
             description="まずはお試し用の基本プラン。リマインド機能・予約管理などのコア機能を利用可能。"
-            // ★ active のときはボタンを無効化
-            disabled={creating !== null || isSubscriptionActive}
+            disabled={creating !== null}
             loading={creating === 'BASIC'}
             onClick={() => handleStartSubscription('BASIC')}
           />
@@ -360,7 +335,7 @@ export default function BillingPage() {
             name="STANDARD"
             priceLabel="月額 15,000円（例）"
             description="メッセージ配信などを強化した標準プラン。今後の拡張もこのプランを前提に検討。"
-            disabled={creating !== null || isSubscriptionActive}
+            disabled={creating !== null}
             loading={creating === 'STANDARD'}
             onClick={() => handleStartSubscription('STANDARD')}
           />
@@ -368,7 +343,7 @@ export default function BillingPage() {
             name="PRO"
             priceLabel="月額 20,000円（例）"
             description="大型店舗・複数拠点向けの上位プラン。将来的に機能制限と連動させる予定。"
-            disabled={creating !== null || isSubscriptionActive}
+            disabled={creating !== null}
             loading={creating === 'PRO'}
             onClick={() => handleStartSubscription('PRO')}
           />
@@ -378,7 +353,7 @@ export default function BillingPage() {
           ※ 現時点ではテスト決済環境です。実運用前に金額・プラン内容・利用規約などを必ず確認してください。
         </p>
 
-        {/* ★ サブスク解約・支払い方法変更（Stripe ポータル） */}
+                {/* ★ サブスク解約・支払い方法変更（Stripe ポータル） */}
         <div className="border rounded-lg p-4 bg-red-50 space-y-2">
           <h2 className="text-sm font-semibold text-red-700">
             サブスクの解約・お支払い情報の変更
@@ -400,6 +375,7 @@ export default function BillingPage() {
             ※ Stripe のカスタマーポータルが別タブで開きます。
           </p>
         </div>
+
       </div>
     </TenantLayout>
   );

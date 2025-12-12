@@ -1,7 +1,14 @@
 // backend/src/billing/billing.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
+
+// billing.service.ts の上の方（classの外でも中でもOK）に追加
+const PRICE_TO_PLAN: Record<string, 'BASIC' | 'STANDARD' | 'PRO'> = {
+  'price_1SbheO3mSiSNFTaeUrRGDQYW': 'BASIC',
+  'price_1SdTvo3mSiSNFTaeCtYBMrPp': 'STANDARD',
+  'price_1SdTwO3mSiSNFTaeB0BJklvB': 'PRO',
+};
 
 @Injectable()
 export class BillingService {
@@ -149,8 +156,42 @@ export class BillingService {
   }
 
   /**
-   * Webhook 受け取り（今はログ出しだけ）
+   * Stripe カスタマーポータル用セッション作成
+   * - 解約やカード変更はここから
    */
+  async createPortalSession(tenantId: number) {
+    // 対象テナントを取得（stripeCustomerId があるかチェック）
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        stripeCustomerId: true,
+      },
+    });
+
+    if (!tenant || !tenant.stripeCustomerId) {
+      throw new BadRequestException(
+        'このテナントにはサブスク登録がありません。',
+      );
+    }
+
+    const frontendBaseUrl =
+      process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+
+    const session = await this.stripe.billingPortal.sessions.create({
+      customer: tenant.stripeCustomerId,
+      return_url: `${frontendBaseUrl}/billing`,
+    });
+
+    if (!session.url) {
+      this.logger.error(
+        `Stripe ポータルセッションに url が含まれていません。sessionId=${session.id}`,
+      );
+      throw new Error('サブスク管理画面のURLの取得に失敗しました。');
+    }
+
+    return { url: session.url };
+  }
+
   /**
    * Webhook 受け取り
    */
@@ -257,6 +298,14 @@ export class BillingService {
           ? new Date(currentPeriodEndUnix * 1000)
           : null;
 
+            // ★ 追加：いま有効な priceId を取る（subscription.items の先頭でOK。基本1つのはず）
+  const currentPriceId =
+    subscription.items?.data?.[0]?.price?.id ?? null;
+
+  // ★ 追加：priceId からアプリの plan へ変換
+  const mappedPlan =
+    currentPriceId ? PRICE_TO_PLAN[currentPriceId] : undefined;
+
         this.logger.log(
           `${event.type}: subId=${subscription.id}, status=${subscription.status}, current_period_end(unix)=${currentPeriodEndUnix}, date=${currentPeriodEndDate?.toISOString()}`,
         );
@@ -281,7 +330,11 @@ export class BillingService {
             // ここは「とりあえず Stripe 側の状態を反映」くらいの役割
             currentPeriodEnd: currentPeriodEndDate ?? undefined,
             // 必要なら validUntil もここで書き換えられる
-            // validUntil: currentPeriodEndDate ?? undefined,
+            validUntil: currentPeriodEndDate ?? undefined,
+
+                  // ★ 追加：Stripe 側の “現在のprice” に合わせて plan を同期
+      ...(mappedPlan ? { plan: mappedPlan } : {}),
+
             isActive: subscription.status === 'active',
           },
         });

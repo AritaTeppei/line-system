@@ -11,6 +11,8 @@ import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+const ACTIVE_SESSION_WINDOW_MS = 30 * 60 * 1000; // 30分
+
 // テナントの状態を表す型
 export type TenantStatus = 'ACTIVE' | 'EXPIRED' | 'INACTIVE' | 'NO_TENANT';
 
@@ -47,6 +49,11 @@ function calcTenantStatus(
   return 'ACTIVE';
 }
 
+// セッションの有効時間（分）
+// ※開発・本番どちらも 1 分で統一
+const USER_SESSION_EXPIRES_MINUTES = 1;
+
+
 @Injectable()
 export class AuthService {
   // 本番では必ず環境変数に逃がすこと！
@@ -55,21 +62,26 @@ export class AuthService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+    // ★ 追加：いまから30分前の境界時刻を返す
+  private getSessionActiveCutoff(): Date {
+    return new Date(Date.now() - ACTIVE_SESSION_WINDOW_MS);
+  }
+
   /**
    * ログアウト時に、このユーザーの有効なセッションをすべて無効化する
    * （同一アカウントの同時ログイン制限のため）
    */
-  async logoutAllSessionsForUser(userId: number): Promise<void> {
-    await (this.prisma as any).userSession.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: new Date(),
-      },
-    });
-  }
+async logoutAllSessionsForUser(userId: number): Promise<void> {
+  await this.prisma.userSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+}
 
   // ★ 追加：プラン＆ロールから同時ログイン上限を返す
   private getMaxSessionsForUser(
@@ -361,13 +373,17 @@ export class AuthService {
 
     // 現在有効なセッション数をカウント
     const now = new Date();
-    const activeCount = await (this.prisma as any).UserSession.count({
+    const cutoff = this.getSessionActiveCutoff();
+    const activeCount = await this.prisma.userSession.count({
       where: {
         userId: payload.id,
         revokedAt: null,
         expiresAt: { gt: now },
+        // createdAt フィルタは一旦消してOK（expiresAt が 10分なので十分）
+        // createdAt: { gte: cutoff },
       },
     });
+
 
     if (activeCount >= maxSessions) {
       throw new UnauthorizedException(
@@ -376,21 +392,23 @@ export class AuthService {
     }
   }
 
-  // ★ 追加：ログイン成功時にセッションを1行作成
-  private async createSession(payload: AuthPayload): Promise<void> {
-    const now = new Date();
-    // トークン有効期限 7日想定に合わせて、セッションの有効期限も7日後にしておく
-    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+private async createSession(payload: AuthPayload): Promise<void> {
+  const now = new Date();
 
-    await (this.prisma as any).UserSession.create({
-      data: {
-        userId: payload.id,
-        createdAt: now,
-        expiresAt,
-        revokedAt: null,
-      },
-    });
-  }
+  // セッションは 10 分で失効
+  const expiresAt = new Date(
+    now.getTime() + USER_SESSION_EXPIRES_MINUTES * 60 * 1000,
+  );
+
+  await this.prisma.userSession.create({
+    data: {
+      userId: payload.id,
+      createdAt: now,
+      expiresAt,
+      revokedAt: null,
+    },
+  });
+}
 
   /**
    * 自分自身のパスワード変更
@@ -509,15 +527,15 @@ export class AuthService {
    * ログアウト用:
    * このユーザーの「有効なセッション(UserSession)」を全部 revokedAt で無効化する
    */
-  async revokeAllSessionsForUser(userId: number): Promise<void> {
-    await this.prisma.userSession.updateMany({
-      where: {
-        userId,
-        revokedAt: null, // まだ無効化されていないものだけ
-      },
-      data: {
-        revokedAt: new Date(),
-      },
-    });
-  }
+async revokeAllSessionsForUser(userId: number): Promise<void> {
+  await this.prisma.userSession.updateMany({
+    where: {
+      userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
+    },
+  });
+}
 }

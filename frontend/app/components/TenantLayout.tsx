@@ -1,7 +1,7 @@
 // frontend/app/components/TenantLayout.tsx
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -64,6 +64,13 @@ const managerSettingLinks = [
 
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  // ★ 追加：フロント側の操作なしタイムアウト（30分）
+const FRONT_INACTIVITY_LOGOUT_MS =
+  process.env.NODE_ENV === 'development'
+    ? 30 * 60 * 1000 // 開発環境：30分
+    : 30 * 60 * 1000; // 本番：30分
+
 
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -246,6 +253,32 @@ export default function TenantLayout({ children }: Props) {
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null); // ★ 追加：ログインユーザー情報
+    // ★ 追加：最後のユーザー操作時刻を管理する ref
+  const lastActivityRef = useRef<number>(Date.now());
+
+// ⬇⬇⬇ ここからこの useEffect を追加 ⬇⬇⬇
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const token = getAuthToken();
+    // トークンがない = ログインしていないので何もしない
+    if (!token) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // 一部ブラウザでは e.preventDefault が必要
+      e.preventDefault();
+      // これを書いておくと「本当に離れますか」ダイアログが出る
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // アンマウント時に後片付け
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [me]); // me がセットされたら有効になるイメージ
+  // ⬆⬆⬆ ここまで追加 ⬆⬆⬆
 
   useEffect(() => {
     const token = getAuthToken();
@@ -329,32 +362,85 @@ export default function TenantLayout({ children }: Props) {
     fetchInfo();
   }, []);
 
-  const handleLogout = async () => {
-    if (typeof window === 'undefined') {
-      return;
+  const handleLogout = useCallback(async (skipApi?: boolean) => {
+  if (typeof window === 'undefined') return;
+
+  const token = window.localStorage.getItem('auth_token');
+
+  // 自動ログアウトの時は API 呼ばない！（競合防止）
+  if (!skipApi && token) {
+    try {
+      await fetch(`${apiBase}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (e) {
+      console.error('logout api error', e);
     }
+  }
 
-    const token = window.localStorage.getItem('auth_token');
+  // トークン類は必ず即削除
+  window.localStorage.removeItem('auth_token');
+  document.cookie = 'Authentication=; Max-Age=0; path=/';
+  document.cookie = 'access_token=; Max-Age=0; path=/';
 
-    if (token && apiBase) {
-      try {
-        await fetch(`${apiBase}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+  // 確実にログアウト画面へ遷移
+  window.location.href = '/';
+}, [router]);
+
+
+    // ★ 追加：フロント側の「30分操作なしで自動ログアウト」
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // 最初に現在時刻をセット
+    lastActivityRef.current = Date.now();
+
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+    };
+
+    // 何かしら操作があったら「アクティビティあり」とみなすイベント
+    const events: (keyof WindowEventMap)[] = [
+      'click',
+      'keydown',
+      'mousemove',
+      'scroll',
+      'touchstart',
+    ];
+
+    events.forEach((ev) => {
+      window.addEventListener(ev, updateActivity);
+    });
+
+    // 1分おきに「最後の操作から30分経っているか」を確認
+    const intervalId = window.setInterval(() => {
+      const now = Date.now();
+      const diff = now - lastActivityRef.current;
+
+      if (diff > FRONT_INACTIVITY_LOGOUT_MS) {
+        // これ以上二重に発火しないように先にクリーンアップ
+        window.clearInterval(intervalId);
+        events.forEach((ev) => {
+          window.removeEventListener(ev, updateActivity);
         });
-      } catch (e) {
-        console.error('logout api error', e);
+
+        // 自動ログアウト
+        handleLogout(true);
       }
-    }
+    }, 60 * 1000); // 1分ごとにチェック
 
-    window.localStorage.removeItem('auth_token');
-    document.cookie = 'Authentication=; Max-Age=0; path=/';
-    document.cookie = 'access_token=; Max-Age=0; path=/';
+    // アンマウント時のクリーンアップ
+    return () => {
+      window.clearInterval(intervalId);
+      events.forEach((ev) => {
+        window.removeEventListener(ev, updateActivity);
+      });
+    };
+  }, [handleLogout, lastActivityRef]);
 
-    router.push('/');
-  };
 
   return (
     <div className="min-h-screen flex bg-[#F7FFF8]">
@@ -400,12 +486,13 @@ export default function TenantLayout({ children }: Props) {
 
           {/* ログアウトボタン */}
           <button
-            type="button"
-            onClick={handleLogout}
-            className="mt-3 w-full inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-800 hover:bg-gray-100 transition-colors"
-          >
-            ログアウト
-          </button>
+  type="button"
+  onClick={() => handleLogout(false)}  // ★ ラッパーで呼ぶ
+  className="mt-3 w-full inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-800 hover:bg-gray-100 transition-colors"
+>
+  ログアウト
+</button>
+
         </div>
 
         {/* ナビゲーション */}
