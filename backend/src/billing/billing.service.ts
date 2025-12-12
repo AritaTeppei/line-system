@@ -248,43 +248,50 @@ export class BillingService {
       }
       // ② 支払い成功 → そのサイクルの終了日で有効期限を更新
       case 'invoice.payment_succeeded': {
-        const invoice = event.data.object as Stripe.Invoice;
+  const invoice = event.data.object as Stripe.Invoice;
 
-        // ★ ここを customer ベースに変更
-        const rawCustomer = (invoice as any).customer;
-        const customerId =
-          typeof rawCustomer === 'string'
-            ? rawCustomer
-            : (rawCustomer?.id ?? null);
+  const rawCustomer = (invoice as any).customer;
+  const customerId =
+    typeof rawCustomer === 'string'
+      ? rawCustomer
+      : (rawCustomer?.id ?? null);
 
-        // 今回の請求サイクル（最初の行）の period.end（Unix秒）
-        const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
-        const periodEnd =
-          periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
+      const line0 = (invoice.lines?.data?.[0] as any) ?? null;
 
-        this.logger.log(
-          `invoice.payment_succeeded for customer=${customerId}, periodEnd=${periodEnd?.toISOString()}`,
-        );
+  const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
+  const periodEnd =
+    periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
 
-        if (!customerId || !periodEnd) {
-          this.logger.warn(
-            'invoice.payment_succeeded だが customerId または periodEnd が取得できません。',
-          );
-          break;
-        }
+  // ★ priceId を取る（Stripeの型差異を吸収）
+const priceId: string | null =
+  line0?.price?.id ??
+  line0?.plan?.id ??
+  line0?.pricing?.price_details?.price ?? // 念のため
+  null;
 
-        // ★ checkout.session.completed で保存した stripeCustomerId と紐付ける
-        await this.prisma.tenant.updateMany({
-          where: { stripeCustomerId: customerId },
-          data: {
-            currentPeriodEnd: periodEnd,
-            validUntil: periodEnd, // ← ダッシュボードの「有効期限」と揃える
-            isActive: true, // ← 支払い成功なので有効化
-          },
-        });
+// ★ priceId → plan
+const planFromInvoice = priceId ? PRICE_TO_PLAN[priceId] : undefined;
 
-        break;
-      }
+this.logger.log(
+  `invoice.payment_succeeded: customer=${customerId}, priceId=${priceId}, mappedPlan=${planFromInvoice ?? '-'}`,
+);
+
+  if (!customerId || !periodEnd) break;
+
+  await this.prisma.tenant.updateMany({
+    where: { stripeCustomerId: customerId },
+    data: {
+      currentPeriodEnd: periodEnd,
+      validUntil: periodEnd,
+      isActive: true,
+
+      // ★ 追加③
+      ...(planFromInvoice ? { plan: planFromInvoice } : {}),
+    },
+  });
+
+  break;
+}
 
       // ③ サブスクのライフサイクルイベント（とりあえずログ＋ステータス更新）
       case 'customer.subscription.created':

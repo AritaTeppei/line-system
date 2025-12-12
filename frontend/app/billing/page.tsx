@@ -228,10 +228,10 @@ export default function BillingPage() {
       }
 
       // ★ 別タブで開く（ポップアップブロックされたらフォールバックで同タブ）
-      const win = window.open(data.url, '_blank', 'noopener,noreferrer');
-      if (!win) {
+      // const win = window.open(data.url, '_blank', 'noopener,noreferrer');
+      // if (!win) {
         window.location.href = data.url;
-      }
+      // }
 
       setPortalLoading(false);
     } catch (e) {
@@ -397,7 +397,7 @@ export default function BillingPage() {
               : 'サブスクの解約・お支払い情報を変更する'}
           </button>
           <p className="text-[10px] text-red-500 mt-1">
-            ※ Stripe のカスタマーポータルが別タブで開きます。
+            ※ Stripe のカスタマーポータルへ遷移します。
           </p>
         </div>
       </div>
