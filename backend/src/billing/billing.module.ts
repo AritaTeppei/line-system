@@ -4,10 +4,12 @@ import { BillingService } from './billing.service';
 import { BillingController } from './billing.controller';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthModule } from '../auth/auth.module';
+import { BillingWebhookController } from './billing.webhook.controller';
 
 @Module({
   imports: [AuthModule],
-  controllers: [BillingController],
+  controllers: [BillingController, BillingWebhookController],
   providers: [BillingService, PrismaService],
+  
 })
 export class BillingModule {}
