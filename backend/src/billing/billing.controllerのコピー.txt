@@ -65,21 +65,4 @@ export class BillingController {
     const status = await this.billingService.getBillingStatus(tenantId);
     return { tenant: status };
   }
-
-   @Post('upgrade-now')
-  @UseGuards(JwtAuthGuard)
-  async upgradeNow(
-    @Req() req: Request,
-    @Body() body: { plan: 'BASIC' | 'STANDARD' | 'PRO' },
-  ) {
-    const user = (req as any).authUser as AuthPayload | undefined;
-
-    if (!user || !user.tenantId) {
-      throw new BadRequestException('テナント情報が取得できません。');
-    }
-
-    return this.billingService.upgradeNow(user.tenantId, body.plan);
-  }
-
-
 }

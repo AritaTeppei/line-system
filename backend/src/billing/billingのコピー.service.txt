@@ -3,41 +3,33 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
 
-// billing.service.ts
-type Plan = 'BASIC' | 'STANDARD' | 'PRO';
+// billing.service.ts の上の方（classの外でも中でもOK）に追加
+const PRICE_TO_PLAN: Record<string, 'BASIC' | 'STANDARD' | 'PRO'> = {
+  'price_1SbheO3mSiSNFTaeUrRGDQYW': 'BASIC',
+  'price_1SdTvo3mSiSNFTaeCtYBMrPp': 'STANDARD',
+  'price_1SdTwO3mSiSNFTaeB0BJklvB': 'PRO',
+};
 
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
   private readonly stripe: Stripe;
 
-  // ★ 追加：PriceId → Plan の逆引き（ENVから生成）
-  private readonly priceToPlan: Record<string, Plan> = {};
+  // backend/src/billing/billing.service.ts の constructor 内
 
   constructor(private readonly prisma: PrismaService) {
     const secretKey = process.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
-      this.logger.warn('STRIPE_SECRET_KEY が設定されていません。');
+      this.logger.warn(
+        'STRIPE_SECRET_KEY が設定されていません。BillingService はまだ本番動作しません。',
+      );
+      // apiVersion を指定せずに初期化
       this.stripe = new Stripe('sk_test_dummy');
     } else {
       this.stripe = new Stripe(secretKey);
     }
-
-    // ★ ここでENVから逆引きマップを作る（Renderの設定が正）
-    const basic = process.env.STRIPE_PRICE_BASIC;
-    const standard = process.env.STRIPE_PRICE_STANDARD;
-    const pro = process.env.STRIPE_PRICE_PRO;
-
-    if (basic) this.priceToPlan[basic] = 'BASIC';
-    if (standard) this.priceToPlan[standard] = 'STANDARD';
-    if (pro) this.priceToPlan[pro] = 'PRO';
-
-    this.logger.log(
-      `priceToPlan loaded: ${Object.entries(this.priceToPlan)
-        .map(([k, v]) => `${v}=${k}`)
-        .join(', ')}`,
-    );
   }
+
   /**
    * Stripe の Checkout セッションを作成して URL を返す
    */
@@ -254,35 +246,35 @@ export class BillingService {
 
         break;
       }
-case 'invoice.payment_succeeded': {
+      // ② 支払い成功 → そのサイクルの終了日で有効期限を更新
+      case 'invoice.payment_succeeded': {
   const invoice = event.data.object as Stripe.Invoice;
 
   const rawCustomer = (invoice as any).customer;
   const customerId =
-    typeof rawCustomer === 'string' ? rawCustomer : (rawCustomer?.id ?? null);
+    typeof rawCustomer === 'string'
+      ? rawCustomer
+      : (rawCustomer?.id ?? null);
 
-  const lines = invoice.lines?.data ?? [];
+      const line0 = (invoice.lines?.data?.[0] as any) ?? null;
 
-  // ★ proration=false を優先（通常の月額更新行）
-  const mainLine =
-    (lines as any[]).find((l) => l?.proration === false && l?.period?.end) ??
-    (lines as any[]).find((l) => l?.period?.end) ??
-    null;
+  const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
+  const periodEnd =
+    periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
 
-  const periodEndUnix = mainLine?.period?.end ?? null;
-  const periodEnd = periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
+  // ★ priceId を取る（Stripeの型差異を吸収）
+const priceId: string | null =
+  line0?.price?.id ??
+  line0?.plan?.id ??
+  line0?.pricing?.price_details?.price ?? // 念のため
+  null;
 
-  // priceIdも mainLine から取る（proration行を避ける）
-  const priceId: string | null =
-    mainLine?.price?.id ??
-    mainLine?.plan?.id ??
-    null;
+// ★ priceId → plan
+const planFromInvoice = priceId ? PRICE_TO_PLAN[priceId] : undefined;
 
-  const planFromInvoice = priceId ? this.priceToPlan[priceId] : undefined;
-
-  this.logger.log(
-    `invoice.payment_succeeded: customer=${customerId}, priceId=${priceId}, mappedPlan=${planFromInvoice ?? '-'}, periodEnd=${periodEnd?.toISOString() ?? '-'}`,
-  );
+this.logger.log(
+  `invoice.payment_succeeded: customer=${customerId}, priceId=${priceId}, mappedPlan=${planFromInvoice ?? '-'}`,
+);
 
   if (!customerId || !periodEnd) break;
 
@@ -293,7 +285,7 @@ case 'invoice.payment_succeeded': {
       validUntil: periodEnd,
       isActive: true,
 
-      // ★ ここでplanも更新してOK（ただし planは基本 subscription.updated の方が信頼できる）
+      // ★ 追加③
       ...(planFromInvoice ? { plan: planFromInvoice } : {}),
     },
   });
@@ -301,70 +293,61 @@ case 'invoice.payment_succeeded': {
   break;
 }
 
-case 'customer.subscription.created':
-case 'customer.subscription.updated':
-case 'customer.subscription.deleted': {
-  const subscription = event.data.object as Stripe.Subscription;
+      // ③ サブスクのライフサイクルイベント（とりあえずログ＋ステータス更新）
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
 
-  const currentPeriodEndUnix =
-    (subscription as any).current_period_end ?? (subscription as any).currentPeriodEnd ?? null;
+        const currentPeriodEndUnix =
+          (subscription as any).current_period_end ?? null;
+        const currentPeriodEndDate = currentPeriodEndUnix
+          ? new Date(currentPeriodEndUnix * 1000)
+          : null;
 
-  const currentPeriodEndDate = currentPeriodEndUnix
-    ? new Date(currentPeriodEndUnix * 1000)
-    : null;
-
+            // ★ 追加：いま有効な priceId を取る（subscription.items の先頭でOK。基本1つのはず）
   const currentPriceId =
-    subscription.items?.data?.[0]?.price?.id ??
-    (subscription.items?.data?.[0] as any)?.plan?.id ??
-    null;
+    subscription.items?.data?.[0]?.price?.id ?? null;
 
-  const mappedPlan = currentPriceId ? this.priceToPlan[currentPriceId] : undefined;
+  // ★ 追加：priceId からアプリの plan へ変換
+  const mappedPlan =
+    currentPriceId ? PRICE_TO_PLAN[currentPriceId] : undefined;
 
-  // ★ まず subscriptionId で探す
-  let tenant = await this.prisma.tenant.findFirst({
-    where: { stripeSubscriptionId: subscription.id },
-  });
+        this.logger.log(
+          `${event.type}: subId=${subscription.id}, status=${subscription.status}, current_period_end(unix)=${currentPeriodEndUnix}, date=${currentPeriodEndDate?.toISOString()}`,
+        );
 
-  // ★ 見つからなければ customerId で探す（createdが先に来る対策）
-  if (!tenant) {
-    const customerId =
-      typeof (subscription as any).customer === 'string'
-        ? (subscription as any).customer
-        : (subscription as any).customer?.id ?? null;
+        const subscriptionId = subscription.id;
 
-    if (customerId) {
-      tenant = await this.prisma.tenant.findFirst({
-        where: { stripeCustomerId: customerId },
-      });
-    }
-  }
+        const tenant = await this.prisma.tenant.findFirst({
+          where: { stripeSubscriptionId: subscriptionId },
+        });
 
-  if (!tenant) {
-    this.logger.warn(`${event.type}: tenant not found subId=${subscription.id}`);
-    break;
-  }
+        if (!tenant) {
+          this.logger.warn(
+            `${event.type}: tenant not found for subscriptionId=${subscriptionId}`,
+          );
+          break;
+        }
 
-  this.logger.log(
-    `${event.type}: tenantId=${tenant.id}, subId=${subscription.id}, status=${subscription.status}, currentPriceId=${currentPriceId}, mappedPlan=${mappedPlan ?? '-'}`,
-  );
+        await this.prisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            subscriptionStatus: subscription.status,
+            // ここは「とりあえず Stripe 側の状態を反映」くらいの役割
+            currentPeriodEnd: currentPeriodEndDate ?? undefined,
+            // 必要なら validUntil もここで書き換えられる
+            validUntil: currentPeriodEndDate ?? undefined,
 
-  await this.prisma.tenant.update({
-    where: { id: tenant.id },
-    data: {
-      subscriptionStatus: subscription.status,
-      currentPeriodEnd: currentPeriodEndDate ?? undefined,
-
-      // ★ deletedの時はvalidUntilを即切らない（期限までは使える前提ならここは触らない方が安全）
-      // validUntil: currentPeriodEndDate ?? undefined,
-
+                  // ★ 追加：Stripe 側の “現在のprice” に合わせて plan を同期
       ...(mappedPlan ? { plan: mappedPlan } : {}),
-      isActive: subscription.status === 'active',
-    },
-  });
 
-  break;
-}
+            isActive: subscription.status === 'active',
+          },
+        });
 
+        break;
+      }
 
       default: {
         this.logger.log(`Unhandled Stripe event type: ${event.type}`);
@@ -372,114 +355,4 @@ case 'customer.subscription.deleted': {
       }
     }
   }
-
-  /**
-   * 即時アップグレード（即時反映 + 差額を即時請求）
-   * - 既存サブスクの price を差し替え
-   * - プロレーション(差額)を作り、即時に請求書を確定→支払い実行
-   */
-  async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
-    if (!tenantId) throw new BadRequestException('tenantId が不正です。');
-
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-    if (!secretKey) {
-      throw new Error('Stripe が未設定です（管理者に連絡してください）。');
-    }
-
-    // plan -> priceId（Render の env を使う）
-    const priceIdMap: Record<'BASIC' | 'STANDARD' | 'PRO', string | undefined> = {
-      BASIC: process.env.STRIPE_PRICE_BASIC,
-      STANDARD: process.env.STRIPE_PRICE_STANDARD,
-      PRO: process.env.STRIPE_PRICE_PRO,
-    };
-    const nextPriceId = priceIdMap[plan];
-    if (!nextPriceId) {
-      throw new BadRequestException(`priceId が未設定です: ${plan}`);
-    }
-
-    // テナントの Stripe 情報を取得
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: {
-        id: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
-        plan: true,
-      },
-    });
-
-    if (!tenant?.stripeCustomerId || !tenant.stripeSubscriptionId) {
-      throw new BadRequestException('このテナントには有効なサブスクがありません。');
-    }
-
-    // 現在のサブスクを取得
-    const sub = await this.stripe.subscriptions.retrieve(
-      tenant.stripeSubscriptionId,
-      { expand: ['items.data.price'] },
-    );
-
-    const currentItem = sub.items.data[0];
-    if (!currentItem) {
-      throw new BadRequestException('subscription item が見つかりません。');
-    }
-
-    const currentPriceId = currentItem.price?.id ?? null;
-
-    // 同じプランに変更しようとしてたら何もしない
-    if (currentPriceId === nextPriceId) {
-      return {
-        ok: true,
-        message: 'すでに同じプランです。',
-        subscriptionId: sub.id,
-        currentPriceId,
-        nextPriceId,
-      };
-    }
-
-    // ① まず「即時反映」：price を差し替える（差額計算は prorations）
-    const updated = await this.stripe.subscriptions.update(sub.id, {
-      items: [{ id: currentItem.id, price: nextPriceId }],
-      proration_behavior: 'create_prorations',
-      // billing_cycle_anchor はデフォルト(unchanged)のままでOK
-    });
-
-    // ② すぐ「差額を即時請求」：未確定のプロレーションを請求書にして支払い実行
-    //    - invoice を作る（pending items を含める）
-    const invoice = await this.stripe.invoices.create({
-      customer: tenant.stripeCustomerId,
-      subscription: updated.id,
-      // プロレーション等をすぐ請求書に入れる
-      pending_invoice_items_behavior: 'include',
-      auto_advance: true,
-    });
-
-    // 確定（finalize）
-    const finalized = await this.stripe.invoices.finalizeInvoice(invoice.id);
-
-    // 支払い実行（カード課金）
-    // 失敗したら例外が飛ぶ → 後で payment_failed フローで拾う予定
-    const paid = await this.stripe.invoices.pay(finalized.id);
-
-    // ③ アプリ側の plan を更新（「今の挙動」はここで同期して維持）
-    await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        plan,
-      },
-    });
-
-    return {
-      ok: true,
-      subscriptionId: updated.id,
-      invoiceId: paid.id,
-      invoiceStatus: paid.status,
-      currentPriceId,
-      nextPriceId,
-      plan,
-    };
-  }
-
-
 }
-
-
