@@ -301,6 +301,45 @@ case 'invoice.payment_succeeded': {
   break;
 }
 
+// ②の invoice.payment_succeeded の下あたりに追加でOK
+case 'invoice.payment_failed': {
+  const invoice = event.data.object as Stripe.Invoice;
+
+  // customer を取り出す（string or object 両対応）
+  const rawCustomer = (invoice as any).customer;
+  const customerId =
+    typeof rawCustomer === 'string'
+      ? rawCustomer
+      : (rawCustomer?.id ?? null);
+
+  // 期間終了（取れれば）→ validUntil/currentPeriodEnd の更新に使える
+  const periodEndUnix = invoice.lines?.data?.[0]?.period?.end ?? null;
+  const periodEnd =
+    periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
+
+  this.logger.warn(
+    `invoice.payment_failed: customer=${customerId}, periodEnd=${periodEnd?.toISOString()}`,
+  );
+
+  if (!customerId) break;
+
+  // ★ここが「利用停止フロー（最小）」：
+  // - isActive=false にしてログイン/利用を止める（既存の ensureTenantActive が効く）
+  // - subscriptionStatus も保存（画面にも出る）
+  // - periodEnd が取れたら validUntil/currentPeriodEnd も更新
+  await this.prisma.tenant.updateMany({
+    where: { stripeCustomerId: customerId },
+    data: {
+      subscriptionStatus: 'past_due', // 文字列運用でOK（今も string だよね）
+      isActive: false,
+      ...(periodEnd ? { currentPeriodEnd: periodEnd, validUntil: periodEnd } : {}),
+    },
+  });
+
+  break;
+}
+
+
 case 'customer.subscription.created':
 case 'customer.subscription.updated':
 case 'customer.subscription.deleted': {
