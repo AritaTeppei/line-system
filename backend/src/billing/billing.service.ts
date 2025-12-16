@@ -378,108 +378,65 @@ case 'customer.subscription.deleted': {
    * - 既存サブスクの price を差し替え
    * - プロレーション(差額)を作り、即時に請求書を確定→支払い実行
    */
-  async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
-    if (!tenantId) throw new BadRequestException('tenantId が不正です。');
+async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
+  if (!tenantId) throw new BadRequestException('tenantId が不正です');
 
-    const secretKey = process.env.STRIPE_SECRET_KEY;
-    if (!secretKey) {
-      throw new Error('Stripe が未設定です（管理者に連絡してください）。');
-    }
+  const tenant = await this.prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+    },
+  });
 
-    // plan -> priceId（Render の env を使う）
-    const priceIdMap: Record<'BASIC' | 'STANDARD' | 'PRO', string | undefined> = {
-      BASIC: process.env.STRIPE_PRICE_BASIC,
-      STANDARD: process.env.STRIPE_PRICE_STANDARD,
-      PRO: process.env.STRIPE_PRICE_PRO,
-    };
-    const nextPriceId = priceIdMap[plan];
-    if (!nextPriceId) {
-      throw new BadRequestException(`priceId が未設定です: ${plan}`);
-    }
-
-    // テナントの Stripe 情報を取得
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: {
-        id: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
-        plan: true,
-      },
-    });
-
-    if (!tenant?.stripeCustomerId || !tenant.stripeSubscriptionId) {
-      throw new BadRequestException('このテナントには有効なサブスクがありません。');
-    }
-
-    // 現在のサブスクを取得
-    const sub = await this.stripe.subscriptions.retrieve(
-      tenant.stripeSubscriptionId,
-      { expand: ['items.data.price'] },
-    );
-
-    const currentItem = sub.items.data[0];
-    if (!currentItem) {
-      throw new BadRequestException('subscription item が見つかりません。');
-    }
-
-    const currentPriceId = currentItem.price?.id ?? null;
-
-    // 同じプランに変更しようとしてたら何もしない
-    if (currentPriceId === nextPriceId) {
-      return {
-        ok: true,
-        message: 'すでに同じプランです。',
-        subscriptionId: sub.id,
-        currentPriceId,
-        nextPriceId,
-      };
-    }
-
-    // ① まず「即時反映」：price を差し替える（差額計算は prorations）
-    const updated = await this.stripe.subscriptions.update(sub.id, {
-      items: [{ id: currentItem.id, price: nextPriceId }],
-      proration_behavior: 'create_prorations',
-      // billing_cycle_anchor はデフォルト(unchanged)のままでOK
-    });
-
-    // ② すぐ「差額を即時請求」：未確定のプロレーションを請求書にして支払い実行
-    //    - invoice を作る（pending items を含める）
-    const invoice = await this.stripe.invoices.create({
-      customer: tenant.stripeCustomerId,
-      subscription: updated.id,
-      // プロレーション等をすぐ請求書に入れる
-      pending_invoice_items_behavior: 'include',
-      auto_advance: true,
-    });
-
-    // 確定（finalize）
-    const finalized = await this.stripe.invoices.finalizeInvoice(invoice.id);
-
-    // 支払い実行（カード課金）
-    // 失敗したら例外が飛ぶ → 後で payment_failed フローで拾う予定
-    const paid = await this.stripe.invoices.pay(finalized.id);
-
-    // ③ アプリ側の plan を更新（「今の挙動」はここで同期して維持）
-    await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        plan,
-      },
-    });
-
-    return {
-      ok: true,
-      subscriptionId: updated.id,
-      invoiceId: paid.id,
-      invoiceStatus: paid.status,
-      currentPriceId,
-      nextPriceId,
-      plan,
-    };
+  if (!tenant?.stripeCustomerId || !tenant.stripeSubscriptionId) {
+    throw new BadRequestException('有効なサブスクがありません');
   }
 
+  const priceIdMap = {
+    BASIC: process.env.STRIPE_PRICE_BASIC,
+    STANDARD: process.env.STRIPE_PRICE_STANDARD,
+    PRO: process.env.STRIPE_PRICE_PRO,
+  };
 
+  const nextPriceId = priceIdMap[plan];
+  if (!nextPriceId) throw new BadRequestException('priceId 未設定');
+
+  const sub = await this.stripe.subscriptions.retrieve(
+    tenant.stripeSubscriptionId,
+  );
+
+  const item = sub.items.data[0];
+  if (!item) throw new BadRequestException('subscription item 不正');
+
+  // ① 即時アップグレード（差額生成）
+  const updated = await this.stripe.subscriptions.update(sub.id, {
+    items: [{ id: item.id, price: nextPriceId }],
+    proration_behavior: 'create_prorations',
+  });
+
+  // ② 差額を即時請求（ここがポイント）
+  const invoice = await this.stripe.invoices.create({
+    customer: tenant.stripeCustomerId,
+    subscription: updated.id,
+    auto_advance: true,
+  });
+
+  await this.stripe.invoices.finalizeInvoice(invoice.id);
+  const paid = await this.stripe.invoices.pay(invoice.id);
+
+  // ③ アプリ即時反映（Webhookでも最終同期される）
+  await this.prisma.tenant.update({
+    where: { id: tenantId },
+    data: { plan },
+  });
+
+  return {
+    ok: true,
+    invoiceId: paid.id,
+    amountPaid: paid.amount_paid,
+  };
+}
 }
 
 
