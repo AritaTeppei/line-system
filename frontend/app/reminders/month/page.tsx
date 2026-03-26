@@ -313,7 +313,7 @@ export default function RemindersMonthPage() {
     return (data.items ?? []).filter((item) => idSet.has(item.id));
   }, [data, selectedIds]);
 
-  const isDeveloper = me?.role === 'DEVELOPER';
+  const isDeveloper = me?.role === 'DEVELOPER' || me?.role === 'MANAGER';
 
     // DEVELOPERは送信済みも再選択可。それ以外は未送信のみ
   const selectableItems = filteredItems.filter(
