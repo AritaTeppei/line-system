@@ -144,9 +144,10 @@ export class BookingsService {
     params: {
       customerId: number;
       carId: number;
-      bookingDate: string | Date; // ★ string でも Date でもOKにする
+      bookingDate: string | Date;
       timeSlot?: string;
       note?: string;
+      needLoanerCar?: boolean;
     },
   ) {
     const tenantId = this.ensureTenant(user);
@@ -196,6 +197,7 @@ export class BookingsService {
         bookingDate, // Prisma 的には DateTime として保存される
         timeSlot: params.timeSlot,
         note: params.note,
+        needsLoanerCar: params.needLoanerCar ?? false,
         status: BookingStatus.PENDING,
         source: 'TENANT_MANUAL',
       },
@@ -255,6 +257,7 @@ export class BookingsService {
       timeSlot?: string;
       note?: string;
       carId?: number;
+      needLoanerCar?: boolean;
     },
   ) {
     const prisma = this.prisma as any;
@@ -315,6 +318,10 @@ export class BookingsService {
       }
 
       data.carId = car.id;
+    }
+
+    if (typeof params.needLoanerCar === 'boolean') {
+      data.needsLoanerCar = params.needLoanerCar;
     }
 
     const updated = await prisma.booking.update({

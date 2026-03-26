@@ -50,7 +50,7 @@ type Booking = {
   confirmationLineSentAt?: string | null;
   confirmationLineMessage?: string | null;
 
-  needLoanerCar?: boolean | null;
+  needsLoanerCar?: boolean | null;
 
 };
 
@@ -673,9 +673,9 @@ const filteredCustomers = useMemo(() => {
   setEditCarId(booking.car?.id ?? null);
 
   setEditNeedLoanerCar(
-  booking.needLoanerCar === null || booking.needLoanerCar === undefined
+  booking.needsLoanerCar === null || booking.needsLoanerCar === undefined
     ? null
-    : booking.needLoanerCar
+    : booking.needsLoanerCar
 );
 
 };
@@ -1033,8 +1033,8 @@ if (modalNeedLoanerCar === null) {
                             <a href={`tel:${tel}`} className="text-xs text-emerald-700 hover:underline">{tel}</a>
                           )}
                           <p className="text-xs text-gray-400 mt-0.5">{sourceLabel}</p>
-                          {b.needLoanerCar != null && (
-                            <p className="text-xs text-gray-500">代車: {b.needLoanerCar ? '必要' : '不要'}</p>
+                          {b.needsLoanerCar != null && (
+                            <p className="text-xs text-gray-500">代車: {b.needsLoanerCar ? '必要' : '不要'}</p>
                           )}
                           {b.note && (
                             <p className="text-xs text-gray-600 mt-0.5 italic">「{b.note.slice(0, 40)}{b.note.length > 40 ? '…' : ''}」</p>
@@ -1358,9 +1358,9 @@ if (isSelected) {
                       {/* 代車・メモ */}
                       <div className="flex flex-wrap gap-3 mb-3 text-sm">
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                          b.needLoanerCar ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-300 bg-white text-gray-600'
+                          b.needsLoanerCar ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-300 bg-white text-gray-600'
                         }`}>
-                          🚙 代車: {b.needLoanerCar == null ? '未選択' : b.needLoanerCar ? '必要' : '不要'}
+                          🚙 代車: {b.needsLoanerCar == null ? '未選択' : b.needsLoanerCar ? '必要' : '不要'}
                         </span>
                         {b.note && (
                           <span className="text-xs text-gray-600 italic">

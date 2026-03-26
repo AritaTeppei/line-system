@@ -39,11 +39,12 @@ export class BookingsController {
       bookingDate: string; // "YYYY-MM-DD"
       timeSlot?: string;
       note?: string;
+      needLoanerCar?: boolean;
     },
   ) {
     const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
 
-    const { customerId, carId, bookingDate, timeSlot, note } = body;
+    const { customerId, carId, bookingDate, timeSlot, note, needLoanerCar } = body;
 
     const d = new Date(bookingDate);
     if (Number.isNaN(d.getTime())) {
@@ -56,6 +57,7 @@ export class BookingsController {
       bookingDate: d,
       timeSlot,
       note,
+      needLoanerCar,
     });
   }
 
@@ -99,7 +101,8 @@ export class BookingsController {
       bookingDate?: string; // "YYYY-MM-DD"
       timeSlot?: string;
       note?: string;
-      carId?: number; // ★ 追加！
+      carId?: number;
+      needLoanerCar?: boolean;
     },
   ) {
     const payload = await this.auth.getPayloadFromRequestWithTenantCheck(req);
