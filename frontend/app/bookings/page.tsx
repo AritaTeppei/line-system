@@ -384,6 +384,14 @@ const filteredCustomers = useMemo(() => {
     return bookingsByDate.get(selectedDateKey) ?? [];
   }, [selectedDateKey, bookingsByDate]);
 
+  const pendingBookings = useMemo(() => {
+    return bookings
+      .filter((b) => b.status === 'PENDING')
+      .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
+  }, [bookings]);
+
+  const [showPendingList, setShowPendingList] = useState(true);
+
   const monthInfo = useMemo(() => {
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
@@ -964,6 +972,113 @@ if (modalNeedLoanerCar === null) {
           </div>
         </header>
 
+        {/* 未確認予約一覧 */}
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowPendingList((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-amber-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base font-extrabold text-amber-900">⚠️ 未確認の予約</span>
+              {pendingBookings.length > 0 ? (
+                <span className="inline-flex items-center rounded-full bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5">
+                  {pendingBookings.length}件
+                </span>
+              ) : (
+                <span className="text-xs text-amber-700">なし</span>
+              )}
+            </div>
+            <span className="text-amber-700 text-sm">{showPendingList ? '▲ 閉じる' : '▼ 開く'}</span>
+          </button>
+
+          {showPendingList && (
+            <div className="border-t border-amber-200 px-4 py-3">
+              {pendingBookings.length === 0 ? (
+                <p className="text-sm text-amber-700 py-2">✅ 未確認の予約はありません</p>
+              ) : (
+                <div className="space-y-2">
+                  {pendingBookings.map((b) => {
+                    const customerName = b.customer
+                      ? `${b.customer.lastName ?? ''} ${b.customer.firstName ?? ''}`.trim()
+                      : '-';
+                    const tel = (b.customer?.mobilePhone ?? '').trim() || null;
+                    const carLabel = b.car
+                      ? `${b.car.carName ?? ''}${b.car.registrationNumber ? `（${b.car.registrationNumber}）` : ''}`
+                      : '-';
+                    const dateStr = toDateKey(b.bookingDate).replace(/-/g, '/');
+                    const sourceLabel =
+                      b.source === 'LINE_PUBLIC_FORM' ? '📲 LINE予約フォーム'
+                      : b.source === 'TENANT_MANUAL' ? '✏️ 店舗入力'
+                      : b.source === 'ADMIN' ? '🔧 管理画面'
+                      : b.source || '不明';
+
+                    return (
+                      <div
+                        key={b.id}
+                        className="rounded-xl bg-white border border-amber-200 p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+                      >
+                        {/* 日時・種別 */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm font-extrabold text-gray-900">{dateStr}</span>
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold ${timeSlotBadgeClass(b.timeSlot)}`}>
+                            {timeSlotLabel(b.timeSlot)}
+                          </span>
+                        </div>
+                        {/* 顧客・車両 */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-900 truncate">{customerName}</p>
+                          <p className="text-xs text-gray-600 truncate">{carLabel}</p>
+                          {tel && (
+                            <a href={`tel:${tel}`} className="text-xs text-emerald-700 hover:underline">{tel}</a>
+                          )}
+                          <p className="text-xs text-gray-400 mt-0.5">{sourceLabel}</p>
+                          {b.needLoanerCar != null && (
+                            <p className="text-xs text-gray-500">代車: {b.needLoanerCar ? '必要' : '不要'}</p>
+                          )}
+                          {b.note && (
+                            <p className="text-xs text-gray-600 mt-0.5 italic">「{b.note.slice(0, 40)}{b.note.length > 40 ? '…' : ''}」</p>
+                          )}
+                        </div>
+                        {/* 操作ボタン */}
+                        <div className="flex flex-wrap gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            disabled={updatingId === b.id}
+                            onClick={() => handleChangeStatus(b.id, 'CONFIRMED')}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 shadow-sm"
+                          >
+                            ✅ 確定する
+                          </button>
+                          <button
+                            type="button"
+                            disabled={updatingId === b.id}
+                            onClick={() => handleChangeStatus(b.id, 'CANCELED')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-white hover:bg-red-50 disabled:opacity-50 text-red-700 text-xs font-bold px-3 py-1.5"
+                          >
+                            ✕ キャンセル
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDateKey(toDateKey(b.bookingDate));
+                              setCurrentMonth(new Date(new Date(b.bookingDate).getFullYear(), new Date(b.bookingDate).getMonth(), 1));
+                              document.querySelector('section.bg-white')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold px-3 py-1.5"
+                          >
+                            📅 カレンダーで見る
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* カレンダー */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -1163,267 +1278,153 @@ if (isSelected) {
           )}
 
           {selectedDateKey && selectedBookings.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-[11px] sm:text-xs">
-                <thead>
-                  <tr className="bg-gray-50 text-gray-900">
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      時間帯
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      顧客
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      連絡先
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      車両 / 車検・点検
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      ステータス
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      代車
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      何の予約か
-                    </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      受付経路 / 操作
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-  {selectedBookings
-    .slice()
-    .sort((a, b) =>
-      (a.timeSlot || '').localeCompare(b.timeSlot || ''),
-    )
-    .map((b) => {
-      const customerName = b.customer
-        ? `${b.customer.lastName ?? ''} ${
-            b.customer.firstName ?? ''
-          }`.trim()
-        : '-';
+            <div className="space-y-3">
+              {selectedBookings
+                .slice()
+                .sort((a, b) => (a.timeSlot || '').localeCompare(b.timeSlot || ''))
+                .map((b) => {
+                  const customerName = b.customer
+                    ? `${b.customer.lastName ?? ''} ${b.customer.firstName ?? ''}`.trim()
+                    : '-';
+                  const tel = (b.customer?.mobilePhone ?? '').trim() || null;
+                  const carLabel = b.car
+                    ? `${b.car.carName ?? ''}${b.car.registrationNumber ? `（${b.car.registrationNumber}）` : ''}`
+                    : '-';
+                  const hasLineUid = !!b.customer?.lineUid?.trim();
+                  const shakenLabel = formatDateLabel(b.car?.shakenDate);
+                  const inspectionLabel = formatDateLabel(b.car?.inspectionDate);
+                  const sourceLabel =
+                    b.source === 'LINE_PUBLIC_FORM' ? '📲 LINE予約フォーム'
+                    : b.source === 'TENANT_MANUAL' ? '✏️ 店舗入力'
+                    : b.source === 'ADMIN' ? '🔧 管理画面'
+                    : b.source || '不明';
 
-      const tel =
-        (b.customer?.mobilePhone ?? '').trim() || '—';
+                  const isPending = b.status === 'PENDING';
 
-      const carLabel = b.car
-        ? `${b.car.carName ?? ''}${
-            b.car.registrationNumber
-              ? `（${b.car.registrationNumber}）`
-              : ''
-          }`
-        : '-';
-      const hasLineUid = !!b.customer?.lineUid?.trim();
-      const shakenLabel = formatDateLabel(b.car?.shakenDate);
-      const inspectionLabel = formatDateLabel(
-        b.car?.inspectionDate,
-      );
+                  return (
+                    <div
+                      key={b.id}
+                      className={`rounded-2xl border p-4 shadow-sm ${
+                        isPending
+                          ? 'border-amber-300 bg-amber-50'
+                          : b.status === 'CONFIRMED'
+                          ? 'border-emerald-200 bg-white'
+                          : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      {/* 上段：時間帯・ステータス・受付経路 */}
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${timeSlotBadgeClass(b.timeSlot)}`}>
+                          {timeSlotLabel(b.timeSlot)}
+                        </span>
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadgeClass(b.status)}`}>
+                          {statusLabel(b.status)}
+                        </span>
+                        <span className="text-xs text-gray-500">{sourceLabel}</span>
+                        {b.confirmationLineSentAt && (
+                          <span className="text-xs text-emerald-600 font-semibold">✅ LINE確定済み</span>
+                        )}
+                      </div>
 
-      const rawNote = (b.note ?? '').trim();
-      const purpose =
-        rawNote === ''
-          ? '未入力'
-          : rawNote.length > 20
-          ? rawNote.slice(0, 20) + '…'
-          : rawNote;
+                      {/* 中段：顧客・車両情報 */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-0.5">顧客</p>
+                          <p className="font-bold text-gray-900 text-sm">{customerName}</p>
+                          {tel ? (
+                            <a href={`tel:${tel}`} className="text-sm text-emerald-700 hover:underline">{tel}</a>
+                          ) : (
+                            <p className="text-sm text-gray-400">電話番号未登録</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-0.5">車両</p>
+                          <p className="font-bold text-gray-900 text-sm">{carLabel}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {shakenLabel && (
+                              <span className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2 py-0.5 text-xs text-gray-700">
+                                🔧 車検 {shakenLabel}
+                              </span>
+                            )}
+                            {inspectionLabel && (
+                              <span className="inline-flex items-center rounded-full border border-gray-300 bg-white px-2 py-0.5 text-xs text-gray-700">
+                                🔩 点検 {inspectionLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
 
-      const sourceLabel =
-        b.source === 'LINE_PUBLIC_FORM'
-          ? 'LINE予約フォーム'
-          : b.source === 'ADMIN'
-          ? '管理画面（ADMIN）'
-          : b.source === 'TENANT_MANUAL'
-          ? '店舗入力（手動）'
-          : b.source || '不明';
+                      {/* 代車・メモ */}
+                      <div className="flex flex-wrap gap-3 mb-3 text-sm">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                          b.needLoanerCar ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-gray-300 bg-white text-gray-600'
+                        }`}>
+                          🚙 代車: {b.needLoanerCar == null ? '未選択' : b.needLoanerCar ? '必要' : '不要'}
+                        </span>
+                        {b.note && (
+                          <span className="text-xs text-gray-600 italic">
+                            💬 「{b.note.slice(0, 50)}{b.note.length > 50 ? '…' : ''}」
+                          </span>
+                        )}
+                      </div>
 
-      return (
-        <tr key={b.id} className="text-gray-900 align-top">
-          {/* 時間帯 */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] ${timeSlotBadgeClass(
-                b.timeSlot,
-              )}`}
-            >
-              {timeSlotLabel(b.timeSlot)}
-            </span>
-          </td>
+                      {/* 下段：操作ボタン */}
+                      <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200">
+                        {/* ステータス変更 */}
+                        <select
+                          value={b.status}
+                          onChange={(e) => handleChangeStatus(b.id, e.target.value as BookingStatus)}
+                          disabled={updatingId === b.id}
+                          className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="PENDING">未確認</option>
+                          <option value="CONFIRMED">確定</option>
+                          <option value="CANCELED">キャンセル</option>
+                        </select>
 
-          {/* 顧客 */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <div className="flex flex-col text-[10px] sm:text-[11px]">
-              <span className="font-semibold">
-                {customerName || '-'}
-              </span>
-            </div>
-          </td>
+                        {/* LINE確定メッセージ */}
+                        {b.status === 'CONFIRMED' && (
+                          <button
+                            type="button"
+                            disabled={!hasLineUid}
+                            onClick={hasLineUid ? () => openConfirmModal(b) : undefined}
+                            className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm ${
+                              hasLineUid
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            }`}
+                          >
+                            📲 {hasLineUid
+                              ? b.confirmationLineSentAt ? 'LINE確定再送' : 'LINE確定送信'
+                              : 'LINE未連携'}
+                          </button>
+                        )}
 
-          {/* 連絡先 */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <div className="text-[10px] sm:text-[11px]">
-              {tel === '—' ? (
-                '—'
-              ) : (
-                <a
-                  href={`tel:${tel}`}
-                  className="text-emerald-700 hover:underline"
-                >
-                  {tel}
-                </a>
-              )}
-            </div>
-          </td>
+                        {/* 詳細編集 */}
+                        {(b.source === 'ADMIN' || b.source === 'TENANT_MANUAL' || b.source === 'LINE_PUBLIC_FORM') && (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(b)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700"
+                          >
+                            🗓 詳細編集
+                          </button>
+                        )}
 
-          {/* 車両 / 車検・点検 */}
-          <td className="px-2 py-1 border border-gray-300 align-top">
-            <div className="flex flex-col gap-0.5 text-[10px] sm:text-[11px] text-gray-900">
-              <span className="font-semibold">
-                {carLabel || '-'}
-              </span>
-
-              {shakenLabel && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
-                    車検
-                  </span>
-                  <span>{shakenLabel}</span>
-                </span>
-              )}
-
-              {inspectionLabel && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-flex items-center rounded-full bg-white border border-gray-400 px-1.5 py-[1px] text-[9px] font-semibold text-gray-900">
-                    点検
-                  </span>
-                  <span>{inspectionLabel}</span>
-                </span>
-              )}
-            </div>
-          </td>
-
-          {/* ステータス / LINE送信 / 削除 */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <div className="flex flex-col items-start gap-1">
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
-                  b.status,
-                )}`}
-              >
-                {statusLabel(b.status)}
-              </span>
-
-              <select
-                value={b.status}
-                onChange={(e) =>
-                  handleChangeStatus(
-                    b.id,
-                    e.target.value as BookingStatus,
-                  )
-                }
-                disabled={updatingId === b.id}
-                className="mt-0.5 rounded-md border border-gray-500 bg-white px-1.5 py-0.5 text-[10px] sm:text-[11px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
-              >
-                <option value="PENDING">未確認</option>
-                <option value="CONFIRMED">確定</option>
-              </select>
-
-                  {b.status === 'CONFIRMED' && (
-      <button
-        type="button"
-        disabled={!hasLineUid} // ★ UIDがないときは押せない
-        onClick={
-          hasLineUid
-            ? () => openConfirmModal(b) // UIDあり → いつも通りモーダル表示
-            : undefined                  // UIDなし → クリックイベントも外しておく
-        }
-        className={
-          'mt-1 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm ' +
-          (hasLineUid
-            ? 'bg-emerald-600 text-white hover:bg-emerald-700' // UIDあり：今まで通りの緑
-            : 'bg-gray-300 text-gray-600 cursor-not-allowed')  // UIDなし：グレー＆クリック不可
-        }
-      >
-        <span>📲</span>
-        <span>
-          {hasLineUid
-            ? b.confirmationLineSentAt
-              ? 'LINE確定メッセージ再送'
-              : 'LINE確定メッセージ送信'
-            : 'LINE未連携'}  {/* ★ UIDなしのときの表示 */}
-        </span>
-      </button>
-    )}
-
-
-              {b.confirmationLineSentAt && (
-                <span className="mt-0.5 text-[10px] text-gray-600">
-                  確定LINE送信済み
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={() => handleDeleteBooking(b.id)}
-                disabled={deletingId === b.id}
-                className="mt-1 inline-flex items-center gap-1 rounded-md border border-red-500 bg-white px-2.5 py-1 text-[10px] sm:text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-60"
-              >
-                <span>🗑</span>
-                <span>
-                  {deletingId === b.id ? '削除中...' : '予約を削除'}
-                </span>
-              </button>
-            </div>
-          </td>
-
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-  <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
-    {b.needLoanerCar == null ? '未選択' : b.needLoanerCar ? '必要' : '不要'}
-  </span>
-</td>
-
-
-          {/* 何の予約か */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
-              {purpose}
-            </span>
-          </td>
-
-          {/* 受付経路 / 日程変更ボタン */}
-          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-            <div className="flex flex-col gap-1 text-[11px]">
-              {b.source === 'ADMIN' ? (
-                <span className="font-bold text-gray-900">
-                  {sourceLabel}
-                </span>
-              ) : (
-                <span className="inline-flex items-center rounded-full border border-gray-400 bg-white px-2 py-0.5 text-[10px] text-gray-900">
-                  {sourceLabel}
-                </span>
-              )}
-
-              {(b.source === 'ADMIN' ||
-                b.source === 'TENANT_MANUAL') && (
-                <button
-                  type="button"
-                  onClick={() => openEditModal(b)}
-                  className="inline-flex items-center gap-1 rounded-md bg-emerald-600 text-white px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold shadow-sm hover:bg-emerald-700"
-                >
-                  <span>🗓</span>
-                  <span>予定の詳細</span>
-                </button>
-              )}
-            </div>
-          </td>
-        </tr>
-      );
-    })}
-</tbody>
-
-              </table>
+                        {/* 削除 */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBooking(b.id)}
+                          disabled={deletingId === b.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-white hover:bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 disabled:opacity-50"
+                        >
+                          🗑 {deletingId === b.id ? '削除中...' : '削除'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
 
