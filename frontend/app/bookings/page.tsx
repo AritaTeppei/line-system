@@ -49,6 +49,9 @@ type Booking = {
   } | null;
   confirmationLineSentAt?: string | null;
   confirmationLineMessage?: string | null;
+
+  needLoanerCar?: boolean | null;
+
 };
 
 type Customer = {
@@ -66,6 +69,9 @@ type Car = {
 
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+  // const [loanerChoice, setLoanerChoice] = useState<'NEED' | 'NO' | ''>('');
+
 
 // ---- API ヘルパー ----
 async function updateBookingStatus(
@@ -130,6 +136,7 @@ async function createBooking(
     carId: number;
     note?: string;
     source?: string;
+    needLoanerCar?: boolean; // ★追加
   },
   token: string,
 ) {
@@ -201,6 +208,13 @@ function BookingsPageInner() {
   );
   const [editDate, setEditDate] = useState('');
   const [editNote, setEditNote] = useState('');  // ★追加
+  // 代車：true=必要, false=不要, null=未選択（必須にするため）
+  const [editNeedLoanerCar, setEditNeedLoanerCar] = useState<boolean | null>(null);
+  const [modalNeedLoanerCar, setModalNeedLoanerCar] = useState<boolean | null>(null);
+
+  // const [editLoanerChoice, setEditLoanerChoice] = useState<'NEED' | 'NO'>('NO');
+
+
   const [editTimeSlot, setEditTimeSlot] =
     useState<TimeSlot>('MORNING');
   const [editSaving, setEditSaving] = useState(false);
@@ -278,6 +292,7 @@ const filteredCustomers = useMemo(() => {
   const [modalNote, setModalNote] = useState('');
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalSaving, setModalSaving] = useState(false);
+  // const [modalLoanerChoice, setModalLoanerChoice] = useState<'NEED' | 'NO' | ''>('');
 
   // --- 初期ロード ---
   useEffect(() => {
@@ -473,12 +488,16 @@ const filteredCustomers = useMemo(() => {
     if (!dateKey) return;
     setModalDateKey(dateKey);
     setShowCreateModal(true);
+    setModalNeedLoanerCar(null);
+
   };
 
   const closeCreateModal = () => {
     setShowCreateModal(false);
     setModalError(null);
     setModalNote('');
+    setModalNeedLoanerCar(null);
+
   };
 
   const timeSlotLabel = (slot: TimeSlot) => {
@@ -621,6 +640,7 @@ const filteredCustomers = useMemo(() => {
   const openEditModal = (booking: Booking) => {
   setEditingBooking(booking);
 
+
   // 予約情報
   setEditDate(toDateKey(booking.bookingDate));
   setEditTimeSlot(booking.timeSlot as TimeSlot);
@@ -643,6 +663,13 @@ const filteredCustomers = useMemo(() => {
 
   // 車両情報
   setEditCarId(booking.car?.id ?? null);
+
+  setEditNeedLoanerCar(
+  booking.needLoanerCar === null || booking.needLoanerCar === undefined
+    ? null
+    : booking.needLoanerCar
+);
+
 };
 
 
@@ -658,6 +685,12 @@ const filteredCustomers = useMemo(() => {
     setEditError('日付を入力してください。');
     return;
   }
+
+  if (editNeedLoanerCar === null) {
+  setEditError('代車の要否を選択してください。');
+  return;
+}
+
 
   const token =
     typeof window !== 'undefined'
@@ -718,6 +751,8 @@ const filteredCustomers = useMemo(() => {
           timeSlot: editTimeSlot,
           note: editNote,
           carId: editCarId ?? undefined,
+          needLoanerCar: editNeedLoanerCar,
+
         }),
       },
     );
@@ -841,6 +876,13 @@ const filteredCustomers = useMemo(() => {
       setModalError('車両を選択してください。');
       return;
     }
+if (modalNeedLoanerCar === null) {
+  setModalError('代車の要否を選択してください。');
+  return;
+}
+
+
+
 
     const token =
       typeof window !== 'undefined'
@@ -864,6 +906,8 @@ const filteredCustomers = useMemo(() => {
           carId: modalCarId,
           note: modalNote,
           source: 'TENANT_MANUAL',
+          needLoanerCar: modalNeedLoanerCar,
+
         },
         token,
       );
@@ -911,35 +955,12 @@ const filteredCustomers = useMemo(() => {
         {/* ヘッダー */}
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
           <div>
-            <h1
-              className="text-3xl font-extrabold text-green-700 tracking-wide drop-shadow-sm"
-              style={{
-                fontFamily: "'M PLUS Rounded 1c', system-ui, sans-serif",
-              }}
-            >
-              予約カレンダー
+            <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+              📅 予約カレンダー
             </h1>
-            <p className="text-[11px] sm:text-xs text-gray-600 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               カレンダー上で予約件数と重複状況を確認できます。日付をクリックすると、その日の予約一覧が下に表示されます。
             </p>
-          </div>
-
-          <div className="flex flex-col items-end gap-2">
-            {me && (
-              <div className="text-xs text-gray-600 text-right">
-                ログイン中:{' '}
-                <span className="font-medium text-gray-900">
-                  {me.email}
-                </span>
-                <span className="ml-2 inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-50 px-2 py-0.5 text-emerald-800 text-[11px]">
-                  {me.role === 'DEVELOPER'
-                    ? '開発者'
-                    : me.role === 'MANAGER'
-                    ? '管理者'
-                    : 'スタッフ'}
-                </span>
-              </div>
-            )}
           </div>
         </header>
 
@@ -1162,6 +1183,9 @@ if (isSelected) {
                       ステータス
                     </th>
                     <th className="px-2 py-1 border border-gray-300 text-left">
+                      代車
+                    </th>
+                    <th className="px-2 py-1 border border-gray-300 text-left">
                       何の予約か
                     </th>
                     <th className="px-2 py-1 border border-gray-300 text-left">
@@ -1354,6 +1378,13 @@ if (isSelected) {
             </div>
           </td>
 
+          <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+  <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
+    {b.needLoanerCar == null ? '未選択' : b.needLoanerCar ? '必要' : '不要'}
+  </span>
+</td>
+
+
           {/* 何の予約か */}
           <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
             <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
@@ -1513,6 +1544,44 @@ if (isSelected) {
                 </select>
               </div>
 
+<div>
+  <label className="block text-sm font-medium mb-1">
+    代車 <span className="text-red-500">*</span>
+  </label>
+
+  <div className="flex items-center gap-6 text-sm">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={modalNeedLoanerCar === true}
+        onChange={() =>
+          setModalNeedLoanerCar(modalNeedLoanerCar === true ? null : true)
+        }
+      />
+      必要
+    </label>
+
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={modalNeedLoanerCar === false}
+        onChange={() =>
+          setModalNeedLoanerCar(modalNeedLoanerCar === false ? null : false)
+        }
+      />
+      不要
+    </label>
+  </div>
+
+  {modalNeedLoanerCar === null && (
+    <p className="mt-1 text-[11px] text-gray-600">
+      ※ 必ずどちらか選択してください
+    </p>
+  )}
+</div>
+
+
+
               <div>
                 <label className="block text-xs font-medium text-gray-900 mb-1">
                   メモ（任意）
@@ -1658,6 +1727,43 @@ if (isSelected) {
                 </select>
               </div>
             </div>
+
+            {/* 代車 */}
+<div>
+  <label className="block text-sm font-medium mb-1">
+    代車 <span className="text-red-500">*</span>
+  </label>
+
+  <div className="flex items-center gap-6 text-sm">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={editNeedLoanerCar === true}
+        onChange={() =>
+          setEditNeedLoanerCar(editNeedLoanerCar === true ? null : true)
+        }
+      />
+      必要
+    </label>
+
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={editNeedLoanerCar === false}
+        onChange={() =>
+          setEditNeedLoanerCar(editNeedLoanerCar === false ? null : false)
+        }
+      />
+      不要
+    </label>
+  </div>
+
+  {editNeedLoanerCar === null && (
+    <p className="mt-1 text-[11px] text-gray-600">
+      ※ 必ずどちらか選択してください
+    </p>
+  )}
+</div>
 
             <div>
               <label className="block text-xs font-medium text-gray-900 mb-1">

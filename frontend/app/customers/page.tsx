@@ -1038,104 +1038,61 @@ const pagedCustomers = filteredCustomers.slice(
         {/* ヘッダー */}
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-green-700 tracking-wide drop-shadow-sm">
-              顧客管理
+            <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+              👥 顧客管理
             </h1>
-            <p className="text-[11px] sm:text-xs text-gray-600 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               顧客情報の登録・編集、一括メッセージ送信ができます。LINE車検リマインドのベースとなる名簿です。
             </p>
           </div>
-
-          {me && (
-            <div className="text-xs text-gray-600 text-right space-y-1">
-              <div>
-                ログイン中:{" "}
-                <span className="font-medium text-gray-900">
-                  {me.name ?? me.email}
-                </span>
-              </div>
-              <div>
-                ロール:{" "}
-                <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-50 px-2 py-0.5 text-emerald-800 text-[11px]">
-                  {me.role === "DEVELOPER"
-                    ? "開発者"
-                    : me.role === "MANAGER"
-                    ? "管理者"
-                    : "スタッフ"}
-                </span>
-              </div>
-            </div>
-          )}
         </header>
 
         {/* サマリ + 新規登録ボタン */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              登録済み顧客
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border-l-4 border-l-green-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-green-600 flex items-center gap-1">👥 登録済み顧客</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{customers.length}</span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {customers.length}
-              </span>
-              <span className="text-[11px] text-gray-500">件</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              顧客一覧に登録されている件数です。
-            </p>
+            <p className="text-xs text-gray-500">顧客一覧に登録されている件数です。</p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              一括送信用に選択中
+          <div className="rounded-2xl border-l-4 border-l-amber-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-amber-600 flex items-center gap-1">☑️ 一括送信用に選択中</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{selectedCustomerIds.length}</span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {selectedCustomerIds.length}
-              </span>
-              <span className="text-[11px] text-gray-500">件</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              下の顧客一覧のチェックボックスで選択した顧客数です。
-            </p>
+            <p className="text-xs text-gray-500">チェックボックスで選択した顧客数です。</p>
           </div>
 
-            {/* 3枚目：新規顧客登録カード */}
-  <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col justify-between gap-2">
-    <div>
-      <div className="text-[11px] font-semibold text-gray-500">
-        新規顧客登録
-      </div>
-      <p className="mt-1 text-[11px] text-gray-500">
-        店舗側で把握している顧客を随時追加できます。
-      </p>
-    </div>
-
-    {/* ★ 右下にボタン2つを横並びで配置 */}
-    <div className="mt-1 flex justify-end gap-2">
-      {/* 新規顧客を登録ボタン（位置を下にずらしてここへ） */}
-      <button
-        type="button"
-        onClick={openNewCustomerModal}
-        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
-      >
-        <span className="text-[14px]">＋</span>
-        <span>新規顧客を登録</span>
-      </button>
-
-      {/* CSVから取り込みボタン（MANAGERのみ表示） */}
-      {me?.role === 'MANAGER' && (
-        <button
-          type="button"
-          onClick={openCsvImportModal}
-          className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 text-emerald-700 bg-white hover:bg-emerald-50 text-xs font-semibold px-3 py-1.5 shadow-sm"
-        >
-          <span className="text-[14px]">📥</span>
-          <span>CSVから取り込み</span>
-        </button>
-      )}
-    </div>
-  </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold text-gray-600">✏️ 新規顧客登録</div>
+              <p className="mt-1 text-xs text-gray-500">店舗側で把握している顧客を随時追加できます。</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={openNewCustomerModal}
+                className="flex-1 inline-flex items-center justify-center gap-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2 shadow-sm transition"
+              >
+                <span>＋</span>
+                <span>新規登録</span>
+              </button>
+              {me?.role === 'MANAGER' && (
+                <button
+                  type="button"
+                  onClick={openCsvImportModal}
+                  className="flex-1 inline-flex items-center justify-center gap-1 rounded-xl border border-green-600 text-green-700 bg-white hover:bg-green-50 text-xs font-bold px-3 py-2 shadow-sm transition"
+                >
+                  <span>📥</span>
+                  <span>CSV取込</span>
+                </button>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* 顧客一覧 + 一括送信 */}

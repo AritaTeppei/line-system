@@ -8,48 +8,211 @@ datasource db {
 }
 
 model Tenant {
-  id              Int       @id @default(autoincrement())
-  name            String
-  email           String
-  plan      String?   @default("TRIAL")
-  isActive        Boolean   @default(true)
-  validUntil      DateTime?
-  lineChannelId   String?
-  lineSecret      String?
-  lineAccessToken String?
-
-  trialEndNotifiedAt DateTime?
-  trialEnd   DateTime?   // ★追加：お試し終了日
-
-  // === ここからサブスク/Billing 管理用フィールド ===
-  stripeCustomerId     String? // Stripe 上の Customer ID
-  stripeSubscriptionId String? // Stripe 上の Subscription ID
-  subscriptionStatus   String? // 'active' | 'past_due' | 'canceled' など
-  currentPeriodEnd     DateTime? // 次回課金期間の終了日時（Stripe からもらう）
-
+  id                       Int                       @id @default(autoincrement())
+  name                     String
+  email                    String
+  plan                     String?                   @default("TRIAL")
+  isActive                 Boolean                   @default(true)
+  validUntil               DateTime?
+  lineAccessToken          String?
+  lineChannelId            String?
+  lineSecret               String?
+  companyAddress1          String?
+  companyAddress2          String?
+  companyName              String?
+  contactMobile            String?
+  contactPhone             String?
+  representativeName       String?
+  currentPeriodEnd         DateTime?
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?
+  subscriptionStatus       String?
+  trialEnd                 DateTime?
+  trialEndNotifiedAt       DateTime?
+  nextPlan                 String?
+  nextPlanStartAt          DateTime?
+  bookings                 Booking[]
+  broadcastLogs            BroadcastLog[]
+  cars                     Car[]
+  customers                Customer[]
+  customerRegisterTokens   CustomerRegisterToken[]
   lineSettings             LineSettings?
+  messageLogs              MessageLog[]
   reminderMessageTemplates ReminderMessageTemplate[]
+  reminderSentLogs         ReminderSentLog[]
+  users                    User[]
+}
 
+model User {
+  id                    Int           @id @default(autoincrement())
+  tenantId              Int?
+  email                 String        @unique
+  name                  String?
+  createdAt             DateTime      @default(now())
+  password              String
+  role                  UserRole      @default(MANAGER)
+  isActive              Boolean       @default(true)
+  maxConcurrentSessions Int           @default(1)
+  plan                  Plan?         @default(BASIC)
+  tenant                Tenant?       @relation(fields: [tenantId], references: [id])
+  sessions              UserSession[]
+}
 
+model UserSession {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id])
+}
 
-  users                  User[]
-  customers              Customer[] // ★ 追加
-  cars                   Car[] // ★ 追加
-  customerRegisterTokens CustomerRegisterToken[]
-  messageLogs            MessageLog[]
-  bookings               Booking[]
+model Customer {
+  id                    Int                    @id @default(autoincrement())
+  tenantId              Int
+  lastName              String
+  firstName             String
+  postalCode            String?
+  address1              String?
+  address2              String?
+  mobilePhone           String?
+  lineUid               String?
+  birthday              DateTime?
+  bookings              Booking[]
+  broadcastLogCustomers BroadcastLogCustomer[]
+  cars                  Car[]
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  messageLogs           MessageLog[]
+  reminderSentLogs      ReminderSentLog[]
 
-  companyName        String? // 会社名
-  companyAddress1    String? // 住所1
-  companyAddress2    String? // 住所2
-  representativeName String? // 代表者名
-  contactPhone       String? // 代表電話
-  contactMobile      String? // 担当者携帯など
+  @@unique([tenantId, lineUid], map: "customer_tenant_lineuid_unique")
+  @@unique([tenantId, mobilePhone], map: "customer_tenant_mobile_unique")
+}
 
-  broadcastLogs BroadcastLog[]
+model CustomerRegisterToken {
+  id        Int       @id @default(autoincrement())
+  tenantId  Int
+  lineUid   String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+}
 
-  // subscriptions   Subscription[] //
-  reminderSentLogs ReminderSentLog[]
+model Car {
+  id                 Int               @id @default(autoincrement())
+  tenantId           Int
+  customerId         Int
+  registrationNumber String
+  chassisNumber      String            @unique(map: "car_chassis_unique")
+  carName            String
+  customDaysBefore   Int?
+  customReminderDate DateTime?
+  inspectionDate     DateTime?
+  shakenDate         DateTime?
+  bookings           Booking[]
+  customer           Customer          @relation(fields: [customerId], references: [id])
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  messageLogs        MessageLog[]
+  reminderSentLogs   ReminderSentLog[]
+}
+
+model MessageLog {
+  id          Int         @id @default(autoincrement())
+  tenantId    Int
+  customerId  Int?
+  carId       Int?
+  lineUid     String?
+  messageType MessageType
+  content     String
+  createdAt   DateTime    @default(now())
+  car         Car?        @relation(fields: [carId], references: [id])
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+}
+
+model Booking {
+  id                      Int           @id @default(autoincrement())
+  tenantId                Int
+  customerId              Int
+  carId                   Int
+  bookingDate             DateTime
+  timeSlot                String?
+  status                  BookingStatus @default(PENDING)
+  source                  String?
+  note                    String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  confirmationLineMessage String?
+  confirmationLineSentAt  DateTime?
+  needsLoanerCar          Boolean       @default(false)
+  car                     Car           @relation(fields: [carId], references: [id])
+  customer                Customer      @relation(fields: [customerId], references: [id])
+  tenant                  Tenant        @relation(fields: [tenantId], references: [id])
+}
+
+model LineSettings {
+  id            Int      @id @default(autoincrement())
+  tenantId      Int      @unique
+  channelId     String?
+  channelSecret String?
+  accessToken   String?
+  webhookUrl    String?
+  isActive      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  destination   String?
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model ReminderMessageTemplate {
+  id        Int                 @id @default(autoincrement())
+  tenantId  Int
+  type      ReminderMessageType
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  body      String
+  note      String?
+  title     String?
+  tenant    Tenant              @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, type])
+}
+
+model BroadcastLog {
+  id          Int                    @id @default(autoincrement())
+  tenantId    Int
+  message     String
+  sentCount   Int
+  targetCount Int
+  createdAt   DateTime               @default(now())
+  target      BroadcastTarget        @default(CUSTOMER)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  customers   BroadcastLogCustomer[]
+
+  @@index([tenantId, createdAt])
+}
+
+model ReminderSentLog {
+  id         Int              @id @default(autoincrement())
+  tenantId   Int
+  date       DateTime
+  category   ReminderCategory
+  customerId Int?
+  carId      Int?
+  createdAt  DateTime         @default(now())
+  car        Car?             @relation(fields: [carId], references: [id])
+  customer   Customer?        @relation(fields: [customerId], references: [id])
+  tenant     Tenant           @relation(fields: [tenantId], references: [id])
+}
+
+model BroadcastLogCustomer {
+  id             Int          @id @default(autoincrement())
+  broadcastLogId Int
+  customerId     Int
+  broadcastLog   BroadcastLog @relation(fields: [broadcastLogId], references: [id])
+  customer       Customer     @relation(fields: [customerId], references: [id])
 }
 
 enum Plan {
@@ -58,109 +221,10 @@ enum Plan {
   PRO
 }
 
-model User {
-  id Int @id @default(autoincrement())
-
-  // ★ 開発者は tenantId = null を許可
-  tenantId Int?
-  tenant   Tenant? @relation(fields: [tenantId], references: [id])
-
-  email    String  @unique
-  name     String?
-  password String
-
-  // ★ ロールを追加（開発者 / 管理者 / クライアント）
-  role                  UserRole @default(MANAGER)
-  isActive              Boolean  @default(true)
-  plan                  Plan?    @default(BASIC)
-  maxConcurrentSessions Int      @default(1)
-
-  createdAt DateTime      @default(now())
-  // ★ ログインセッションとのリレーション（後々制限に使う）
-  sessions  UserSession[]
-}
-
-model UserSession {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
-  createdAt DateTime  @default(now())
-  expiresAt DateTime? // 有効期限（あとで使う想定）
-  revokedAt DateTime? // 強制ログアウトした時に入れる想定
-}
-
 enum UserRole {
   DEVELOPER
   MANAGER
   CLIENT
-}
-
-model Customer {
-  id       Int    @id @default(autoincrement())
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  lastName    String
-  firstName   String
-  postalCode  String?
-  address1    String?
-  address2    String?
-  mobilePhone String?
-  lineUid     String?
-  //lineSettings   LineSettings?
-
-  // ★ 追加：誕生日
-  birthday DateTime?
-
-  cars        Car[]
-  messageLogs MessageLog[]
-  bookings    Booking[]
-
-  broadcastLogCustomers BroadcastLogCustomer[]
-  reminderSentLogs      ReminderSentLog[]
-
-  @@unique([tenantId, lineUid], map: "customer_tenant_lineuid_unique")
-  @@unique([tenantId, mobilePhone], map: "customer_tenant_mobile_unique")
-}
-
-model CustomerRegisterToken {
-  id       Int    @id @default(autoincrement())
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  lineUid String // LINEのUID（userId）
-
-  token     String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-
-  createdAt DateTime @default(now())
-}
-
-model Car {
-  id       Int    @id @default(autoincrement())
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  registrationNumber String
-  chassisNumber      String
-  carName            String
-
-  // ★ 追加：車検・点検・任意日付
-  shakenDate         DateTime? // 車検日
-  inspectionDate     DateTime? // 点検日
-  customReminderDate DateTime? // 任意の日付
-  customDaysBefore   Int? // 任意日付の何日前に通知するか
-
-  messageLogs      MessageLog[]
-  bookings         Booking[]
-  reminderSentLogs ReminderSentLog[]
-
-  @@unique([chassisNumber], map: "car_chassis_unique")
 }
 
 enum ReminderMessageType {
@@ -172,11 +236,8 @@ enum ReminderMessageType {
 }
 
 enum MessageType {
-  // 手動送信用
   MANUAL_CUSTOMER
   MANUAL_CAR
-
-  // 自動リマインド用
   REMINDER_BIRTHDAY
   REMINDER_SHAKEN_2M
   REMINDER_SHAKEN_1W
@@ -185,150 +246,14 @@ enum MessageType {
 }
 
 enum BookingStatus {
-  PENDING // 予約申請あり（未確認）
-  CONFIRMED // 管理者が承認
-  CANCELED // キャンセル（顧客または管理者）
+  PENDING
+  CONFIRMED
+  CANCELED
 }
 
 enum BroadcastTarget {
   CUSTOMER
   CAR
-}
-
-model MessageLog {
-  id Int @id @default(autoincrement())
-
-  // ★ テナントとのリレーション
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  // ★ 顧客とのリレーション（任意）
-  customerId Int?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  // ★ 車両とのリレーション（任意）
-  carId Int?
-  car   Car? @relation(fields: [carId], references: [id])
-
-  lineUid     String?
-  messageType MessageType
-  content     String
-
-  createdAt DateTime @default(now())
-}
-
-model Booking {
-  id Int @id @default(autoincrement())
-
-  // マルチテナント
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  // 顧客・車両と紐づく
-  customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  carId Int
-  car   Car @relation(fields: [carId], references: [id])
-
-  // 予約日（日時）
-  // 最初は「日だけ」で運用してもOKだし、あとで時間も足せる
-  bookingDate DateTime // 実際に入庫してほしい日
-  timeSlot    String? // 例: "AM", "PM", "10:00-11:00" など自由形式
-
-  status BookingStatus @default(PENDING)
-
-  // どこから来た予約か（LINEフォーム or 管理画面など）
-  source String? // "LINE_PUBLIC_FORM" / "ADMIN" など文字で運用
-
-  // 管理用メモ
-  note String?
-
-  // ★ 追加：確定LINE送信の履歴
-  confirmationLineSentAt  DateTime?
-  confirmationLineMessage String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model LineSettings {
-  id       Int    @id @default(autoincrement())
-  tenantId Int    @unique
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  // LINE公式アカウントの基本情報
-  channelId     String? // チャネルID
-  channelSecret String? // チャネルシークレット
-  accessToken   String? // 長期アクセストークン
-  webhookUrl    String? // 現在LINEに登録しているWebhook URL（表示用）
-  destination   String?
-  isActive      Boolean @default(false) // このテナントでLINE連携を有効にするか
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ReminderMessageTemplate {
-  id       Int    @id @default(autoincrement())
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  type  ReminderMessageType // ← ここが大事
-  title String? // 管理画面での名称とかに使える
-  body  String // 実際に送るメッセージ本文
-  note  String? // 管理者向けメモ（任意）
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([tenantId, type])
-}
-
-model BroadcastLog {
-  id          Int      @id @default(autoincrement())
-  tenantId    Int
-  message     String
-  sentCount   Int
-  targetCount Int
-  createdAt   DateTime @default(now())
-
-  tenant    Tenant                 @relation(fields: [tenantId], references: [id])
-  customers BroadcastLogCustomer[] // ★ 追加
-  target    BroadcastTarget        @default(CUSTOMER)
-
-  @@index([tenantId, createdAt])
-}
-
-model ReminderSentLog {
-  id Int @id @default(autoincrement())
-
-  tenantId Int
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  // 送信したリマインドの対象日（「リマインド日付」）
-  date DateTime
-
-  // 種別（誕生日 / 車検2ヶ月前 / 1週間前 / 点検1ヶ月前 / 任意日付）
-  category ReminderCategory
-
-  // どの顧客・車に紐づくログか（どちらか片方だけ入るケースもあり）
-  customerId Int?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  carId Int?
-  car   Car? @relation(fields: [carId], references: [id])
-
-  createdAt DateTime @default(now())
-}
-
-model BroadcastLogCustomer {
-  id             Int          @id @default(autoincrement())
-  broadcastLogId Int
-  broadcastLog   BroadcastLog @relation(fields: [broadcastLogId], references: [id])
-
-  customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id])
 }
 
 enum ReminderCategory {

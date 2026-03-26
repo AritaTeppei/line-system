@@ -9,6 +9,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3000', // ローカル開発用フロント
+      'http://localhost:3001', // ローカル開発用フロント（PitLink）
       'https://line-system.vercel.app', // Vercel 本番フロント
     ],
     credentials: true,

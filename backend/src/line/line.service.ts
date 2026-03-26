@@ -108,7 +108,11 @@ export class LineService {
   /**
    * 友だち登録時などに登録フォームURLを送る
    */
-  async sendRegisterFormLink(tenantId: number, lineUid: string): Promise<void> {
+  async sendRegisterFormLink(
+    tenantId: number,
+    lineUid: string,
+    replyToken?: string,
+  ): Promise<void> {
     if (!lineUid) {
       this.logger.warn(
         `sendRegisterFormLink called without lineUid (tenantId=${tenantId})`,
@@ -130,15 +134,39 @@ export class LineService {
     });
 
     const url = this.generatePublicRegisterUrl(token);
-    const message = `お客様情報の登録はこちらからお願いします。\n${url}`;
+    const message =
+      `ご登録ありがとうございます！\n` +
+      `以下のリンクからお客様情報をご登録ください。\n` +
+      `（リンクは7日間有効です）\n\n` +
+      `${url}`;
 
+    // replyToken がある場合は Reply API を優先（より確実に届く）
+    if (replyToken) {
+      try {
+        await this.lineSettingsService.sendReplyMessage(
+          tenantId,
+          replyToken,
+          message,
+        );
+        this.logger.log(
+          `Sent register form link via Reply API to lineUid=${lineUid} for tenant=${tenantId}`,
+        );
+        return;
+      } catch (e: any) {
+        this.logger.warn(
+          `Reply API failed, falling back to Push API: ${e?.message ?? e}`,
+        );
+      }
+    }
+
+    // Reply API が使えない場合は Push API にフォールバック
     try {
       await this.lineSettingsService.sendTestMessage(tenantId, {
         to: lineUid,
         message,
       });
       this.logger.log(
-        `Sent register form link to lineUid=${lineUid} for tenant=${tenantId}`,
+        `Sent register form link via Push API to lineUid=${lineUid} for tenant=${tenantId}`,
       );
     } catch (e: any) {
       this.logger.error(
@@ -458,6 +486,8 @@ export class LineService {
 
     // 1) 友だち登録（follow）のときに「顧客登録URL」を送る
     if (type === 'follow') {
+      const replyToken: string | undefined = event?.replyToken;
+
       // まず、この UID がすでに既存顧客に紐づいているか確認
       const existingCustomer = await this.findCustomerByLineUid(
         tenantId,
@@ -472,7 +502,8 @@ export class LineService {
       }
 
       // まだ誰にも紐づいていない UID なら、登録用URLを送る
-      await this.sendRegisterFormLink(tenantId, userId);
+      // replyToken を渡して Reply API を優先させる
+      await this.sendRegisterFormLink(tenantId, userId, replyToken);
       return;
     }
 

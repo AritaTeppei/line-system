@@ -14,11 +14,29 @@ type Plan = 'BASIC' | 'STANDARD' | 'PRO';
 //   'price_1SdTwO3mSiSNFTaeB0BJklvB': 'PRO',
 // } as const;
 
-
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
   private readonly stripe: Stripe;
+
+  private planToPriceId(plan: Plan): string {
+  const priceId =
+    plan === 'BASIC'
+      ? process.env.STRIPE_PRICE_BASIC
+      : plan === 'STANDARD'
+        ? process.env.STRIPE_PRICE_STANDARD
+        : process.env.STRIPE_PRICE_PRO;
+
+  if (!priceId) throw new BadRequestException(`priceId 未設定: ${plan}`);
+  return priceId;
+}
+
+private readonly PLAN_RANK: Record<Plan, number> = {
+  BASIC: 1,
+  STANDARD: 2,
+  PRO: 3,
+};
+
 
   // ★ 追加：PriceId → Plan の逆引き（ENVから生成）
   private readonly priceToPlan: Record<string, Plan> = {};
@@ -150,6 +168,9 @@ export class BillingService {
         stripeSubscriptionId: true,
         subscriptionStatus: true,
         currentPeriodEnd: true,
+        nextPlan: true,
+        nextPlanStartAt: true,
+        trialEnd: true,
       },
     });
 
@@ -169,6 +190,9 @@ export class BillingService {
       stripeSubscriptionId: tenant.stripeSubscriptionId,
       subscriptionStatus: tenant.subscriptionStatus,
       currentPeriodEnd: tenant.currentPeriodEnd,
+      nextPlan: tenant.nextPlan,
+      nextPlanStartAt: tenant.nextPlanStartAt,
+      trialEnd: tenant.trialEnd,
     };
   }
 
@@ -295,15 +319,28 @@ const periodEnd = periodEndUnix != null ? new Date(periodEndUnix * 1000) : null;
 
   if (!customerId || !periodEnd) break;
 
+  // ダウングレード予約があった場合、次期請求時に plan を確定・予約情報クリア
+  const tenantForInvoice = customerId
+    ? await this.prisma.tenant.findFirst({ where: { stripeCustomerId: customerId } })
+    : null;
+
+  const hasScheduledDowngrade =
+    tenantForInvoice?.nextPlanStartAt &&
+    periodEnd &&
+    tenantForInvoice.nextPlanStartAt <= periodEnd;
+
   await this.prisma.tenant.updateMany({
     where: { stripeCustomerId: customerId },
     data: {
       currentPeriodEnd: periodEnd,
       validUntil: periodEnd,
       isActive: true,
-
-      // ★ ここでplanも更新してOK（ただし planは基本 subscription.updated の方が信頼できる）
-      ...(planFromInvoice ? { plan: planFromInvoice } : {}),
+      // 請求から取得したプランで更新（ダウングレード予約があれば nextPlan を使う）
+      ...(hasScheduledDowngrade && tenantForInvoice?.nextPlan
+        ? { plan: tenantForInvoice.nextPlan as Plan, nextPlan: null, nextPlanStartAt: null }
+        : planFromInvoice
+          ? { plan: planFromInvoice }
+          : {}),
     },
   });
 
@@ -393,14 +430,21 @@ if (currentPriceId && !mappedPlan) {
     break;
   }
 
+  // ダウングレード予約中（nextPlanStartAt が未来）の場合は plan を上書きしない
+  // scheduleDowngrade が proration:none で Stripe の price を変更するため
+  // webhook が飛んでくるが、今期末まで現在プランを維持するために skip する
+  const shouldUpdatePlan =
+    mappedPlan &&
+    (!tenant.nextPlanStartAt || tenant.nextPlanStartAt <= new Date());
+
   await this.prisma.tenant.update({
   where: { id: tenant.id },
   data: {
     subscriptionStatus: subscription.status,
     currentPeriodEnd: currentPeriodEndDate ?? undefined,
     validUntil: currentPeriodEndDate ?? undefined,
-    ...(mappedPlan ? { plan: mappedPlan } : {}),
-    isActive: shouldBeActive, // ★ここ必須
+    ...(shouldUpdatePlan ? { plan: mappedPlan! } : {}),
+    isActive: shouldBeActive,
   },
 });
 
@@ -421,7 +465,7 @@ if (currentPriceId && !mappedPlan) {
    * - プロレーション(差額)を作り、即時に請求書を確定→支払い実行
    */
 async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
-  if (!tenantId) throw new BadRequestException('tenantId が不正です');
+  if (!tenantId || isNaN(tenantId)) throw new BadRequestException('tenantId が不正です');
 
   const tenant = await this.prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -451,35 +495,156 @@ async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
   const item = sub.items.data[0];
   if (!item) throw new BadRequestException('subscription item 不正');
 
-  // ① 即時アップグレード（差額生成）
+  // ① 既存のダウングレードスケジュールがあればリリース（解除）してから即時変更
+  const existingScheduleId =
+    typeof (sub as any).schedule === 'string'
+      ? ((sub as any).schedule as string)
+      : ((sub as any).schedule?.id as string | undefined);
+
+  if (existingScheduleId) {
+    this.logger.log(
+      `upgradeNow: releasing existing schedule=${existingScheduleId}`,
+    );
+    await this.stripe.subscriptionSchedules.release(existingScheduleId);
+    // アプリ側の予約情報もクリア
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { nextPlan: null, nextPlanStartAt: null },
+    });
+  }
+
+  // ② 即時アップグレード（差額生成）
   const updated = await this.stripe.subscriptions.update(sub.id, {
     items: [{ id: item.id, price: nextPriceId }],
     proration_behavior: 'create_prorations',
   });
 
-  // ② 差額を即時請求（ここがポイント）
-const invoice = await this.stripe.invoices.create({
-  customer: tenant.stripeCustomerId,
-  subscription: updated.id,
-  auto_advance: false,
-});
+  // ③ 差額を即時請求（0円の場合はスキップ）
+  let invoiceId: string | null = null;
+  let amountPaid = 0;
 
-const finalized = await this.stripe.invoices.finalizeInvoice(invoice.id);
-const paid = await this.stripe.invoices.pay(finalized.id);
+  try {
+    const invoice = await this.stripe.invoices.create({
+      customer: tenant.stripeCustomerId,
+      subscription: updated.id,
+      auto_advance: false,
+    });
 
+    const finalized = await this.stripe.invoices.finalizeInvoice(invoice.id);
 
-  // ③ アプリ即時反映（Webhookでも最終同期される）
+    if (finalized.amount_due > 0) {
+      const paid = await this.stripe.invoices.pay(finalized.id);
+      invoiceId = paid.id;
+      amountPaid = paid.amount_paid;
+    } else {
+      invoiceId = finalized.id;
+      amountPaid = 0;
+    }
+  } catch (e: any) {
+    // 請求額0円などで invoice 作成が失敗する場合は無視して進む
+    this.logger.warn(`upgradeNow: invoice step skipped. reason=${e?.message}`);
+  }
+
+  // ④ アプリ即時反映（nextPlan/nextPlanStartAt もクリア）
   await this.prisma.tenant.update({
     where: { id: tenantId },
-    data: { plan },
+    data: { plan, nextPlan: null, nextPlanStartAt: null },
   });
 
   return {
     ok: true,
-    invoiceId: paid.id,
-    amountPaid: paid.amount_paid,
+    invoiceId,
+    amountPaid,
   };
 }
+
+async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
+  if (!tenantId) throw new BadRequestException('tenantId が不正です');
+
+  const tenant = await this.prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      stripeCustomerId: true,
+      stripeSubscriptionId: true,
+      plan: true, // アプリ内の現在プラン（参考）
+    },
+  });
+
+  if (!tenant?.stripeCustomerId || !tenant.stripeSubscriptionId) {
+    throw new BadRequestException('有効なサブスクがありません');
+  }
+
+  const nextPriceId = this.planToPriceId(nextPlan);
+
+  // StripeのSubscriptionを取得
+  const sub = await this.stripe.subscriptions.retrieve(
+    tenant.stripeSubscriptionId,
+  );
+
+  const currentPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+  const currentPlan = currentPriceId ? this.priceToPlan[currentPriceId] : undefined;
+
+  if (!currentPlan) {
+    throw new BadRequestException(
+      `現在プランが特定できません（priceToPlan未設定の可能性）。currentPriceId=${currentPriceId}`,
+    );
+  }
+
+  // ダウングレードだけ許可（同じ/アップは別ルート）
+  if (this.PLAN_RANK[nextPlan] >= this.PLAN_RANK[currentPlan]) {
+    return {
+      ok: true,
+      message: 'ダウングレードではありません（アップグレードは upgrade-now を使用）',
+      currentPlan,
+      nextPlan,
+    };
+  }
+
+  // current_period_end を取得（API バージョンによって場所が異なる）
+  const subAny = sub as any;
+  const item0 = subAny.items?.data?.[0];
+  const currentPeriodEndUnix: number | null =
+    subAny.current_period_end ?? item0?.current_period_end ?? null;
+
+  this.logger.log(
+    `scheduleDowngrade: current_period_end=${currentPeriodEndUnix}, sub.status=${sub.status}`,
+  );
+
+  if (!currentPeriodEndUnix) {
+    this.logger.error(
+      `scheduleDowngrade: period fields missing. sub keys=${Object.keys(subAny).join(', ')}`,
+    );
+    throw new BadRequestException('current_period_end が取得できません');
+  }
+
+  // subscription schedule を使わず直接 price を変更（proration なし）
+  // → Stripe 側は次回更新から新プランで請求される
+  // → 今期は既に支払い済みなので差額は発生しない
+  // → DB 上は nextPlan/nextPlanStartAt で管理し、plan は今期末まで維持する
+  const item = sub.items.data[0];
+  await this.stripe.subscriptions.update(sub.id, {
+    items: [{ id: item.id, price: nextPriceId }],
+    proration_behavior: 'none',
+  });
+
+  const effectiveAt = new Date(currentPeriodEndUnix * 1000);
+
+  // DB: plan はそのまま維持、nextPlan/nextPlanStartAt で予約を記録
+  await this.prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      nextPlan,
+      nextPlanStartAt: effectiveAt,
+    },
+  });
+
+  return {
+    ok: true,
+    message: '次回更新でダウングレード予約しました',
+    currentPlan,
+    nextPlan,
+    effectiveAt: effectiveAt.toISOString(),
+  };
 }
 
-
+}

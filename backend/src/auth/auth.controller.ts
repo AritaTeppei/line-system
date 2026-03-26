@@ -137,6 +137,7 @@ export class AuthController {
       ? await this.prisma.tenant.findUnique({
           where: { id: payload.tenantId },
           select: {
+            name: true,
             plan: true,
             validUntil: true,
             isActive: true,
@@ -174,14 +175,12 @@ export class AuthController {
 
     // ★ フロントで使いやすい形で返す
     return {
-      // もともとの payload 情報
       id: payload.id,
       email: payload.email,
       name: (payload as any).name ?? null,
       tenantId: payload.tenantId ?? null,
       role: payload.role,
-
-      // 追加情報
+      tenantName: tenant?.name ?? null,
       tenantPlan,
       trialRemainingDays,
       trialExpired,

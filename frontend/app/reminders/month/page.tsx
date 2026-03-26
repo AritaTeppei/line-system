@@ -453,286 +453,200 @@ export default function RemindersMonthPage() {
 
   return (
     <TenantLayout>
-      <div className="max-w-6xl mx-auto space-y-6 py-4">
+      <div className="max-w-6xl mx-auto space-y-6 pb-12">
         {/* ヘッダー */}
-        <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-2">
-          <div>
-            <h1
-              className="text-3xl font-extrabold text-green-700 tracking-wide drop-shadow-sm"
-              style={{
-                fontFamily: "'M PLUS Rounded 1c', system-ui, sans-serif",
-              }}
-            >
-              リマインド（月別サマリ）
-            </h1>
-            <p className="text-[11px] sm:text-xs text-gray-600 mt-1">
-              指定した月の「誕生日・車検・点検・任意日付」の対象件数を日別に確認し、
-              下の一覧から送信対象を絞り込んで一括送信できます。
-            </p>
-          </div>
-
-          {me && (
-            <div className="text-xs text-gray-600 text-right space-y-1">
-              <div>
-                ログイン中:{' '}
-                <span className="font-medium text-gray-900">
-                  {me.name ?? me.email}
-                </span>
-              </div>
-              <div>
-                ロール:{' '}
-                <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-50 px-2 py-0.5 text-emerald-800 text-[11px]">
-                  {me.role === 'DEVELOPER'
-                    ? '開発者'
-                    : me.role === 'MANAGER'
-                    ? '管理者'
-                    : 'スタッフ'}
-                </span>
-              </div>
-            </div>
-          )}
-        </header>
+        <div>
+          <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+            🔔 リマインド管理
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            指定した月の「誕生日・車検・点検・任意日付」の対象件数を日別に確認し、一覧から送信対象を絞り込んで一括送信できます。
+          </p>
+        </div>
 
         {/* エラー表示 */}
         {pageError && (
-          <div className="max-w-3xl">
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 whitespace-pre-wrap">
-              {pageError}
-            </div>
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 whitespace-pre-wrap">
+            {pageError}
           </div>
         )}
 
         {/* サマリカード */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              今月のリマインド件数
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border-l-4 border-l-green-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-green-600">🔔 今月のリマインド件数</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{totalCountThisMonth}</span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {totalCountThisMonth}
-              </span>
-              <span className="text-[11px] text-gray-500">件</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              月別サマリに含まれる全リマインド件数です。
-            </p>
+            <p className="text-xs text-gray-500">月別サマリに含まれる全リマインド件数です。</p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              一括送信用に選択中
+          <div className="rounded-2xl border-l-4 border-l-amber-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-amber-600">☑️ 一括送信用に選択中</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{selectedIds.length}</span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {selectedIds.length}
-              </span>
-              <span className="text-[11px] text-gray-500">件</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
+            <p className="text-xs text-gray-500">
               下の一覧でチェックを入れているリマインド対象の件数です。
             </p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              表示中の種別
+          <div className="rounded-2xl border-l-4 border-l-purple-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-purple-600">🔍 表示中の種別</div>
+            <div className="text-lg font-black text-gray-900">
+              {categoryOptions.find((c) => c.value === categoryFilter)?.label}
             </div>
-            <div className="text-sm font-semibold text-gray-900">
-              {
-                categoryOptions.find((c) => c.value === categoryFilter)
-                  ?.label
-              }
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              「種別フィルタ」で誕生日・車検・点検・任意日付ごとに絞り込みができます。
-            </p>
+            <p className="text-xs text-gray-500">種別フィルタで絞り込みができます。</p>
           </div>
         </section>
 
-        {/* 月選択＋操作バー */}
-        <section className="rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-3 sm:px-5 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* 月選択バー */}
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-sm px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover:bg-gray-100"
+              className="px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-bold bg-white hover:bg-gray-50 transition"
             >
               ← 前の月
             </button>
-
             <input
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="border border-gray-400 rounded-md px-2 py-1 text-xs sm:text-sm"
+              className="border border-gray-300 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
             />
-
             <button
               type="button"
               onClick={handleNextMonth}
-              className="px-3 py-1 border border-gray-400 rounded-md text-xs bg-gray-50 hover:bg-gray-100"
+              className="px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-bold bg-white hover:bg-gray-50 transition"
             >
               次の月 →
             </button>
           </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[11px] text-gray-600">
-            <span>
-              月を切り替えると、その月のサマリと対象一覧が自動で更新されます。
+          {data && (
+            <span className="text-xs text-gray-500">
+              この月の合計: <span className="font-bold text-gray-800">{totalCountThisMonth}</span> 件
             </span>
-            {data && (
-              <span>
-                この月の合計:{' '}
-                <span className="font-semibold text-gray-900">
-                  {totalCountThisMonth}
-                </span>{' '}
-                件
-              </span>
-            )}
-          </div>
+          )}
         </section>
 
         {/* ローディング */}
         {loading && (
-          <div className="text-sm text-gray-600">読み込み中...</div>
+          <div className="text-sm text-gray-500 bg-white rounded-2xl border border-gray-200 px-5 py-4 shadow-sm">読み込み中...</div>
         )}
 
         {/* 日ごとの件数テーブル */}
         {data && (
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-            <div className="px-4 py-2 border-b text-sm font-semibold text-gray-900">
-              日別サマリ
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-700">📅 日別サマリ</span>
             </div>
-            <table className="min-w-full text-[11px] sm:text-xs">
+            <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    日付
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    合計
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    誕生日
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    車検2ヶ月前
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    車検1週間前
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    点検1ヶ月前
-                  </th>
-                  <th className="px-2 py-1 text-right border-b border-gray-200">
-                    任意日付
-                  </th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">日付</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-gray-600">合計</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-rose-600">🎂誕生日</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-blue-600">🔧車検2ヶ月前</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-orange-600">⚠️車検1週間前</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-purple-600">🔩点検1ヶ月前</th>
+                  <th className="px-3 py-2 text-right border-b border-gray-200 font-bold text-gray-600">📅任意日付</th>
                 </tr>
               </thead>
               <tbody>
                 {data.days.map((day) => (
-                  <tr key={day.date} className="border-t border-gray-100">
-                    <td className="px-2 py-1">{day.date}</td>
-                    <td className="px-2 py-1 text-right font-semibold">
-                      {day.totalCount}
+                  <tr key={day.date} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 font-medium text-gray-800">{day.date}</td>
+                    <td className="px-3 py-2 text-right font-bold text-gray-900">
+                      {day.totalCount > 0 ? <span className="inline-flex items-center justify-center rounded-full bg-green-100 text-green-800 px-2 py-0.5 min-w-[2rem]">{day.totalCount}</span> : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      {day.birthdayCount}
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {day.birthdayCount > 0 ? day.birthdayCount : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      {day.shakenTwoMonthsCount}
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {day.shakenTwoMonthsCount > 0 ? day.shakenTwoMonthsCount : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      {day.shakenOneWeekCount}
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {day.shakenOneWeekCount > 0 ? day.shakenOneWeekCount : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      {day.inspectionOneMonthCount}
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {day.inspectionOneMonthCount > 0 ? day.inspectionOneMonthCount : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-2 py-1 text-right">
-                      {day.customCount}
+                    <td className="px-3 py-2 text-right text-gray-600">
+                      {day.customCount > 0 ? day.customCount : <span className="text-gray-300">-</span>}
                     </td>
                   </tr>
                 ))}
                 {data.days.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="px-2 py-4 text-center text-gray-500"
-                    >
+                    <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-sm">
                       この月のリマインド対象はありません。
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+            </div>
           </section>
         )}
 
         {/* 対象者＋対象車両 一覧 */}
         {data && (
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-            <div className="px-4 py-2 border-b flex flex-wrap items-center gap-3">
-              <span className="text-sm font-semibold text-gray-900">
-                対象者 & 対象車両 一覧
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-bold text-gray-700">
+                👤 対象者 & 対象車両 一覧
               </span>
 
-              <div className="flex items-center gap-2 text-[11px]">
-                <span>種別フィルタ:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">種別:</span>
                 <select
                   value={categoryFilter}
                   onChange={(e) =>
                     setCategoryFilter(
-                      e.target.value as
-                        | 'ALL'
-                        | MonthReminderItem['category'],
+                      e.target.value as 'ALL' | MonthReminderItem['category'],
                     )
                   }
-                  className="border border-gray-400 rounded px-2 py-1 text-[11px]"
+                  className="border border-gray-300 rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
                 >
                   {categoryOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="ml-auto flex flex-col sm:flex-row sm:items-center gap-2 text-[11px]">
-                <div className="flex itemscenter gap-2">
-                  <span>
-                    選択中:{' '}
-                    <span className="font-semibold text-emerald-700">
-                      {selectedIds.length}
-                    </span>{' '}
-                    件
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleToggleAllVisible}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-400 bg-white hover:bg-gray-100 px-2 py-1 text-[11px]"
-                    disabled={selectableItems.length === 0}
-                  >
-                    {allVisibleSelected
-                      ? 'この一覧の未送信分を全て外す'
-                      : 'この一覧の未送信分を全て選択'}
-                  </button>
-                </div>
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-600">
+                  選択中: <span className="font-bold text-green-700">{selectedIds.length}</span> 件
+                </span>
+                <button
+                  type="button"
+                  onClick={handleToggleAllVisible}
+                  className="rounded-xl border border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-bold transition"
+                  disabled={selectableItems.length === 0}
+                >
+                  {allVisibleSelected ? '全て外す' : '未送信を全て選択'}
+                </button>
                 <button
                   type="button"
                   onClick={handleOpenSendConfirm}
                   disabled={sending || selectedIds.length === 0}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="rounded-xl bg-green-600 text-white px-4 py-1.5 text-xs font-bold shadow-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
-                  {sending ? '送信中...' : '選択した件を送信'}
+                  {sending ? '⏳ 送信中...' : '📤 選択した件を送信'}
                 </button>
               </div>
             </div>
 
-            <table className="min-w-full text-[11px] sm:text-xs">
+            <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-2 py-1 text-center border-b border-gray-200 w-8">
+                  <th className="px-3 py-2 text-center border-b border-gray-200 w-10">
                     <input
                       type="checkbox"
                       checked={selectableItems.length > 0 && allVisibleSelected}
@@ -740,99 +654,62 @@ export default function RemindersMonthPage() {
                       disabled={selectableItems.length === 0}
                     />
                   </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    日付
-                  </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    種別
-                  </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    顧客名
-                  </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    車両
-                  </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    ナンバー
-                  </th>
-                  <th className="px-2 py-1 text-left border-b border-gray-200">
-                    状態
-                  </th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">日付</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">種別</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">顧客名</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">車両</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">ナンバー</th>
+                  <th className="px-3 py-2 text-left border-b border-gray-200 font-bold text-gray-600">状態</th>
                 </tr>
               </thead>
               <tbody>
    {filteredItems.map((item) => {
       const isSent = !!item.sent;
-
-      // ★ LINE連携あり＆未送信だけ選択可能
       const selectable = !isSent && canSelect(item);
       const isChecked = selectable && selectedIds.includes(item.id);
 
       return (
         <tr
           key={item.id}
-          className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
-          onClick={() => setDetailItem(item)} // 行クリックで詳細モーダル
+          className="border-t border-gray-100 hover:bg-green-50 cursor-pointer transition-colors"
+          onClick={() => setDetailItem(item)}
         >
-          {/* チェックボックス */}
           <td
-            className="px-2 py-1 text-center align-middle"
+            className="px-3 py-2 text-center align-middle"
             onClick={(e) => e.stopPropagation()}
           >
             <input
               type="checkbox"
               checked={isChecked}
               disabled={!selectable}
-              onChange={() => {
-                if (selectable) {
-                  toggleItem(item.id);
-                }
-              }}
+              onChange={() => { if (selectable) toggleItem(item.id); }}
             />
           </td>
-
-          {/* 日付 */}
-          <td className="px-2 py-1 whitespace-nowrap">
+          <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-800">
             {item.date}
           </td>
-
-          {/* 種別 */}
-          <td className="px-2 py-1 whitespace-nowrap">
-            {categoryLabelMap[item.category]}
+          <td className="px-3 py-2 whitespace-nowrap">
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-gray-100 text-gray-700">
+              {categoryLabelMap[item.category]}
+            </span>
           </td>
 
-          {/* 顧客名 */}
-          <td className="px-2 py-1 whitespace-nowrap">
-            {item.customerName}
-          </td>
-
-          {/* 車両名 */}
-          <td className="px-2 py-1 whitespace-nowrap">
-            {item.carName ?? '-'}
-          </td>
-
-          {/* ナンバー（plateNumber 優先 → registrationNumber） */}
-          <td className="px-2 py-1 whitespace-nowrap">
-            {item.plateNumber ?? item.registrationNumber ?? '-'}
-          </td>
-
-          {/* 状態 */}
-          <td className="px-2 py-1 text-xs whitespace-nowrap">
+          <td className="px-3 py-2 whitespace-nowrap text-gray-800">{item.customerName}</td>
+          <td className="px-3 py-2 whitespace-nowrap text-gray-600">{item.carName ?? '-'}</td>
+          <td className="px-3 py-2 whitespace-nowrap text-gray-600">{item.plateNumber ?? item.registrationNumber ?? '-'}</td>
+          <td className="px-3 py-2 whitespace-nowrap">
             {item.lineUid ? (
               isSent ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  送信済み
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold">
+                  ✅ 送信済み
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 px-2 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                  未送信
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-[11px] font-bold">
+                  📤 未送信
                 </span>
               )
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 border border-gray-200 px-2.5 py-0.5 text-[11px]">
                 LINE未連携
               </span>
             )}
@@ -840,239 +717,154 @@ export default function RemindersMonthPage() {
         </tr>
       );
     })}
-
     {filteredItems.length === 0 && (
       <tr>
-        <td
-          colSpan={7}
-          className="px-2 py-4 text-center text-gray-500"
-        >
+        <td colSpan={7} className="px-3 py-6 text-center text-gray-400 text-sm">
           この条件に合う対象はありません。
         </td>
       </tr>
     )}
   </tbody>
 </table>
+            </div>
           </section>
         )}
 
         {!loading && !data && !pageError && (
-          <p className="text-sm text-gray-600">
-            月を選択すると、その月の日付ごとの件数と、
-            対象者・対象車両の一覧が表示されます。
-          </p>
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm px-5 py-6 text-sm text-gray-500 text-center">
+            月を選択すると、その月の日付ごとの件数と対象者・対象車両の一覧が表示されます。
+          </div>
         )}
       </div>
 
-      {/* ★ 送信確認モーダル（件数＋メッセージ内容＋カウントダウン） */}
+      {/* 送信確認モーダル */}
       {sendConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              選択したリマインドの送信確認
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              下記の件数と内容で LINE リマインドを送信します。
-              内容をご確認のうえ、10秒カウントダウン後に送信を実行します。
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 p-5">
+            <h3 className="text-base font-extrabold text-gray-900 mb-1">📤 送信確認</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              下記の件数と内容でLINEリマインドを送信します。10秒カウントダウン後に送信されます。
             </p>
 
-            <div className="space-y-3 text-[12px] sm:text-sm">
-              <div className="flex justify-between">
-                <span className="text-[11px] font-medium text-gray-500">
-                  送信対象件数
-                </span>
-                <span className="text-gray-900 font-semibold">
-                  {selectedItems.length} 件
-                </span>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center bg-gray-50 rounded-xl px-4 py-2.5">
+                <span className="text-xs font-bold text-gray-600">送信対象件数</span>
+                <span className="text-lg font-black text-green-700">{selectedItems.length} 件</span>
               </div>
 
-              {/* 簡易一覧（先頭3件くらい） */}
-              <div className="border-t border-gray-200 pt-2">
-                <div className="text-[11px] font-medium text-gray-500 mb-1">
-                  対象の一部（最大3件）
-                </div>
-                <ul className="space-y-1 max-h-32 overflow-y-auto text-[11px] text-gray-800">
+              <div className="rounded-xl border border-gray-200 p-3">
+                <div className="text-xs font-bold text-gray-600 mb-2">対象の一部（最大3件）</div>
+                <ul className="space-y-1 max-h-28 overflow-y-auto">
                   {selectedItems.slice(0, 3).map((item) => (
-                    <li key={item.id} className="flex flex-wrap gap-x-2">
-                      <span className="text-gray-500">
-                        {item.date} /
-                        {categoryLabelMap[item.category]}
-                      </span>
-                      <span className="font-medium">
-                        {item.customerName}
-                      </span>
-                      {item.carName && (
-                        <span className="text-gray-600">
-                          （{item.carName}）
-                        </span>
-                      )}
+                    <li key={item.id} className="text-xs text-gray-700 flex flex-wrap gap-x-2">
+                      <span className="text-gray-400">{item.date} / {categoryLabelMap[item.category]}</span>
+                      <span className="font-semibold">{item.customerName}</span>
+                      {item.carName && <span className="text-gray-500">({item.carName})</span>}
                     </li>
                   ))}
-                  {selectedItems.length === 0 && (
-                    <li className="text-gray-500">
-                      送信対象が選択されていません。
-                    </li>
-                  )}
+                  {selectedItems.length === 0 && <li className="text-xs text-gray-400">送信対象が選択されていません。</li>}
                 </ul>
               </div>
 
-              {/* メッセージ内容サンプル（1件目） */}
-              <div className="border-t border-gray-200 pt-2">
-                <div className="text-[11px] font-medium text-gray-500 mb-1">
-                  メッセージ内容（1件目のサンプル）
-                </div>
-                <pre className="text-[11px] bg-gray-50 border border-gray-200 rounded-md p-2 whitespace-pre-wrap text-gray-800 max-h-40 overflow-y-auto">
-                  {selectedItems[0]?.messageText ||
-                    'メッセージ内容を取得できませんでした。'}
+              <div className="rounded-xl border border-gray-200 p-3">
+                <div className="text-xs font-bold text-gray-600 mb-1.5">メッセージ内容（1件目）</div>
+                <pre className="text-xs bg-gray-50 rounded-lg p-2.5 whitespace-pre-wrap text-gray-800 max-h-32 overflow-y-auto">
+                  {selectedItems[0]?.messageText || 'メッセージ内容を取得できませんでした。'}
                 </pre>
               </div>
 
-              {/* カウントダウン表示 */}
-              <div className="border-t border-gray-200 pt-2 flex items-center justify-between">
-                <div className="text-[11px] text-gray-600">
-                  カウントダウンが 0 秒になると送信を開始します。
-                </div>
-                <div className="text-lg font-bold text-emerald-700 tabular-nums">
-                  {isCounting ? `${countdown}s` : '待機中'}
-                </div>
+              <div className="flex items-center justify-between bg-green-50 rounded-xl px-4 py-2.5 border border-green-200">
+                <span className="text-xs text-gray-600">カウントダウンが0秒になると送信を開始します。</span>
+                <span className="text-2xl font-black text-green-700 tabular-nums">
+                  {isCounting ? `${countdown}s` : '—'}
+                </span>
               </div>
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setSendConfirmOpen(false);
-                  setIsCounting(false);
-                  setCountdown(10);
-                }}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+                onClick={() => { setSendConfirmOpen(false); setIsCounting(false); setCountdown(10); }}
+                className="px-4 py-2 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 font-bold transition"
                 disabled={sending}
               >
                 キャンセル
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (!isCounting) {
-                    setCountdown(10);
-                    setIsCounting(true);
-                  }
-                }}
+                onClick={() => { if (!isCounting) { setCountdown(10); setIsCounting(true); } }}
                 disabled={sending || selectedItems.length === 0}
-                className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
               >
-                {isCounting
-                  ? `${countdown} 秒後に送信します`
-                  : '10秒カウントダウンを開始'}
+                {isCounting ? `${countdown} 秒後に送信します` : '10秒カウントダウンを開始'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 顧客・車両 詳細モーダル */}
+      {/* 詳細モーダル */}
       {detailItem && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              顧客・車両の詳細
-            </h3>
-            <p className="text-xs text-gray-600 mb-3">
-              月別サマリで選択した行の情報です。顧客・車両のより詳しい情報は
-              「顧客一覧」「車両一覧」から確認できます。
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 p-5">
+            <h3 className="text-base font-extrabold text-gray-900 mb-1">👤 顧客・車両の詳細</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              詳しい情報は「顧客一覧」「車両一覧」から確認できます。
             </p>
 
-            <div className="space-y-3 text[12px] sm:text-sm">
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  リマインド日付
+            <div className="space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">リマインド日付</div>
+                  <div className="font-semibold text-gray-900">{detailItem.date}</div>
                 </div>
-                <div className="text-gray-900">{detailItem.date}</div>
-              </div>
-
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  リマインド種別
-                </div>
-                <div className="text-gray-900">
-                  {categoryLabelMap[detailItem.category]}
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">種別</div>
+                  <div className="font-semibold text-gray-900">{categoryLabelMap[detailItem.category]}</div>
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-2">
-                <div className="text-[11px] font-medium text-gray-500">
-                  顧客名
+              <div className="rounded-xl bg-gray-50 px-3 py-2">
+                <div className="text-[10px] font-bold text-gray-500 mb-0.5">顧客名</div>
+                <div className="font-semibold text-gray-900">{detailItem.customerName || '-'}</div>
+              </div>
+              <div className="rounded-xl bg-gray-50 px-3 py-2">
+                <div className="text-[10px] font-bold text-gray-500 mb-0.5">住所</div>
+                <div className="text-gray-800 whitespace-pre-line">{detailItem.customerAddress || '-'}</div>
+              </div>
+
+              <div className="rounded-xl bg-gray-50 px-3 py-2">
+                <div className="text-[10px] font-bold text-gray-500 mb-0.5">連絡先（電話）</div>
+                <div className="text-gray-800">{detailItem.customerPhone || '-'}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">車両名</div>
+                  <div className="text-gray-800">{detailItem.carName || '-'}</div>
                 </div>
-                <div className="text-gray-900">
-                  {detailItem.customerName || '-'}
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">ナンバー</div>
+                  <div className="text-gray-800">{detailItem.plateNumber || '-'}</div>
+                </div>
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">車検日</div>
+                  <div className="text-gray-800">{formatDateLabel(detailItem.shakenDate)}</div>
+                </div>
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="text-[10px] font-bold text-gray-500 mb-0.5">点検日</div>
+                  <div className="text-gray-800">{formatDateLabel(detailItem.inspectionDate)}</div>
                 </div>
               </div>
 
-              {/* 住所 */}
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  住所
-                </div>
-                <div className="text-gray-900 whitespace-pre-line">
-                  {detailItem.customerAddress || '-'}
-                </div>
-              </div>
-
-              {/* 連絡先（電話） */}
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  連絡先（電話）
-                </div>
-                <div className="text-gray-900">
-                  {detailItem.customerPhone || '-'}
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-2">
-                <div className="text-[11px] font-medium text-gray-500">
-                  車両名
-                </div>
-                <div className="text-gray-900">
-                  {detailItem.carName || '-'}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  ナンバー
-                </div>
-                <div className="text-gray-900">
-                  {detailItem.plateNumber || '-'}
-                </div>
-              </div>
-
-              {/* ★ 車検日 */}
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  車検日
-                </div>
-                <div className="text-gray-900">
-                  {formatDateLabel(detailItem.shakenDate)}
-                </div>
-              </div>
-
-              {/* ★ 点検日 */}
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  点検日
-                </div>
-                <div className="text-gray-900">
-                  {formatDateLabel(detailItem.inspectionDate)}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[11px] font-medium text-gray-500">
-                  状態
-                </div>
-                <div className="text-gray-900">
-                  {detailItem.sent ? '送信済み' : '未送信'}
+              <div className="rounded-xl bg-gray-50 px-3 py-2">
+                <div className="text-[10px] font-bold text-gray-500 mb-0.5">状態</div>
+                <div>
+                  {detailItem.sent ? (
+                    <span className="text-xs font-bold text-emerald-700">✅ 送信済み</span>
+                  ) : (
+                    <span className="text-xs font-bold text-blue-700">📤 未送信</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1081,7 +873,7 @@ export default function RemindersMonthPage() {
               <button
                 type="button"
                 onClick={() => setDetailItem(null)}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+                className="px-4 py-2 rounded-xl border border-gray-300 text-sm font-bold text-gray-700 bg-white hover:bg-gray-50 transition"
               >
                 閉じる
               </button>

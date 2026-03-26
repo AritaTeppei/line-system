@@ -81,5 +81,16 @@ export class BillingController {
     return this.billingService.upgradeNow(user.tenantId, body.plan);
   }
 
-
+    @Post('downgrade-next')
+    @UseGuards(JwtAuthGuard)
+    async downgradeNext(
+      @Req() req: Request,
+      @Body() body: { plan: 'BASIC' | 'STANDARD' | 'PRO' },
+    ) {
+      const user = (req as any).authUser as AuthPayload | undefined;
+      if (!user || !user.tenantId) {
+        throw new BadRequestException('テナント情報が取得できません。');
+      }
+      return this.billingService.scheduleDowngrade(user.tenantId, body.plan);
+    }
 }

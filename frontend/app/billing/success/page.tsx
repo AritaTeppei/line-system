@@ -1,17 +1,18 @@
 // frontend/app/billing/success/page.tsx
 
 type BillingSuccessPageProps = {
-  searchParams: {
+  searchParams: Promise<{
     [key: string]: string | string[] | undefined;
-  };
+  }>;
 };
 
-export default function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
-  // URL例: /billing/success?session_id=xxx&redirect_status=succeeded などを想定
-  const sessionIdParam = searchParams["session_id"];
+export default async function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
+  const params = await searchParams;
+
+  const sessionIdParam = params["session_id"];
   const sessionId = Array.isArray(sessionIdParam) ? sessionIdParam[0] : sessionIdParam ?? "";
 
-  const statusParam = searchParams["redirect_status"];
+  const statusParam = params["redirect_status"];
   const status = Array.isArray(statusParam) ? statusParam[0] : statusParam ?? "succeeded";
 
   return (

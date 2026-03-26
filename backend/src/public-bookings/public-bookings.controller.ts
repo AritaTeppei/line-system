@@ -65,9 +65,10 @@ export class PublicBookingsController {
       bookingDate: string;
       timeSlot: string;
       note?: string;
+      needLoanerCar: boolean;
     },
   ) {
-    const { tenantId, customerId, carId, bookingDate, timeSlot, note } = body;
+    const { tenantId, customerId, carId, bookingDate, timeSlot, note, needLoanerCar  } = body;
 
     if (!tenantId || !customerId || !carId) {
       throw new BadRequestException(
@@ -78,6 +79,10 @@ export class PublicBookingsController {
     if (!bookingDate) {
       throw new BadRequestException('bookingDate は必須です。');
     }
+
+    if (typeof needLoanerCar !== 'boolean') {
+  throw new BadRequestException('代車の要否（needLoanerCar）は必須です。');
+}
 
     // "YYYY-MM-DD" 想定でパース
     const date = new Date(bookingDate);
@@ -169,6 +174,7 @@ export class PublicBookingsController {
         status: 'PENDING', // BookingStatus.PENDING
         source: 'LINE_PUBLIC_FORM', // 「どこから来たか」
         note: note ?? null,
+        needLoanerCar,
       },
     });
 

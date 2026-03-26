@@ -156,12 +156,7 @@ export class LineSettingsService {
 
     const body = {
       to: dto.to,
-      messages: [
-        {
-          type: 'text',
-          text: dto.message,
-        },
-      ],
+      messages: [{ type: 'text', text: dto.message }],
     };
 
     try {
@@ -177,14 +172,49 @@ export class LineSettingsService {
       return { success: true };
     } catch (e: any) {
       const lineError = e?.response?.data ?? e?.message ?? e;
-
       console.error('LINE push error:', lineError);
-
-      // 一時的に詳細を返す（デバッグ用）
       throw new BadRequestException({
         message: 'LINEへのテスト送信に失敗しました',
         lineError,
       });
     }
+  }
+
+  /**
+   * Reply API でメッセージ送信（replyToken を使う）
+   * follow イベントなど replyToken がある場合に優先して使う
+   */
+  async sendReplyMessage(
+    tenantId: number,
+    replyToken: string,
+    message: string,
+  ): Promise<void> {
+    const settings = await this.prisma.lineSettings.findUnique({
+      where: { tenantId },
+    });
+
+    if (!settings?.accessToken) {
+      throw new BadRequestException(
+        'このテナントにはLINEアクセストークンが設定されていません',
+      );
+    }
+
+    const body = {
+      replyToken,
+      messages: [{ type: 'text', text: message }],
+    };
+
+    const res$ = this.http.post(
+      'https://api.line.me/v2/bot/message/reply',
+      body,
+      {
+        headers: {
+          Authorization: `Bearer ${settings.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+    await firstValueFrom(res$);
   }
 }

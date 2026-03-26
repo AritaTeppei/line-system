@@ -335,343 +335,275 @@ export default function RemindersPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p>読み込み中...</p>
-      </main>
+      <TenantLayout>
+        <div className="text-sm text-gray-800">読み込み中...</div>
+      </TenantLayout>
     );
   }
 
   if (pageError) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <div className="border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
-          <p className="font-semibold mb-2">エラー</p>
-          <p className="text-sm mb-2 whitespace-pre-wrap">{pageError}</p>
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100"
-            onClick={reloadPreview}
-          >
-            再読み込み
-          </button>
+      <TenantLayout>
+        <div className="max-w-3xl mx-auto mt-8">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p className="font-bold mb-1">エラー</p>
+            <p className="whitespace-pre-wrap">{pageError}</p>
+            <button
+              className="mt-3 px-4 py-1.5 rounded-xl border border-red-300 bg-white text-red-700 text-xs font-bold hover:bg-red-50 transition"
+              onClick={reloadPreview}
+            >
+              再読み込み
+            </button>
+          </div>
         </div>
-      </main>
+      </TenantLayout>
     );
   }
 
+  // カードメタ情報
+  const reminderCards: {
+    key: 'birthday' | 'shaken2m' | 'shaken1w' | 'inspection1m' | 'custom';
+    icon: string;
+    label: string;
+    timing: string;
+    color: string;
+    border: string;
+    badge: string;
+    sendingKey: typeof sendingType;
+    message: string;
+    setMessage: (v: string) => void;
+    onSend: () => void;
+    targets: { id: string; name: string; sub?: string; lineUid?: string | null; extra?: string }[];
+  }[] = [
+    {
+      key: 'birthday',
+      icon: '🎂',
+      label: '誕生日メッセージ',
+      timing: '誕生日当日',
+      color: 'from-rose-50 to-pink-50',
+      border: 'border-rose-200',
+      badge: 'bg-rose-100 text-rose-700',
+      sendingKey: 'BIRTHDAY',
+      message: birthdayMessage,
+      setMessage: setBirthdayMessage,
+      onSend: handleSendBirthday,
+      targets: (preview?.birthdayTargets ?? []).map((t) => ({
+        id: `birthday-${t.customerId}`,
+        name: t.customerName,
+        lineUid: t.lineUid,
+      })),
+    },
+    {
+      key: 'shaken2m',
+      icon: '🔧',
+      label: '車検 2ヶ月前',
+      timing: '車検満了の約60日前',
+      color: 'from-blue-50 to-sky-50',
+      border: 'border-blue-200',
+      badge: 'bg-blue-100 text-blue-700',
+      sendingKey: 'SHAKEN_2M',
+      message: shaken2mMessage,
+      setMessage: setShaken2mMessage,
+      onSend: handleSendShaken2m,
+      targets: (preview?.shakenTwoMonths ?? []).map((t) => ({
+        id: `shaken2m-${t.carId}`,
+        name: `${t.carName}（${t.registrationNumber}）`,
+        sub: `顧客: ${t.customerName}`,
+        lineUid: t.lineUid,
+      })),
+    },
+    {
+      key: 'shaken1w',
+      icon: '⚠️',
+      label: '車検 1週間前',
+      timing: '車検満了の7日前',
+      color: 'from-orange-50 to-amber-50',
+      border: 'border-orange-200',
+      badge: 'bg-orange-100 text-orange-700',
+      sendingKey: 'SHAKEN_1W',
+      message: shaken1wMessage,
+      setMessage: setShaken1wMessage,
+      onSend: handleSendShaken1w,
+      targets: (preview?.shakenOneWeek ?? []).map((t) => ({
+        id: `shaken1w-${t.carId}`,
+        name: `${t.carName}（${t.registrationNumber}）`,
+        sub: `顧客: ${t.customerName}`,
+        lineUid: t.lineUid,
+      })),
+    },
+    {
+      key: 'inspection1m',
+      icon: '🔩',
+      label: '点検 1ヶ月前',
+      timing: '点検予定日の30日前',
+      color: 'from-purple-50 to-violet-50',
+      border: 'border-purple-200',
+      badge: 'bg-purple-100 text-purple-700',
+      sendingKey: 'INSPECTION_1M',
+      message: inspection1mMessage,
+      setMessage: setInspection1mMessage,
+      onSend: handleSendInspection1m,
+      targets: (preview?.inspectionOneMonth ?? []).map((t) => ({
+        id: `insp1m-${t.carId}`,
+        name: `${t.carName}（${t.registrationNumber}）`,
+        sub: `顧客: ${t.customerName}`,
+        lineUid: t.lineUid,
+      })),
+    },
+    {
+      key: 'custom',
+      icon: '📅',
+      label: '任意日付メッセージ',
+      timing: '任意に設定した日付の指定日前',
+      color: 'from-gray-50 to-slate-50',
+      border: 'border-gray-200',
+      badge: 'bg-gray-100 text-gray-600',
+      sendingKey: 'CUSTOM',
+      message: customMessage,
+      setMessage: setCustomMessage,
+      onSend: handleSendCustom,
+      targets: (preview?.custom ?? []).map((t) => ({
+        id: `custom-${t.carId}`,
+        name: `${t.carName}（${t.registrationNumber}）`,
+        sub: `顧客: ${t.customerName}`,
+        lineUid: t.lineUid,
+        extra: t.daysBefore != null ? `${t.daysBefore}日前のタイミング` : undefined,
+      })),
+    },
+  ];
+
   return (
     <TenantLayout>
-    <main className="min-h-screen flex flex-col items-center p-4 gap-6">
-      <h1 className="text-2xl font-bold mt-4">リマインド候補プレビュー & 一括送信</h1>
+      <div className="max-w-3xl mx-auto space-y-5 pb-12">
 
-      {me && (
-        <div className="border rounded-md px-4 py-3 bg-gray-50 w-full max-w-4xl">
-          <p>
-            ログイン中: {me.name ?? me.email}（ロール: {me.role}）
+        {/* ── ページヘッダー ── */}
+        <div>
+          <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+            🔔 リマインド管理
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            指定した日付のリマインド対象をプレビューし、LINE一括送信ができます。
           </p>
-          <p className="text-xs text-gray-600 mt-1">
-            dev@example.com（MANAGER）で、自テナントの候補と送信を確認する想定です。
-          </p>
-        </div>
-      )}
-
-      {/* 日付選択＆再取得 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-white">
-        <h2 className="font-semibold mb-3">対象日</h2>
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            className="border rounded px-2 py-1 text-sm"
-            value={dateStr}
-            onChange={(e) => setDateStr(e.target.value)}
-          />
-          <button
-            className="px-3 py-1 border rounded text-sm bg-gray-100"
-            onClick={reloadPreview}
-          >
-            この日付でプレビュー
-          </button>
-        </div>
-        {preview && (
-          <p className="text-xs text-gray-600 mt-2">
-            サーバー側判定日: {formatDate(preview.date)}（tenantId:{' '}
-            {preview.tenantId}）
-          </p>
-        )}
-        {sendMessage && (
-          <p className="text-xs text-green-700 mt-2 whitespace-pre-wrap">
-            {sendMessage}
-          </p>
-        )}
-        {sendError && (
-          <p className="text-xs text-red-600 mt-2 whitespace-pre-wrap">
-            {sendError}
-          </p>
-        )}
-      </section>
-
-      {/* 誕生日 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-gray-50">
-        <h2 className="font-semibold mb-3">誕生日対象（当日）</h2>
-
-        <div className="mb-3">
-          <label className="block text-xs text-gray-600 mb-1">
-            送信メッセージ（全対象共通）
-          </label>
-          <textarea
-            className="w-full border rounded px-2 py-1 text-sm h-24"
-            value={birthdayMessage}
-            onChange={(e) => setBirthdayMessage(e.target.value)}
-          />
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100 disabled:opacity-60"
-            onClick={handleSendBirthday}
-            disabled={sendingType === 'BIRTHDAY'}
-          >
-            {sendingType === 'BIRTHDAY'
-              ? '送信中...'
-              : '誕生日対象に一括送信（LINE連携ありのみ）'}
-          </button>
         </div>
 
-        {preview && preview.birthdayTargets.length === 0 && (
-          <p className="text-sm text-gray-600">対象はありません。</p>
-        )}
-        <ul className="space-y-1">
-          {preview?.birthdayTargets.map((t) => (
-            <li
-              key={`birthday-${t.customerId}`}
-              className="text-sm border-b last:border-b-0 py-1"
+        {/* 日付選択カード */}
+        <section className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
+          <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">🗓️ 対象日を選択</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="date"
+              className="border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+              value={dateStr}
+              onChange={(e) => setDateStr(e.target.value)}
+            />
+            <button
+              className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 transition shadow-sm"
+              onClick={reloadPreview}
             >
-              <span className="font-semibold">{t.customerName}</span>
-              {t.lineUid ? (
-                <span className="text-xs text-green-700 ml-2">
-                  （LINE連携あり）
-                </span>
-              ) : (
-                <span className="text-xs text-red-500 ml-2">
-                  （LINE未連携・送信対象外）
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
+              この日付でプレビュー
+            </button>
+            {preview && (
+              <span className="text-xs text-gray-500">
+                判定日: {formatDate(preview.date)}
+              </span>
+            )}
+          </div>
 
-      {/* 車検2ヶ月前 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-white">
-        <h2 className="font-semibold mb-3">車検 2ヶ月前</h2>
+          {sendMessage && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 font-semibold">
+              ✅ {sendMessage}
+            </div>
+          )}
+          {sendError && (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+              ❌ {sendError}
+            </div>
+          )}
+        </section>
 
-        <div className="mb-3">
-          <label className="block text-xs text-gray-600 mb-1">
-            送信メッセージ（全対象共通）
-          </label>
-          <textarea
-            className="w-full border rounded px-2 py-1 text-sm h-24"
-            value={shaken2mMessage}
-            onChange={(e) => setShaken2mMessage(e.target.value)}
-          />
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100 disabled:opacity-60"
-            onClick={handleSendShaken2m}
-            disabled={sendingType === 'SHAKEN_2M'}
-          >
-            {sendingType === 'SHAKEN_2M'
-              ? '送信中...'
-              : '車検２ヶ月前対象に一括送信（LINE連携ありのみ）'}
-          </button>
+        {/* リマインドカード一覧 */}
+        <div className="space-y-4">
+          {reminderCards.map((card) => {
+            const isSending = sendingType === card.sendingKey;
+            const lineEnabledCount = card.targets.filter((t) => t.lineUid).length;
+
+            return (
+              <section
+                key={card.key}
+                className={`rounded-2xl border shadow-sm overflow-hidden ${card.border}`}
+              >
+                {/* カードヘッダー */}
+                <div className={`bg-gradient-to-r ${card.color} px-5 py-3 flex items-center justify-between`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{card.icon}</span>
+                    <h2 className="text-sm font-bold text-gray-800">{card.label}</h2>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${card.badge}`}>
+                      {card.timing}
+                    </span>
+                    <span className="text-xs font-bold text-gray-700 bg-white/70 border border-gray-200 rounded-full px-2.5 py-1">
+                      対象 {card.targets.length}件
+                      {lineEnabledCount > 0 && (
+                        <span className="text-green-700 ml-1">（LINE {lineEnabledCount}件）</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white px-5 pt-4 pb-3 space-y-3">
+                  {/* メッセージ入力 */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                      送信メッセージ（全対象共通）
+                    </label>
+                    <textarea
+                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 transition"
+                      value={card.message}
+                      onChange={(e) => card.setMessage(e.target.value)}
+                    />
+                  </div>
+
+                  {/* 対象リスト */}
+                  {card.targets.length === 0 ? (
+                    <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3">この日付の対象はありません。</p>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {card.targets.map((t) => (
+                        <li key={t.id} className="flex items-start justify-between gap-2 text-sm rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                          <div>
+                            <span className="font-semibold text-gray-800">{t.name}</span>
+                            {t.sub && <span className="text-xs text-gray-500 ml-2">{t.sub}</span>}
+                            {t.extra && <span className="text-xs text-gray-400 ml-2">({t.extra})</span>}
+                          </div>
+                          {t.lineUid ? (
+                            <span className="flex-shrink-0 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">LINE✓</span>
+                          ) : (
+                            <span className="flex-shrink-0 text-xs text-red-500 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">未連携</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* 送信フッター */}
+                <div className="bg-gray-50 border-t border-gray-100 px-5 py-3 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={card.onSend}
+                    disabled={isSending || lineEnabledCount === 0}
+                    className="px-5 py-2 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+                  >
+                    {isSending ? '⏳ 送信中...' : `📤 LINE連携済み ${lineEnabledCount}件に一括送信`}
+                  </button>
+                </div>
+              </section>
+            );
+          })}
         </div>
 
-        {preview && preview.shakenTwoMonths.length === 0 && (
-          <p className="text-sm text-gray-600">対象はありません。</p>
-        )}
-        <ul className="space-y-1">
-          {preview?.shakenTwoMonths.map((t) => (
-            <li
-              key={`shaken2m-${t.carId}`}
-              className="text-sm border-b last:border-b-0 py-1"
-            >
-              <div>
-                <span className="font-semibold">
-                  {t.carName}（{t.registrationNumber}）
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                顧客: {t.customerName}{' '}
-                {t.lineUid ? (
-                  <span className="text-green-700 ml-1">（LINE連携あり）</span>
-                ) : (
-                  <span className="text-red-500 ml-1">
-                    （LINE未連携・送信対象外）
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* 車検1週間前 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-gray-50">
-        <h2 className="font-semibold mb-3">車検 1週間前</h2>
-
-        <div className="mb-3">
-          <label className="block text-xs text-gray-600 mb-1">
-            送信メッセージ（全対象共通）
-          </label>
-          <textarea
-            className="w-full border rounded px-2 py-1 text-sm h-24"
-            value={shaken1wMessage}
-            onChange={(e) => setShaken1wMessage(e.target.value)}
-          />
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100 disabled:opacity-60"
-            onClick={handleSendShaken1w}
-            disabled={sendingType === 'SHAKEN_1W'}
-          >
-            {sendingType === 'SHAKEN_1W'
-              ? '送信中...'
-              : '車検１週間前対象に一括送信（LINE連携ありのみ）'}
-          </button>
-        </div>
-
-        {preview && preview.shakenOneWeek.length === 0 && (
-          <p className="text-sm text-gray-600">対象はありません。</p>
-        )}
-        <ul className="space-y-1">
-          {preview?.shakenOneWeek.map((t) => (
-            <li
-              key={`shaken1w-${t.carId}`}
-              className="text-sm border-b last:border-b-0 py-1"
-            >
-              <div>
-                <span className="font-semibold">
-                  {t.carName}（{t.registrationNumber}）
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                顧客: {t.customerName}{' '}
-                {t.lineUid ? (
-                  <span className="text-green-700 ml-1">（LINE連携あり）</span>
-                ) : (
-                  <span className="text-red-500 ml-1">
-                    （LINE未連携・送信対象外）
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* 点検1ヶ月前 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-white">
-        <h2 className="font-semibold mb-3">点検 1ヶ月前</h2>
-
-        <div className="mb-3">
-          <label className="block text-xs text-gray-600 mb-1">
-            送信メッセージ（全対象共通）
-          </label>
-          <textarea
-            className="w-full border rounded px-2 py-1 text-sm h-24"
-            value={inspection1mMessage}
-            onChange={(e) => setInspection1mMessage(e.target.value)}
-          />
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100 disabled:opacity-60"
-            onClick={handleSendInspection1m}
-            disabled={sendingType === 'INSPECTION_1M'}
-          >
-            {sendingType === 'INSPECTION_1M'
-              ? '送信中...'
-              : '点検１ヶ月前対象に一括送信（LINE連携ありのみ）'}
-          </button>
-        </div>
-
-        {preview && preview.inspectionOneMonth.length === 0 && (
-          <p className="text-sm text-gray-600">対象はありません。</p>
-        )}
-        <ul className="space-y-1">
-          {preview?.inspectionOneMonth.map((t) => (
-            <li
-              key={`insp1m-${t.carId}`}
-              className="text-sm border-b last:border-b-0 py-1"
-            >
-              <div>
-                <span className="font-semibold">
-                  {t.carName}（{t.registrationNumber}）
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                顧客: {t.customerName}{' '}
-                {t.lineUid ? (
-                  <span className="text-green-700 ml-1">（LINE連携あり）</span>
-                ) : (
-                  <span className="text-red-500 ml-1">
-                    （LINE未連携・送信対象外）
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* 任意日付 */}
-      <section className="border rounded-md px-4 py-4 w-full max-w-4xl bg-gray-50">
-        <h2 className="font-semibold mb-3">任意日付（custom）</h2>
-
-        <div className="mb-3">
-          <label className="block text-xs text-gray-600 mb-1">
-            送信メッセージ（全対象共通）
-          </label>
-          <textarea
-            className="w-full border rounded px-2 py-1 text-sm h-24"
-            value={customMessage}
-            onChange={(e) => setCustomMessage(e.target.value)}
-          />
-          <button
-            className="mt-2 px-3 py-1 border rounded text-sm bg-gray-100 disabled:opacity-60"
-            onClick={handleSendCustom}
-            disabled={sendingType === 'CUSTOM'}
-          >
-            {sendingType === 'CUSTOM'
-              ? '送信中...'
-              : '任意日付対象に一括送信（LINE連携ありのみ）'}
-          </button>
-        </div>
-
-        {preview && preview.custom.length === 0 && (
-          <p className="text-sm text-gray-600">対象はありません。</p>
-        )}
-        <ul className="space-y-1">
-          {preview?.custom.map((t) => (
-            <li
-              key={`custom-${t.carId}`}
-              className="text-sm border-b last:border-b-0 py-1"
-            >
-              <div>
-                <span className="font-semibold">
-                  {t.carName}（{t.registrationNumber}）
-                </span>
-              </div>
-              <div className="text-xs text-gray-600">
-                顧客: {t.customerName}{' '}
-                {t.lineUid ? (
-                  <span className="text-green-700 ml-1">（LINE連携あり）</span>
-                ) : (
-                  <span className="text-red-500 ml-1">
-                    （LINE未連携・送信対象外）
-                  </span>
-                )}
-              </div>
-              <div className="text-xs text-gray-500">
-                任意日付まで {t.daysBefore ?? 0} 日前のタイミング
-              </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+      </div>
     </TenantLayout>
   );
 }

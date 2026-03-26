@@ -49,6 +49,10 @@ type OnboardingStatus = {
   currentPeriodEnd: string | null;
 } | null;
 
+type MeExtended = Me & {
+  tenantPlan?: string | null;
+  trialEnd?: string | null;
+};
 
 type Customer = {
   id: number;
@@ -128,7 +132,7 @@ function statusBadgeClass(s: BookingStatus) {
 const weekdayLabels = ['日', '月', '火', '水', '木', '金', '土'];
 
 export default function DashboardPage() {
-  const [me, setMe] = useState<Me | null>(null);
+  const [me, setMe] = useState<MeExtended | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
@@ -164,55 +168,7 @@ export default function DashboardPage() {
         if (!res.ok) throw new Error('auth/me api error');
         return res.json();
       })
-      .then((data: Me) => setMe(data));
-
-    const fetchBookings = fetch(`${apiBase}/bookings`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error('bookings api error');
-        return res.json();
-      })
-      .then((data: Booking[]) => setBookings(data));
-
-    const fetchCustomers = fetch(`${apiBase}/customers`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error('customers api error');
-        return res.json();
-      })
-      .then((data: Customer[]) => setCustomers(data));
-
-    Promise.all([fetchMe, fetchBookings, fetchCustomers])
-      .catch((err) => {
-        console.error(err);
-        setErrorMsg(
-          'ダッシュボード情報の取得に失敗しました。時間をおいて再度お試しください。',
-        );
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-    // 初期ロード：auth/me + bookings + customers
-  useEffect(() => {
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('auth_token')
-        : null;
-
-    if (!token) {
-      setLoading(false);
-      setErrorMsg('ログイン情報が見つかりません。再ログインしてください。');
-      return;
-    }
-
-    const headers: HeadersInit = {
-      Authorization: `Bearer ${token}`,
-    };
-
-    const fetchMe = fetch(`${apiBase}/auth/me`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error('auth/me api error');
-        return res.json();
-      })
-      .then((data: Me) => setMe(data));
+      .then((data: MeExtended) => setMe(data));
 
     const fetchBookings = fetch(`${apiBase}/bookings`, { headers })
       .then((res) => {
@@ -396,139 +352,146 @@ export default function DashboardPage() {
 
   const monthLabel = `${currentYear}年 ${currentMonth + 1}月`;
 
+  // トライアル残り日数（ダッシュボード用）
+  const isTrial = (me as MeExtended | null)?.tenantPlan?.toUpperCase() === 'TRIAL';
+  let trialRemainingDays: number | null = null;
+  const trialEndStr = (me as MeExtended | null)?.trialEnd;
+  if (isTrial && trialEndStr) {
+    const end = new Date(trialEndStr);
+    const now = new Date();
+    trialRemainingDays = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
   return (
     <TenantLayout>
       <div className="max-w-6xl mx-auto space-y-6">
         {/* ヘッダー */}
-        <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold text-green-700 tracking-wide drop-shadow-sm">
-              ダッシュボード
-            </h1>
-            <p className="text-[11px] sm:text-xs text-gray-600 mt-1">
-              本日の予約状況や今月の予約件数、直近の動きをひと目で確認できます。
-              詳細は左メニューから各画面へ移動してください。
-            </p>
-          </div>
-
-          {me && (
-            <div className="text-xs text-gray-600 text-right space-y-1">
-              <div>
-                ログイン中:{' '}
-                <span className="font-medium text-gray-900">
-                  {me.email}
-                </span>
-              </div>
-              <div>
-                ロール:{' '}
-                <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-50 px-2 py-0.5 text-emerald-800 text-[11px]">
-                  {me.role === 'DEVELOPER'
-                    ? '開発者'
-                    : me.role === 'MANAGER'
-                    ? '管理者'
-                    : 'スタッフ'}
-                </span>
-              </div>
-            </div>
-          )}
+        <header>
+          <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+            📊 ダッシュボード
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            本日の予約状況や今月の動きをひと目で確認できます。
+          </p>
         </header>
 
-        {/* サマリカード */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          {/* 本日の予約 */}
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-2">
-            <div className="text-[11px] font-semibold text-gray-500">
-              本日の予約
+        {/* ★ トライアル中アップグレードバナー */}
+        {isTrial && me?.role === 'MANAGER' && (
+          <div className="rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 p-px shadow-lg">
+            <div className="rounded-2xl bg-white/95 px-5 py-4 flex flex-col sm:flex-row items-center gap-3">
+              <div className="text-3xl flex-shrink-0">⏳</div>
+              <div className="flex-1 text-center sm:text-left">
+                <p className="font-black text-gray-900 text-base">
+                  トライアル中
+                  {trialRemainingDays !== null && (
+                    <span className="text-orange-500 ml-2">
+                      — あと <span className="text-2xl font-black">{Math.max(0, trialRemainingDays)}</span> 日
+                    </span>
+                  )}
+                </p>
+                <p className="text-sm text-gray-600 mt-0.5">
+                  プランに登録すると顧客・車両・予約の件数制限が外れ、フル機能が使えます！
+                </p>
+              </div>
+              <a
+                href="/billing"
+                className="flex-shrink-0 inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow hover:shadow-md hover:from-green-600 hover:to-emerald-700 transition-all"
+              >
+                ✨ プランを登録する
+              </a>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
+          </div>
+        )}
+
+        {/* サマリカード */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* 本日の予約 */}
+          <div className="rounded-2xl border-l-4 border-l-blue-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-blue-500 flex items-center gap-1">
+              📆 本日の予約
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">
                 {todayBookings.length}
               </span>
-              <span className="text-[11px] text-gray-500">
-                件（{todayKey}）
-              </span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="mt-1 text-[11px] text-gray-600 space-y-0.5">
-              <div>
-                ・未確認：{' '}
-                <span className="font-semibold text-amber-700">
-                  {todayPendingCount}件
-                </span>
+            <div className="text-sm text-gray-500">
+              {todayKey}
+            </div>
+            <div className="mt-1 space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">未確認</span>
+                <span className="font-bold text-amber-600">{todayPendingCount}件</span>
               </div>
-              <div>
-                ・確定：{' '}
-                <span className="font-semibold text-emerald-700">
-                  {todayConfirmedCount}件
-                </span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">確定</span>
+                <span className="font-bold text-emerald-600">{todayConfirmedCount}件</span>
               </div>
             </div>
           </div>
 
           {/* 今月の予約 */}
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-2">
-            <div className="text-[11px] font-semibold text-gray-500">
-              今月の予約（{monthLabel}）
+          <div className="rounded-2xl border-l-4 border-l-green-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-green-600 flex items-center gap-1">
+              📈 今月の予約
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">
                 {monthTotal}
               </span>
-              <span className="text-[11px] text-gray-500">件</span>
+              <span className="text-sm text-gray-400">件</span>
             </div>
-            <div className="mt-1 text-[11px] text-gray-600 space-y-0.5">
-              <div>
-                ・未確認：{' '}
-                <span className="font-semibold text-amber-700">
-                  {monthPending}件
-                </span>
+            <div className="text-sm text-gray-500">
+              {monthLabel}
+            </div>
+            <div className="mt-1 space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">未確認</span>
+                <span className="font-bold text-amber-600">{monthPending}件</span>
               </div>
-              <div>
-                ・確定：{' '}
-                <span className="font-semibold text-emerald-700">
-                  {monthConfirmed}件
-                </span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">確定</span>
+                <span className="font-bold text-emerald-600">{monthConfirmed}件</span>
               </div>
             </div>
           </div>
 
-          {/* 顧客・未確認など */}
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-2">
-            <div className="text-[11px] font-semibold text-gray-500">
-              全体状況
+          {/* 全体状況 */}
+          <div className="rounded-2xl border-l-4 border-l-purple-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-purple-500 flex items-center gap-1">
+              👥 全体状況
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-gray-900">
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">
                 {customers.length}
               </span>
-              <span className="text-[11px] text-gray-500">
-                件の顧客
-              </span>
+              <span className="text-sm text-gray-400">名の顧客</span>
             </div>
-            <div className="mt-1 text-[11px] text-gray-600 space-y-0.5">
-              <div>
-                ・未確認予約：{' '}
-                <span className="font-semibold text-amber-700">
-                  {totalPending}件
-                </span>
+            <div className="text-sm text-gray-500">
+              登録済み顧客数
+            </div>
+            <div className="mt-1 space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">未確認予約</span>
+                <span className="font-bold text-amber-600">{totalPending}件</span>
               </div>
-              <div>
-                ・全予約件数：{' '}
-                <span className="font-semibold text-gray-900">
-                  {bookings.length}件
-                </span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">全予約数</span>
+                <span className="font-bold text-gray-700">{bookings.length}件</span>
               </div>
             </div>
           </div>
         </section>
 
-                        {/* 簡易グラフ：直近7日間の予約件数 */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm sm:text-base font-semibold text-gray-900">
-              直近7日間の予約件数
+        {/* 簡易グラフ：直近7日間の予約件数 */}
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+              📉 直近7日間の予約件数
             </h2>
-            <p className="text-[11px] text-gray-500">
-              今日を含めた7日間の予約件数を、棒グラフで表示します。
+            <p className="text-xs text-gray-400 hidden sm:block">
+              今日を含めた7日間
             </p>
           </div>
 
@@ -592,9 +555,9 @@ export default function DashboardPage() {
         </section>
 
         {/* 直近の予約一覧 */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
-            直近の予約（最新5件）
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <h2 className="text-base font-black text-gray-900 mb-4 flex items-center gap-2">
+            📋 直近の予約（最新5件）
           </h2>
 
           {recentBookings.length === 0 ? (
@@ -603,30 +566,30 @@ export default function DashboardPage() {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-[11px] sm:text-xs">
+              <table className="min-w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-900">
-                    <th className="px-2 py-1 border border-gray-300 text-left">
+                  <tr className="bg-gray-50 text-gray-700">
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
                       予約日
                     </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
                       時間帯
                     </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
                       顧客
                     </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
                       車両
                     </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
                       ステータス
                     </th>
-                    <th className="px-2 py-1 border border-gray-300 text-left">
-                      何の予約か
+                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
+                      内容
                     </th>
                   </tr>
                 </thead>
-                                <tbody>
+                <tbody>
                   {recentBookings.map((b) => {
                     const customerName = b.customer
                       ? `${b.customer.lastName ?? ''} ${
@@ -654,7 +617,6 @@ export default function DashboardPage() {
                       b.bookingDate,
                     );
 
-                    // ★ クリック時に /bookings?date=YYYY-MM-DD へ遷移
                     const handleRowClick = () => {
                       const dateKey = toDateKey(b.bookingDate);
                       router.push(
@@ -666,31 +628,31 @@ export default function DashboardPage() {
                       <tr
                         key={b.id}
                         onClick={handleRowClick}
-                        className="text-gray-900 align-top cursor-pointer hover:bg-emerald-50"
+                        className="text-gray-800 align-middle cursor-pointer hover:bg-green-50 transition-colors"
                       >
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap text-sm font-medium">
                           {dateLabel}
                         </td>
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap text-sm">
                           {timeSlotLabel(b.timeSlot)}
                         </td>
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap text-sm">
                           {customerName || '-'}
                         </td>
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap text-sm">
                           {carLabel || '-'}
                         </td>
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap">
                           <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${statusBadgeClass(
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(
                               b.status,
                             )}`}
                           >
                             {statusLabel(b.status)}
                           </span>
                         </td>
-                        <td className="px-2 py-1 border border-gray-300 whitespace-nowrap">
-                          <span className="inline-flex items-center rounded-full border border-gray-500 bg-white px-2 py-0.5 text-[10px] sm:text-[11px] text-gray-900">
+                        <td className="px-3 py-2 border border-gray-200 whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-700">
                             {purpose}
                           </span>
                         </td>
@@ -703,9 +665,8 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <p className="mt-3 text-[11px] text-gray-500">
-            予約の詳細な確認や日付別の重複状況は、
-            左メニュー「予約一覧」からカレンダー画面で確認できます。
+          <p className="mt-4 text-sm text-gray-400">
+            予約の詳細確認・日付別管理は左メニューの「📅 予約一覧」から確認できます。
           </p>
         </section>
       </div>

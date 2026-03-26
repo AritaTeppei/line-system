@@ -38,6 +38,7 @@ export default function PublicBookingForm({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false); // ★ 仮予約済みフラグ
+  const [loanerCar, setLoanerCar] = useState<'NEED' | 'NO' | ''>('');
 
   // この予約リンク用の localStorage キー（同じリンクからの二重利用を防ぐ）
   const reservationKey =
@@ -71,6 +72,11 @@ export default function PublicBookingForm({
       alert('すでに仮予約を送信済みです。店舗からの連絡をお待ちください。');
       return;
     }
+
+    if (!loanerCar) {
+    setErrorMsg('代車の有無を選択してください。');
+    return;
+    } 
 
     if (baseError) {
       setErrorMsg(baseError);
@@ -116,6 +122,7 @@ export default function PublicBookingForm({
           carId,
           bookingDate,
           timeSlot, // "MORNING" | "AFTERNOON" | "EVENING"
+          needsLoanerCar: loanerCar === 'NEED',
           note,
         }),
       });
@@ -263,6 +270,39 @@ export default function PublicBookingForm({
                   </select>
                   <p className="mt-1 text-xs text-slate-700">
                     正確な入庫時間は店舗からの折り返し連絡にてご相談させていただきます。
+                  </p>
+                </div>
+
+                                {/* 代車（必須） */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    代車 <span className="text-red-500">*</span>
+                  </label>
+
+                  <div className="flex items-center gap-4 text-sm">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={loanerCar === 'NEED'}
+                        onChange={() => setLoanerCar('NEED')}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      必要
+                    </label>
+
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={loanerCar === 'NO'}
+                        onChange={() => setLoanerCar('NO')}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      不要
+                    </label>
+                  </div>
+
+                  <p className="mt-1 text-xs text-slate-700">
+                    どちらか一方を選択してください。
                   </p>
                 </div>
 

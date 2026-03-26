@@ -26,12 +26,9 @@ type MeResponse = {
   tenantId: number | null;
   role: Role;
   tenantName?: string | null;
-  tenantPlan?: string | null; 
+  tenantPlan?: string | null;
   trialEnd?: string | null;
-  tenant?: {
-    name?: string | null;
-    displayName?: string | null;
-  } | null;
+  trialRemainingDays?: number | null;
 };
 
 type OnboardingStatus = {
@@ -45,31 +42,30 @@ type OnboardingStatus = {
   currentPeriodEnd: string | null;
 } | null;
 
-// メインメニュー
+// メインメニュー（絵文字アイコン付き）
 const mainLinks = [
-  { href: '/dashboard', label: 'ダッシュボード' },
-  { href: '/customers', label: '顧客一覧' },
-  { href: '/cars', label: '車両一覧' },
-  { href: '/bookings', label: '予約一覧' },
-  { href: '/reminders/month', label: 'リマインド管理' },
+  { href: '/dashboard', label: 'ダッシュボード', icon: '📊' },
+  { href: '/customers', label: '顧客一覧', icon: '👥' },
+  { href: '/cars', label: '車両一覧', icon: '🚗' },
+  { href: '/bookings', label: '予約一覧', icon: '📅' },
+  { href: '/reminders/month', label: 'リマインド管理', icon: '🔔' },
 ];
 
-// ★ 管理者用「各種設定」メニュー（3つに集約）
+// ★ 管理者用「各種設定」メニュー
 const managerSettingLinks = [
-  { href: '/settings/messages', label: 'メッセージ設定' },
-  { href: '/settings/change-password', label: '設定パスワード' },
-  { href: '/onboarding/line', label: 'LINE連携' },
-  { href: '/billing', label: 'サブスク登録・プラン管理' }, 
+  { href: '/settings/messages', label: 'メッセージ設定', icon: '💬' },
+  { href: '/settings/change-password', label: 'パスワード設定', icon: '🔒' },
+  { href: '/onboarding/line', label: 'LINE連携', icon: '🟢' },
+  { href: '/billing', label: 'サブスク・プラン管理', icon: '💳' },
 ];
 
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-  // ★ 追加：フロント側の操作なしタイムアウト（30分）
 const FRONT_INACTIVITY_LOGOUT_MS =
   process.env.NODE_ENV === 'development'
-    ? 30 * 60 * 1000 // 開発環境：30分
-    : 30 * 60 * 1000; // 本番：30分
+    ? 30 * 60 * 1000
+    : 30 * 60 * 1000;
 
 
 function getAuthToken(): string | null {
@@ -125,7 +121,6 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
   if (!me || me.role !== 'MANAGER') return null;
   if (!status) return null;
 
-  // LINE設定 + サブスク登録が完了していたらパネル非表示
   const allDone =
     status.hasLineSettings &&
     status.lineSettingsActive &&
@@ -133,58 +128,72 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
 
   if (allDone) return null;
 
+  const step1Done = status.hasLineSettings && status.lineSettingsActive;
+  const step2Done = status.hasSubscription;
+
   return (
-    <section className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-xs text-gray-800">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <p className="font-semibold text-yellow-900 text-sm mb-1">
-            初期設定の進捗
-          </p>
-          <p className="text-[11px] text-gray-700">
-            テナント名：<b>{status.tenantName}</b>（プラン: {status.plan}）
-          </p>
-          <ul className="mt-1 space-y-[2px] text-[11px]">
-            <li>
-              ・LINE連携：
-              <b>
-                {status.hasLineSettings
-                  ? status.lineSettingsActive
-                    ? '設定済み（有効）'
-                    : '設定済み（無効）'
-                  : '未設定'}
-              </b>
-            </li>
-            <li>
-              ・サブスク（クレジット登録）：
-              <b>
-                {status.hasSubscription
-                  ? `登録済み（${status.subscriptionStatus ?? '状態不明'}）`
-                  : '未登録'}
-              </b>
-            </li>
-          </ul>
+    <section className="mb-4 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-4 shadow-sm">
+      <p className="font-bold text-amber-900 text-sm mb-3 flex items-center gap-2">
+        🚀 初期設定を完了させましょう
+      </p>
+
+      <div className="space-y-2 mb-4">
+        {/* STEP 1: LINE連携 */}
+        <div className={`flex items-center gap-3 rounded-lg px-3 py-2 ${step1Done ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-amber-200'}`}>
+          <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step1Done ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white'}`}>
+            {step1Done ? '✓' : '1'}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-xs font-semibold ${step1Done ? 'text-emerald-700 line-through' : 'text-gray-800'}`}>
+              LINE連携の設定
+            </p>
+            {!step1Done && (
+              <p className="text-[10px] text-gray-500">未設定 — まずはここから</p>
+            )}
+          </div>
+          {step1Done && <span className="text-emerald-500 text-sm">✅</span>}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 mt-1 sm:mt-0">
-          <button
-            type="button"
-            className="px-3 py-1 rounded-md border border-emerald-500 bg-white text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
-            onClick={() => router.push('/onboarding/line')}
-          >
-            LINE連携の設定
-          </button>
-          <button
-            type="button"
-            className="px-3 py-1 rounded-md bg-blue-600 text-[11px] font-semibold text-white hover:bg-blue-700 shadow-sm"
-            onClick={() => router.push('/billing')}
-          >
-            サブスク登録・プラン管理
-          </button>
+        {/* STEP 2: サブスク登録 */}
+        <div className={`flex items-center gap-3 rounded-lg px-3 py-2 ${step2Done ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-amber-200'}`}>
+          <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step2Done ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-white'}`}>
+            {step2Done ? '✓' : '2'}
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className={`text-xs font-semibold ${step2Done ? 'text-emerald-700 line-through' : 'text-gray-800'}`}>
+              サブスク登録
+            </p>
+            {!step2Done && (
+              <p className="text-[10px] text-gray-500">未登録 — フル機能が使えます</p>
+            )}
+          </div>
+          {step2Done && <span className="text-emerald-500 text-sm">✅</span>}
         </div>
       </div>
 
+      <div className="flex flex-col gap-2">
+        {!step1Done && (
+          <button
+            type="button"
+            className="w-full px-3 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors shadow-sm"
+            onClick={() => router.push('/onboarding/line')}
+          >
+            🟢 LINE連携を設定する
+          </button>
+        )}
+        {!step2Done && (
+          <button
+            type="button"
+            className="w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
+            onClick={() => router.push('/billing')}
+          >
+            💳 サブスク登録・プラン管理
+          </button>
+        )}
+      </div>
+
       {error && (
-        <p className="mt-1 text-[10px] text-red-700 whitespace-pre-wrap">
+        <p className="mt-2 text-[10px] text-red-700 whitespace-pre-wrap">
           {error}
         </p>
       )}
@@ -194,50 +203,92 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
 
 // ★ TRIAL テナント専用バナー（サイドバー用）
 function TrialBanner({ me }: { me: MeResponse | null }) {
-  // me がない場合は表示しない
   if (!me) return null;
-
-  // MANAGER 以外には出さない
   if (me.role !== 'MANAGER') return null;
 
-  // プランが TRIAL 以外なら表示しない
   const rawPlan = me.tenantPlan ?? '';
   if (!rawPlan || rawPlan.toUpperCase() !== 'TRIAL') {
     return null;
   }
 
-  // ★ 残り日数を計算
+  // 残り日数を計算（トライアルは7日間前提）
+  const TRIAL_TOTAL_DAYS = 7;
   let remainingDays: number | null = null;
+  let progressPercent = 100;
+
   if (me.trialEnd) {
-    const end = new Date(me.trialEnd); // trialEnd は string | null | undefined なので if で絞り込み
+    const end = new Date(me.trialEnd);
     const now = new Date();
     const diffMs = end.getTime() - now.getTime();
     remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    // 経過日数を算出してプログレスバーに使用
+    const elapsed = TRIAL_TOTAL_DAYS - Math.max(0, remainingDays);
+    progressPercent = Math.min(100, Math.max(0, (elapsed / TRIAL_TOTAL_DAYS) * 100));
   }
 
+  // 残り日数に応じた緊急カラー
+  const isUrgent = remainingDays !== null && remainingDays <= 3;
+  const isWarning = remainingDays !== null && remainingDays <= 7 && !isUrgent;
+
+  const bannerBg = isUrgent
+    ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-300'
+    : isWarning
+    ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300'
+    : 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300';
+
+  const countBg = isUrgent
+    ? 'bg-red-500'
+    : isWarning
+    ? 'bg-orange-500'
+    : 'bg-amber-500';
+
+  const textColor = isUrgent
+    ? 'text-red-800'
+    : isWarning
+    ? 'text-orange-800'
+    : 'text-amber-800';
+
+  const barColor = isUrgent
+    ? 'bg-red-400'
+    : isWarning
+    ? 'bg-orange-400'
+    : 'bg-amber-400';
+
   return (
-    <div className="mt-2 w-full rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-center">
-      <p className="text-[11px] font-bold text-orange-700">
-        お試しプランをご利用中です
+    <div className={`mt-3 w-full rounded-xl border ${bannerBg} px-3 py-3`}>
+      <p className={`text-xs font-bold ${textColor} flex items-center gap-1`}>
+        ⏳ トライアル中
       </p>
 
       {remainingDays !== null && (
-        <p className="mt-1 text-[11px] text-orange-700 font-semibold">
-          残り {remainingDays} 日
-        </p>
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <span className={`${countBg} text-white rounded-lg px-3 py-1 text-2xl font-black leading-tight`}>
+            {Math.max(0, remainingDays)}
+          </span>
+          <span className={`text-sm font-bold ${textColor}`}>日</span>
+        </div>
       )}
 
-      <p className="mt-1 text-[10px] text-orange-700 leading-tight">
-        顧客・車両・予約の件数に
-        <br />
-        制限があります。
+      {/* 進捗バー */}
+      <div className="mt-2 w-full bg-white/70 rounded-full h-1.5 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${barColor} transition-all duration-500`}
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+      <p className={`mt-1 text-[10px] ${textColor} text-center`}>
+        トライアル経過 {Math.round(progressPercent)}%
+      </p>
+
+      <p className={`mt-2 text-[10px] ${textColor} text-center leading-tight`}>
+        顧客・車両・予約に<br />利用件数の制限があります
       </p>
 
       <Link
         href="/billing"
-        className="mt-2 inline-block w-full rounded-md bg-orange-500 px-2 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
+        className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg ${isUrgent ? 'bg-red-500 hover:bg-red-600' : isWarning ? 'bg-orange-500 hover:bg-orange-600' : 'bg-amber-500 hover:bg-amber-600'} px-2 py-2 text-xs font-bold text-white transition-colors shadow-sm`}
       >
-        サブスク登録して制限を解除
+        今すぐプラン登録する →
       </Link>
     </div>
   );
@@ -252,33 +303,26 @@ export default function TenantLayout({ children }: Props) {
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
-  const [me, setMe] = useState<MeResponse | null>(null); // ★ 追加：ログインユーザー情報
-    // ★ 追加：最後のユーザー操作時刻を管理する ref
+  const [me, setMe] = useState<MeResponse | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
 
-// ⬇⬇⬇ ここからこの useEffect を追加 ⬇⬇⬇
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const token = getAuthToken();
-    // トークンがない = ログインしていないので何もしない
     if (!token) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // 一部ブラウザでは e.preventDefault が必要
       e.preventDefault();
-      // これを書いておくと「本当に離れますか」ダイアログが出る
       e.returnValue = '';
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // アンマウント時に後片付け
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [me]); // me がセットされたら有効になるイメージ
-  // ⬆⬆⬆ ここまで追加 ⬆⬆⬆
+  }, [me]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -332,25 +376,10 @@ export default function TenantLayout({ children }: Props) {
         }
 
         const meData: MeResponse = await meRes.json();
-        setMe(meData); // ★ me を保存
+        setMe(meData);
 
-        // ログインユーザー名（担当）
-        const userNameValue = meData.name ?? null;
-        setUserName(userNameValue);
-
-        const tenantNameFromApi =
-          meData.tenantName ??
-          meData.tenant?.name ??
-          meData.tenant?.displayName ??
-          null;
-
-        const tenantNameValue =
-          tenantNameFromApi ??
-          (meData.tenantId != null
-            ? `Tenant #${meData.tenantId}`
-            : null);
-
-        setTenantName(tenantNameValue);
+        setUserName(meData.name ?? null);
+        setTenantName(meData.tenantName ?? null);
       } catch (e) {
         console.error('テナント情報の取得に失敗しました', e);
         setTenantName(null);
@@ -363,46 +392,40 @@ export default function TenantLayout({ children }: Props) {
   }, []);
 
   const handleLogout = useCallback(async (skipApi?: boolean) => {
-  if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-  const token = window.localStorage.getItem('auth_token');
+    const token = window.localStorage.getItem('auth_token');
 
-  // 自動ログアウトの時は API 呼ばない！（競合防止）
-  if (!skipApi && token) {
-    try {
-      await fetch(`${apiBase}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-    } catch (e) {
-      console.error('logout api error', e);
+    if (!skipApi && token) {
+      try {
+        await fetch(`${apiBase}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch (e) {
+        console.error('logout api error', e);
+      }
     }
-  }
 
-  // トークン類は必ず即削除
-  window.localStorage.removeItem('auth_token');
-  document.cookie = 'Authentication=; Max-Age=0; path=/';
-  document.cookie = 'access_token=; Max-Age=0; path=/';
+    window.localStorage.removeItem('auth_token');
+    document.cookie = 'Authentication=; Max-Age=0; path=/';
+    document.cookie = 'access_token=; Max-Age=0; path=/';
 
-  // 確実にログアウト画面へ遷移
-  window.location.href = '/';
-}, [router]);
+    window.location.href = '/';
+  }, [router]);
 
 
-    // ★ 追加：フロント側の「30分操作なしで自動ログアウト」
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 最初に現在時刻をセット
     lastActivityRef.current = Date.now();
 
     const updateActivity = () => {
       lastActivityRef.current = Date.now();
     };
 
-    // 何かしら操作があったら「アクティビティあり」とみなすイベント
     const events: (keyof WindowEventMap)[] = [
       'click',
       'keydown',
@@ -415,24 +438,20 @@ export default function TenantLayout({ children }: Props) {
       window.addEventListener(ev, updateActivity);
     });
 
-    // 1分おきに「最後の操作から30分経っているか」を確認
     const intervalId = window.setInterval(() => {
       const now = Date.now();
       const diff = now - lastActivityRef.current;
 
       if (diff > FRONT_INACTIVITY_LOGOUT_MS) {
-        // これ以上二重に発火しないように先にクリーンアップ
         window.clearInterval(intervalId);
         events.forEach((ev) => {
           window.removeEventListener(ev, updateActivity);
         });
 
-        // 自動ログアウト
         handleLogout(true);
       }
-    }, 60 * 1000); // 1分ごとにチェック
+    }, 60 * 1000);
 
-    // アンマウント時のクリーンアップ
     return () => {
       window.clearInterval(intervalId);
       events.forEach((ev) => {
@@ -443,143 +462,161 @@ export default function TenantLayout({ children }: Props) {
 
 
   return (
-    <div className="min-h-screen flex bg-[#F7FFF8]">
-      {/* 左サイドバー */}
-      <aside className="w-56 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
-        {/* ロゴ & タイトル部分 */}
-        <div className="px-4 py-4 border-b border-gray-100 flex flex-col items-center">
-          <div className="w-[160px] mb-2">
-            <Image
-              src="/pitlink-logo.png"
-              alt="PitLink ロゴ"
-              width={160}
-              height={160}
-              className="w-full h-auto"
-              priority
-            />
-          </div>
-          <div className="text-[11px] text-gray-500 text-center leading-tight">
-            自動車業界向けLINE 連携プラットフォーム
-          </div>
-          <div className="mt-2 text-xs font-bold text-gray-800">
-            LINE 通知システム
-          </div>
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50/50 to-white">
 
-          {/* ログインユーザー（担当） */}
-          {userName && (
-            <div className="mt-0.5 text-[11px] text-gray-600 text-center">
-              ログインユーザー：
-              <span className="font-medium">{userName}</span>
-            </div>
-          )}
-
-          {/* テナント名（あれば） */}
-          {tenantName && (
-            <div className="mt-0.5 text-[11px] text-gray-600 text-center">
-              テナント：
-              <span className="font-medium">{tenantName}</span>
-            </div>
-          )}
-
-          {/* ★ TRIAL プラン用バナー（テナント名の下） */}
-          <TrialBanner me={me} />
-
-          {/* ログアウトボタン */}
-          <button
-  type="button"
-  onClick={() => handleLogout(false)}  // ★ ラッパーで呼ぶ
-  className="mt-3 w-full inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-800 hover:bg-gray-100 transition-colors"
->
-  ログアウト
-</button>
-
+      {/* ── トップバー ── */}
+      <header className="h-14 bg-white border-b border-gray-200 shadow-sm flex items-center px-5 gap-4 flex-shrink-0 z-20">
+        {/* 店舗名 */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-green-600 text-lg">🏪</span>
+          <span className="font-bold text-gray-800 text-sm truncate max-w-[220px]">
+            {tenantName ?? 'PitLink'}
+          </span>
         </div>
 
-        {/* ナビゲーション */}
-        <nav className="px-3 py-4 text-xs flex-1 flex flex-col">
-          {/* メインメニュー */}
-          <div className="space-y-1">
-            {mainLinks.map((link) => {
-              const active =
-                pathname === link.href ||
-                (link.href !== '/dashboard' &&
-                  pathname?.startsWith(link.href));
+        {/* セパレーター */}
+        <div className="h-5 w-px bg-gray-200 flex-shrink-0" />
 
-              const isBookingsLink = link.href === '/bookings';
-              const showBadge =
-                isBookingsLink &&
-                pendingCount !== null &&
-                pendingCount > 0;
+        {/* ログインユーザー */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-sm font-semibold text-gray-700 truncate">
+            {userName ?? me?.email ?? ''}
+          </span>
+          {me?.role && (
+            <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              me.role === 'MANAGER'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-blue-100 text-blue-700'
+            }`}>
+              {me.role === 'MANAGER' ? '管理者' : 'スタッフ'}
+            </span>
+          )}
+        </div>
 
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={[
-                    'flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors',
-                    active
-                      ? 'bg-[#00C300] text-white'
-                      : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
-                  ].join(' ')}
-                >
-                  <span>{link.label}</span>
+        {/* ログアウトボタン */}
+        <button
+          type="button"
+          onClick={() => handleLogout(false)}
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+        >
+          <span>🚪</span> ログアウト
+        </button>
+      </header>
 
-                  {/* 未確認予約バッジ */}
-                  {showBadge && (
-                    <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] min-w-[18px] px-1">
-                      {pendingCount > 99 ? '99+' : pendingCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+      {/* ── メインエリア（サイドバー ＋ コンテンツ）── */}
+      <div className="flex flex-1 min-h-0">
+
+        {/* 左サイドバー */}
+        <aside className="w-56 bg-gradient-to-b from-white to-green-50/30 border-r border-gray-200 flex-shrink-0 flex flex-col shadow-sm">
+
+          {/* ロゴ */}
+          <div className="px-4 py-5 border-b border-gray-100 flex flex-col items-center">
+            <div className="w-[140px]">
+              <Image
+                src="/pitlink-logo.png"
+                alt="PitLink ロゴ"
+                width={140}
+                height={140}
+                className="w-full h-auto"
+                priority
+              />
+            </div>
+            <div className="mt-1 text-[11px] text-gray-400 text-center leading-snug">
+              自動車業界向け LINE連携
+            </div>
+
+            {/* ★ TRIAL プラン用バナー */}
+            <TrialBanner me={me} />
           </div>
 
-          {/* 各種設定（★ 管理者のみ・3つに集約） */}
-          {me?.role === 'MANAGER' && (
-            <div className="mt-4 pt-3 border-t border-gray-100">
-              <div className="mb-2 text-[11px] font-semibold text-gray-500 tracking-wide">
-                - 各種設定 -
-              </div>
+          {/* ナビゲーション */}
+          <nav className="px-3 py-4 text-sm flex-1 flex flex-col">
+            {/* メインメニュー */}
+            <div className="space-y-1">
+              {mainLinks.map((link) => {
+                const active =
+                  pathname === link.href ||
+                  (link.href !== '/dashboard' &&
+                    pathname?.startsWith(link.href));
 
-              <div className="space-y-1">
-                {managerSettingLinks.map((link) => {
-                  const active =
-                    pathname === link.href ||
-                    pathname?.startsWith(link.href);
+                const isBookingsLink = link.href === '/bookings';
+                const showBadge =
+                  isBookingsLink &&
+                  pendingCount !== null &&
+                  pendingCount > 0;
 
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={[
-                        'flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-colors',
-                        active
-                          ? 'bg-[#00C300] text-white'
-                          : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
-                      ].join(' ')}
-                    >
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={[
+                      'flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-150 font-medium',
+                      active
+                        ? 'bg-[#00C300] text-white shadow-sm'
+                        : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
+                    ].join(' ')}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{link.icon}</span>
                       <span>{link.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
+                    </span>
+
+                    {showBadge && (
+                      <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] min-w-[20px] px-1 font-bold">
+                        {pendingCount > 99 ? '99+' : pendingCount}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
             </div>
-          )}
-        </nav>
 
-        {/* フッター */}
-        <div className="px-3 py-2 border-t border-gray-100 text-[10px] text-gray-400 text-center">
-          &copy; PitLink
+            {/* 各種設定（管理者のみ） */}
+            {me?.role === 'MANAGER' && (
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="mb-2 text-[11px] font-bold text-gray-400 tracking-widest px-1">
+                  ⚙️ 各種設定
+                </div>
+
+                <div className="space-y-1">
+                  {managerSettingLinks.map((link) => {
+                    const active =
+                      pathname === link.href ||
+                      pathname?.startsWith(link.href);
+
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={[
+                          'flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-150 font-medium text-sm',
+                          active
+                            ? 'bg-[#00C300] text-white shadow-sm'
+                            : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
+                        ].join(' ')}
+                      >
+                        <span>{link.icon}</span>
+                        <span>{link.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </nav>
+
+          {/* フッター */}
+          <div className="px-3 py-3 border-t border-gray-100 text-[10px] text-gray-400 text-center">
+            &copy; PitLink
+          </div>
+        </aside>
+
+        {/* コンテンツエリア */}
+        <div className="flex-1 overflow-auto px-5 py-6">
+          <OnboardingPanel me={me} />
+          {children}
         </div>
-      </aside>
 
-      {/* 右側：各ページの中身 */}
-      <div className="flex-1 px-4 py-5">
-        {/* ★ 初期設定の進捗（TenantLayout 配下の全ページ共通） */}
-        <OnboardingPanel me={me} />
-
-        {children}
       </div>
     </div>
   );

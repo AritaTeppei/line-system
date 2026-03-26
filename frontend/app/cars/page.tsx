@@ -668,85 +668,48 @@ const filteredCustomersForSelect = normalizedCustomerQuery
         {/* ヘッダー */}
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-green-700 tracking-wide drop-shadow-sm">
-              車両管理
+            <h1 className="text-2xl font-extrabold text-green-700 flex items-center gap-2">
+              🚗 車両管理
             </h1>
-            <p className="text-[11px] sm:text-xs text-gray-600 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               顧客に紐づく車両情報の登録・編集、一括メッセージ送信ができます。LINE車検リマインドの対象車両をここで管理します。
             </p>
           </div>
-
-          {me && (
-            <div className="text-xs text-gray-600 text-right space-y-1">
-              <div>
-                ログイン中:{" "}
-                <span className="font-medium text-gray-900">
-                  {me.name ?? me.email}
-                </span>
-              </div>
-              <div>
-                ロール:{" "}
-                <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-50 px-2 py-0.5 text-emerald-800 text-[11px]">
-                  {me.role === "DEVELOPER"
-                    ? "開発者"
-                    : me.role === "MANAGER"
-                    ? "管理者"
-                    : "スタッフ"}
-                </span>
-              </div>
-            </div>
-          )}
         </header>
 
         {/* サマリ + 新規登録ボタン */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              登録済み車両
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl border-l-4 border-l-blue-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-blue-600 flex items-center gap-1">🚗 登録済み車両</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{cars.length}</span>
+              <span className="text-sm text-gray-400">台</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {cars.length}
-              </span>
-              <span className="text-[11px] text-gray-500">台</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              このテナントで登録されている車両の件数です。
-            </p>
+            <p className="text-xs text-gray-500">このテナントで登録されている車両の件数です。</p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-1">
-            <div className="text-[11px] font-semibold text-gray-500">
-              一括送信用に選択中
+          <div className="rounded-2xl border-l-4 border-l-amber-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-amber-600 flex items-center gap-1">☑️ 一括送信用に選択中</div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-4xl font-black text-gray-900">{selectedCarIds.length}</span>
+              <span className="text-sm text-gray-400">台</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">
-                {selectedCarIds.length}
-              </span>
-              <span className="text-[11px] text-gray-500">台</span>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              下の車両一覧のチェックボックスで選択した車両数です。
-            </p>
+            <p className="text-xs text-gray-500">チェックボックスで選択した車両数です。</p>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col justify-between gap-2">
-            <div className="text-[11px] font-semibold text-gray-500">
-              新規車両登録
+          <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col justify-between gap-3">
+            <div>
+              <div className="text-xs font-bold text-gray-600">✏️ 新規車両登録</div>
+              <p className="mt-1 text-xs text-gray-500">顧客に紐づく車両を新しく登録します。</p>
             </div>
-            <p className="text-[11px] text-gray-500">
-              顧客に紐づく車両を新しく登録します。顧客はあらかじめ顧客一覧で登録しておいてください。
-            </p>
-            <div className="mt-1">
-              <button
-                type="button"
-                onClick={openNewCarModal}
-                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
-              >
-                <span className="text-[14px]">＋</span>
-                <span>新規車両を登録</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={openNewCarModal}
+              className="inline-flex items-center justify-center gap-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-4 py-2 shadow-sm transition"
+            >
+              <span>＋</span>
+              <span>新規車両を登録</span>
+            </button>
           </div>
         </section>
 
