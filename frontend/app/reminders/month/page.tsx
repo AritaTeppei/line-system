@@ -313,9 +313,11 @@ export default function RemindersMonthPage() {
     return (data.items ?? []).filter((item) => idSet.has(item.id));
   }, [data, selectedIds]);
 
-    // ★「未送信」かつ「LINE連携あり」の行だけを「選択可能」とみなす
+  const isDeveloper = me?.role === 'DEVELOPER';
+
+    // DEVELOPERは送信済みも再選択可。それ以外は未送信のみ
   const selectableItems = filteredItems.filter(
-    (item) => !item.sent && canSelect(item),
+    (item) => (isDeveloper || !item.sent) && canSelect(item),
   );
 
   // チェック切り替え（未送信のみ）
@@ -665,7 +667,7 @@ export default function RemindersMonthPage() {
               <tbody>
    {filteredItems.map((item) => {
       const isSent = !!item.sent;
-      const selectable = !isSent && canSelect(item);
+      const selectable = (isDeveloper || !isSent) && canSelect(item);
       const isChecked = selectable && selectedIds.includes(item.id);
 
       return (
@@ -700,9 +702,15 @@ export default function RemindersMonthPage() {
           <td className="px-3 py-2 whitespace-nowrap">
             {item.lineUid ? (
               isSent ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold">
-                  ✅ 送信済み
-                </span>
+                isDeveloper ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-0.5 text-[11px] font-bold">
+                    🔁 送信済み（再送可）
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-bold">
+                    ✅ 送信済み
+                  </span>
+                )
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-[11px] font-bold">
                   📤 未送信
