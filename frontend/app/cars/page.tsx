@@ -833,38 +833,38 @@ const filteredCustomersForSelect = normalizedCustomerQuery
             </p>
           ) : (
             <>
-            <div className="overflow-x-auto max-h-[520px] border rounded-lg">
-              <table className="min-w-full text-[11px] sm:text-xs">
+            <div className="overflow-x-auto max-h-[520px] border rounded-xl">
+              <table className="min-w-full text-xs sm:text-sm">
                 <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
-                    <th className="border px-2 py-1 w-8">
+                    <th className="border-b px-3 py-2 w-8">
                       <span className="sr-only">選択</span>
                     </th>
-                    <th className="border px-2 py-1 text-left w-12">
+                    <th className="border-b px-3 py-2 text-left w-12 text-gray-600 font-semibold">
                       ID
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       顧客
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       車両名
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       登録番号
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       車台番号
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       車検日
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       点検日
                     </th>
-                    <th className="border px-2 py-1 text-left">
+                    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       任意日付
                     </th>
-                    <th className="border px-2 py-1 text-left w-28">
+                    <th className="border-b px-3 py-2 text-left w-28 text-gray-600 font-semibold">
                       操作
                     </th>
                   </tr>
@@ -878,75 +878,59 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                         key={car.id}
                         className="hover:bg-gray-50 text-gray-900"
                       >
-                        <td className="border px-2 py-1 text-center align-middle">
+                        <td className="border-b px-3 py-2 text-center align-middle">
                           <input
                             type="checkbox"
                             checked={selected}
-                            onChange={() =>
-                              toggleCarSelection(car.id)
-                            }
+                            onChange={() => toggleCarSelection(car.id)}
                           />
                         </td>
-                        <td className="border px-2 py-1 align-middle">
+                        <td className="border-b px-3 py-2 align-middle text-gray-500">
                           {car.id}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap">
                           <div className="flex flex-col gap-0.5">
-                            <span>{customerName}</span>
-                            <span className="text-[10px] text-gray-500">
-                              {car.customer.lineUid
-                                ? "LINE連携済"
-                                : "LINE未連携"}
+                            <span className="font-medium">{customerName}</span>
+                            <span className={`text-xs ${car.customer.lineUid ? 'text-green-600' : 'text-gray-400'}`}>
+                              {car.customer.lineUid ? "LINE連携済" : "LINE未連携"}
                             </span>
                           </div>
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap font-medium">
                           {car.carName}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap text-gray-700">
                           {car.registrationNumber}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap text-gray-700">
                           {car.chassisNumber}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap">
                           {car.shakenDate ? (
-                            <span>{formatDate(car.shakenDate)}</span>
+                            <span className="text-gray-700">{formatDate(car.shakenDate)}</span>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap">
                           {car.inspectionDate ? (
-                            <span>
-                              {formatDate(car.inspectionDate)}
-                            </span>
+                            <span className="text-gray-700">{formatDate(car.inspectionDate)}</span>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
-                        <td className="border px-2 py-1 align-middle whitespace-nowrap">
+                        <td className="border-b px-3 py-2 align-middle whitespace-nowrap">
                           {car.customReminderDate ? (
                             <>
-                              <span>
-                                {formatDate(
-                                  car.customReminderDate,
-                                )}
-                              </span>
+                              <span className="text-gray-700">{formatDate(car.customReminderDate)}</span>
                               {car.customDaysBefore != null && (
-                                <span className="text-[10px] text-gray-500 ml-1">
+                                <span className="text-xs text-gray-500 ml-1">
                                   / {car.customDaysBefore}日前
                                 </span>
                               )}
                             </>
                           ) : (
-                            <span className="text-gray-400">
-                              未設定
-                            </span>
+                            <span className="text-gray-400">未設定</span>
                           )}
                         </td>
                         <td className="border px-2 py-1 align-middle">
@@ -954,16 +938,14 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                             <button
                               type="button"
                               onClick={() => handleEditClick(car)}
-                              className="px-2 py-0.5 border border-gray-400 rounded-md text-[10px] hover:bg-gray-100 bg-white"
+                              className="px-3 py-1 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 bg-white font-medium"
                             >
                               編集
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                handleDeleteClick(car.id)
-                              }
-                              className="px-2 py-0.5 border border-red-500 rounded-md text-[10px] text-red-700 hover:bg-red-50 bg-white"
+                              onClick={() => handleDeleteClick(car.id)}
+                              className="px-3 py-1 border border-red-300 rounded-lg text-xs text-red-600 hover:bg-red-50 bg-white font-medium"
                             >
                               削除
                             </button>
@@ -1020,190 +1002,155 @@ const filteredCustomersForSelect = normalizedCustomerQuery
       {/* 車両登録／編集モーダル */}
       {isCarModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-              {editingCarId == null
-                ? "新規車両の登録"
-                : `車両情報の編集（ID: ${editingCarId}）`}
-            </h3>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden">
+            {/* モーダルヘッダー */}
+            <div className={`px-6 py-4 ${editingCarId == null ? 'bg-green-600' : 'bg-blue-600'} text-white`}>
+              <h3 className="text-base font-bold">
+                {editingCarId == null ? '🚗 新規車両の登録' : '✏️ 車両情報の編集'}
+              </h3>
+            </div>
 
+            <div className="p-5 overflow-y-auto max-h-[80vh]">
             {formError && (
-              <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
+              <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
                 {formError}
               </div>
             )}
 
             <form
-              className="space-y-3 text-[12px] sm:text-sm"
+              className="space-y-4"
               onSubmit={handleCreateOrUpdateCar}
             >
               <div>
-  <label className="block text-xs font-medium mb-1">
-    顧客 <span className="text-red-500">*</span>
-  </label>
-
-  {/* ★ 顧客検索入力欄を追加 */}
-  <input
-    type="text"
-    value={customerSearchQuery}
-    onChange={(e) => {
-      setCustomerSearchQuery(e.target.value);
-      // 新しい検索語に合わせて選択をクリアしたいならこれもアリ：
-      // setCustomerId("");
-    }}
-    placeholder="顧客名・携帯番号・IDなどで検索"
-    className="w-full mb-2 rounded-md border border-gray-400 px-2 py-1 text-[11px]"
-  />
-
-  <select
-    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
-    value={customerId}
-    onChange={(e) => setCustomerId(e.target.value)}
-  >
-    <option value="">選択してください</option>
-
-    {/* ★ ここを customers → filteredCustomersForSelect に変更 */}
-    {filteredCustomersForSelect.map((c) => (
-      <option key={c.id} value={c.id}>
-        {/* 表示情報はお好みで増やせる */}
-        {c.lastName} {c.firstName}
-        {c.mobilePhone ? `（${c.mobilePhone}）` : ""}
-      </option>
-    ))}
-  </select>
-
-  <p className="mt-1 text-[10px] text-gray-500">
-    上の検索欄に名前や携帯番号を入力すると候補が絞り込まれます。
-  </p>
-</div>
-
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  登録番号（例: 福岡333は1234）{" "}
-                  <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  顧客 <span className="text-red-500">*</span>
                 </label>
                 <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                  type="text"
+                  value={customerSearchQuery}
+                  onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                  placeholder="顧客名・携帯番号・IDなどで検索"
+                  className="w-full mb-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                />
+                <select
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                >
+                  <option value="">選択してください</option>
+                  {filteredCustomersForSelect.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.lastName} {c.firstName}
+                      {c.mobilePhone ? `（${c.mobilePhone}）` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  上の検索欄に名前や携帯番号を入力すると候補が絞り込まれます。
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  登録番号（例: 福岡333は1234）<span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                   value={registrationNumber}
-                  onChange={(e) =>
-                    setRegistrationNumber(e.target.value)
-                  }
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">
-                  車台番号（例: VZR-1234568）{" "}
-                  <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  車台番号（例: VZR-1234568）<span className="text-red-500">*</span>
                 </label>
                 <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                   value={chassisNumber}
-                  onChange={(e) =>
-                    setChassisNumber(e.target.value)
-                  }
+                  onChange={(e) => setChassisNumber(e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">
-                  車名（例: トヨタ ハイエース）{" "}
-                  <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  車名（例: トヨタ ハイエース）<span className="text-red-500">*</span>
                 </label>
                 <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                   value={carName}
                   onChange={(e) => setCarName(e.target.value)}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium mb-1">
-                    車検日
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">車検日</label>
                   <input
                     type="date"
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                     value={shakenDate}
                     onChange={(e) => setShakenDate(e.target.value)}
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-medium mb-1">
-                    点検日
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">点検日</label>
                   <input
                     type="date"
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                     value={inspectionDate}
-                    onChange={(e) =>
-                      setInspectionDate(e.target.value)
-                    }
+                    onChange={(e) => setInspectionDate(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium mb-1">
-                    任意日付
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">任意日付</label>
                   <input
                     type="date"
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                     value={customReminderDate}
-                    onChange={(e) =>
-                      setCustomReminderDate(e.target.value)
-                    }
+                    onChange={(e) => setCustomReminderDate(e.target.value)}
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-medium mb-1">
-                    任意日付の何日前に通知するか
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">何日前に通知</label>
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                     value={customDaysBefore}
-                    onChange={(e) =>
-                      setCustomDaysBefore(e.target.value)
-                    }
+                    onChange={(e) => setCustomDaysBefore(e.target.value)}
                   />
                 </div>
               </div>
 
               {formSuccess && (
-                <div className="text-[11px] text-emerald-700">
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
                   {formSuccess}
                 </div>
               )}
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-1 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={closeCarModal}
                   disabled={submitting}
-                  className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
+                  className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
                 >
                   閉じる
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
+                  className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700 disabled:bg-green-300"
                 >
-                  {submitting
-                    ? "処理中..."
-                    : editingCarId == null
-                    ? "車両を登録"
-                    : "車両情報を更新"}
+                  {submitting ? "処理中..." : editingCarId == null ? "車両を登録" : "車両情報を更新"}
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

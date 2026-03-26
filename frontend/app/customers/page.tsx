@@ -1218,32 +1218,32 @@ const pagedCustomers = filteredCustomers.slice(
             </p>
           ) : (
             <>
-              <div className="overflow-x-auto max-h-[480px] border rounded-lg">
-                <table className="min-w-full text-[11px] sm:text-xs">
+              <div className="overflow-x-auto max-h-[480px] border rounded-xl">
+                <table className="min-w-full text-xs sm:text-sm">
                   <thead className="bg-gray-50 sticky top-0 z-10">
   <tr>
-    <th className="border px-2 py-1 w-8">
+    <th className="border-b px-3 py-2 w-8">
       <span className="sr-only">選択</span>
     </th>
-    <th className="border px-2 py-1 text-left w-12">
+    <th className="border-b px-3 py-2 text-left w-14 text-gray-600 font-semibold">
       ID
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       名前
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       住所
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       携帯番号
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       LINE UID
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       誕生日
     </th>
-    <th className="border px-2 py-1 text-left">
+    <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
       タグ
     </th>
   </tr>
@@ -1263,11 +1263,11 @@ const pagedCustomers = filteredCustomers.slice(
         onClick={() => handleEditClick(c)}  // ★ 行クリックで車両モーダル
       >
         {/* チェックボックス */}
-        <td className="border px-2 py-1 text-center">
+        <td className="border-b px-3 py-2 text-center">
           <input
             type="checkbox"
             checked={isSelected}
-            onClick={(e) => e.stopPropagation()} // 行クリックを止める
+            onClick={(e) => e.stopPropagation()}
             onChange={() => {
               setSelectedCustomerIds((prev) =>
                 isSelected
@@ -1279,17 +1279,17 @@ const pagedCustomers = filteredCustomers.slice(
         </td>
 
         {/* 顧客ID */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        <td className="border-b px-3 py-2 whitespace-nowrap text-gray-500">
           {formatCustomerId(c)}
         </td>
 
         {/* 名前 */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        <td className="border-b px-3 py-2 whitespace-nowrap font-medium text-gray-900">
           {c.lastName} {c.firstName}
         </td>
 
         {/* 住所 */}
-        <td className="border px-2 py-1">
+        <td className="border-b px-3 py-2 text-gray-700">
           {fullAddress ? (
             fullAddress
           ) : (
@@ -1298,14 +1298,14 @@ const pagedCustomers = filteredCustomers.slice(
         </td>
 
         {/* 携帯番号 */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        <td className="border-b px-3 py-2 whitespace-nowrap text-gray-700">
           {c.mobilePhone ?? (
             <span className="text-gray-400">未登録</span>
           )}
         </td>
 
         {/* LINE UID */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        <td className="border-b px-3 py-2 whitespace-nowrap text-gray-700">
           {c.lineUid ? (
             <span title={c.lineUid}>
               {formatLineUid(c.lineUid)}
@@ -1316,20 +1316,20 @@ const pagedCustomers = filteredCustomers.slice(
         </td>
 
         {/* 誕生日 */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        <td className="border-b px-3 py-2 whitespace-nowrap text-gray-700">
           {c.birthday ? formatDate(c.birthday) : ""}
         </td>
 
-        {/* タグ（例：車両 / LINE連携 など） */}
-        <td className="border px-2 py-1 whitespace-nowrap">
+        {/* タグ */}
+        <td className="border-b px-3 py-2 whitespace-nowrap">
           <div className="flex flex-wrap gap-1">
             {resolveHasVehicle(c) && (
-              <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-300 px-2 py-0.5 text-[10px] text-emerald-700">
+              <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs text-emerald-700">
                 車両あり
               </span>
             )}
             {c.lineUid && (
-              <span className="inline-flex items-center rounded-full bg-green-50 border border-green-300 px-2 py-0.5 text-[10px] text-green-700">
+              <span className="inline-flex items-center rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
                 LINE連携
               </span>
             )}
@@ -1387,65 +1387,67 @@ const pagedCustomers = filteredCustomers.slice(
 
       {isCustomerModalOpen && (
   <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
-    <div className="w-full max-w-4xl rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-      <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2">
-        {editingCustomerId == null
-          ? '新規顧客の登録'
-          : `顧客情報の編集（ID: ${editingCustomerId}）`}
-      </h3>
+    <div className="w-full max-w-4xl rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden">
+      {/* モーダルヘッダー */}
+      <div className={`px-6 py-4 ${editingCustomerId == null ? 'bg-green-600' : 'bg-blue-600'} text-white`}>
+        <h3 className="text-base font-bold">
+          {editingCustomerId == null ? '👤 新規顧客の登録' : '✏️ 顧客情報の編集'}
+        </h3>
+      </div>
+
+      <div className="p-4 sm:p-5 overflow-y-auto max-h-[80vh]">
 
 {formError && (
-  <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
+  <div className="mb-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
     {formError}
   </div>
 )}
 
       {formSuccess && (
-  <div className="mb-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-800">
+  <div className="mb-3 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
     {formSuccess}
   </div>
 )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* 左：顧客情報フォーム */}
         <form
-          className="space-y-3 text-[12px] sm:text-sm"
+          className="space-y-4"
           onSubmit={handleCreateOrUpdate}
         >
-          {/* 姓・名・住所・電話・UID・誕生日など、今までの入力たち */}
-          {/* 例： */}
-          <div className="flex gap-2">
+          {/* 姓・名 */}
+          <div className="flex gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 姓 <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 名 <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
               />
             </div>
           </div>
 
-                    {/* 郵便番号＋住所1 */}
-          <div className="space-y-2">
+          {/* 郵便番号＋住所 */}
+          <div className="space-y-3">
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <label className="block text-xs font-medium mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   郵便番号
                 </label>
                 <input
-                  className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                   placeholder="8100001"
                   value={postalCode}
                   onChange={(e) => setPostalCode(e.target.value)}
@@ -1455,18 +1457,18 @@ const pagedCustomers = filteredCustomers.slice(
                 type="button"
                 onClick={handleLookupAddress}
                 disabled={isSearchingAddress || !postalCode.trim()}
-                className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm bg-white hover:bg-gray-100 disabled:opacity-50"
+                className="px-4 py-3 rounded-xl border border-gray-300 text-sm bg-white hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
               >
                 {isSearchingAddress ? "検索中..." : "住所検索"}
               </button>
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 住所（番地まで）
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 placeholder="福岡市〇〇区△△1-2-3"
                 value={address1}
                 onChange={(e) => setAddress1(e.target.value)}
@@ -1474,11 +1476,11 @@ const pagedCustomers = filteredCustomers.slice(
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 住所（建物名・部屋番号など）
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 placeholder="〇〇マンション101号室"
                 value={address2}
                 onChange={(e) => setAddress2(e.target.value)}
@@ -1487,13 +1489,13 @@ const pagedCustomers = filteredCustomers.slice(
           </div>
 
           {/* 電話・LINE UID・誕生日 */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 携帯番号 <span className="text-red-500">*</span>
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 placeholder="09012345678"
                 value={mobilePhone}
                 onChange={(e) => setMobilePhone(e.target.value)}
@@ -1501,11 +1503,11 @@ const pagedCustomers = filteredCustomers.slice(
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 LINE UID
               </label>
               <input
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 placeholder="Uから始まるIDを貼り付け"
                 value={lineUid}
                 onChange={(e) => setLineUid(e.target.value)}
@@ -1513,225 +1515,150 @@ const pagedCustomers = filteredCustomers.slice(
             </div>
 
             <div>
-              <label className="block text-xs font-medium mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 誕生日
               </label>
               <input
                 type="date"
-                className="w-full rounded-md border border-gray-500 px-2 py-1.5 text-[12px]"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                 value={birthday}
                 onChange={(e) => setBirthday(e.target.value)}
               />
             </div>
           </div>
 
-
           <div className="flex justify-end gap-2 pt-2">
             <button
-  type="button"
-  onClick={closeCustomerModal}
-  className="px-3 py-1.5 rounded-md border border-gray-500 text-xs sm:text-sm text-gray-900 bg-white hover:bg-gray-100"
->
-  閉じる
-</button>
-
+              type="button"
+              onClick={closeCustomerModal}
+              className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50"
+            >
+              閉じる
+            </button>
             <button
               type="submit"
-              className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700"
+              className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700"
             >
               {editingCustomerId == null ? '登録する' : '更新する'}
             </button>
           </div>
         </form>
 
-        {/* 右：車両一覧＋編集（元の「車両一覧＆編集モーダル」の中身をほぼそのままコピー） */}
-        <div>
-          <h4 className="text-xs font-semibold text-gray-900 mb-1">
-            車両一覧・編集
-          </h4>
-          <p className="text-[10px] text-gray-500 mb-2">
-            この顧客に紐づいている車両の一覧です。車両をクリックすると下のフォームで編集できます。
-          </p>
-
-            {carFormError && (
-    <div className="mb-2 rounded-md bg-red-50 border border-red-200 px-3 py-1.5 text-[11px] text-red-800">
-      {carFormError}
-    </div>
-  )}
-
-  {carFormSuccess && (
-    <div className="mb-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] text-emerald-800">
-      {carFormSuccess}
-    </div>
-  )}
-
-
-          {/* 一覧部分：今の車両モーダルのテーブルをここにコピー */}
-          <div className="border rounded-lg max-h-64 overflow-y-auto mb-2">
-            <table className="min-w-full text-[11px] sm:text-xs">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  <th className="border px-2 py-1 text-left">車名</th>
-                  <th className="border px-2 py-1 text-left">登録番号</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cars
-                  .filter((car) => car.customerId === editingCustomerId)
-                  .map((car) => {
-                    const isActive =
-                      selectedCar && selectedCar.id === car.id;
-                    return (
-                      <tr
-                        key={car.id}
-                        className={
-                          'cursor-pointer hover:bg-emerald-50 ' +
-                          (isActive ? 'bg-emerald-50' : '')
-                        }
-                        onClick={() => {
-                          setSelectedCar(car);
-                          setCarName(car.carName ?? '');
-                          setRegistrationNumber(
-                            car.registrationNumber ?? '',
-                          );
-                          setChassisNumber(car.chassisNumber ?? '');
-                          setShakenDate(
-                            car.shakenDate
-                              ? new Date(car.shakenDate)
-                                  .toISOString()
-                                  .slice(0, 10)
-                              : '',
-                          );
-                          setInspectionDate(
-                            car.inspectionDate
-                              ? new Date(car.inspectionDate)
-                                  .toISOString()
-                                  .slice(0, 10)
-                              : '',
-                          );
-                        }}
-                      >
-                        <td className="border px-2 py-1">
-                          {car.carName || (
-                            <span className="text-gray-400">
-                              車名未設定
-                            </span>
-                          )}
-                        </td>
-                        <td className="border px-2 py-1">
-                          {car.registrationNumber || (
-                            <span className="text-gray-400">
-                              登録番号未設定
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                {cars.filter(
-                  (car) => car.customerId === editingCustomerId,
-                ).length === 0 && (
-                  <tr>
-                    <td
-                      className="border px-2 py-2 text-center text-gray-500"
-                      colSpan={2}
-                    >
-                      この顧客に紐づく車両がありません。
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        {/* 右：車両一覧＋編集 */}
+        <div className="space-y-3">
+          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
+            <h4 className="text-sm font-bold text-gray-800 mb-0.5">🚗 紐づき車両</h4>
+            <p className="text-xs text-gray-500">
+              車両をクリックすると下のフォームで編集できます。
+            </p>
           </div>
 
-          {/* 選択中の車両編集フォーム（これも車両モーダルから流用） */}
-          <h5 className="text-xs font-semibold text-gray-900 mb-1">
-            {selectedCar
-              ? `選択中の車両を編集（ID: ${selectedCar.id}）`
-              : '編集する車両を上の一覧から選択してください'}
-          </h5>
+          {carFormError && (
+            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+              {carFormError}
+            </div>
+          )}
+          {carFormSuccess && (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+              {carFormSuccess}
+            </div>
+          )}
 
-          {selectedCar && (
-  <form
-    className="space-y-2 text-[12px] sm:text-sm"
-    onSubmit={(e) => e.preventDefault()}
-  >
-    {/* 車名 */}
-    <div>
-      <label className="block text-xs font-medium mb-1">
-        車名
-      </label>
-      <input
-        className="w-full rounded-md border border-gray-500 px-2 py-1"
-        value={carName}
-        onChange={(e) => setCarName(e.target.value)}
-      />
-    </div>
+          {/* 車両リスト */}
+          <div className="rounded-xl border border-gray-200 overflow-hidden max-h-52 overflow-y-auto">
+            {cars.filter((car) => car.customerId === editingCustomerId).length === 0 ? (
+              <p className="px-4 py-4 text-sm text-gray-400 text-center">この顧客に紐づく車両がありません。</p>
+            ) : (
+              cars.filter((car) => car.customerId === editingCustomerId).map((car) => {
+                const isActive = selectedCar && selectedCar.id === car.id;
+                return (
+                  <div
+                    key={car.id}
+                    className={`flex items-center justify-between px-4 py-3 border-b border-gray-100 cursor-pointer transition-colors ${isActive ? 'bg-green-50' : 'hover:bg-gray-50'}`}
+                    onClick={() => {
+                      setSelectedCar(car);
+                      setCarName(car.carName ?? '');
+                      setRegistrationNumber(car.registrationNumber ?? '');
+                      setChassisNumber(car.chassisNumber ?? '');
+                      setShakenDate(car.shakenDate ? new Date(car.shakenDate).toISOString().slice(0, 10) : '');
+                      setInspectionDate(car.inspectionDate ? new Date(car.inspectionDate).toISOString().slice(0, 10) : '');
+                    }}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{car.carName || <span className="text-gray-400">車名未設定</span>}</p>
+                      <p className="text-xs text-gray-500">{car.registrationNumber || '登録番号未設定'}</p>
+                    </div>
+                    {isActive && <span className="text-xs text-green-600 font-bold">編集中</span>}
+                  </div>
+                );
+              })
+            )}
+          </div>
 
-    {/* 登録番号 */}
-    <div>
-      <label className="block text-xs font-medium mb-1">
-        登録番号
-      </label>
-      <input
-        className="w-full rounded-md border border-gray-500 px-2 py-1"
-        placeholder="福岡300あ12-34 など"
-        value={registrationNumber}
-        onChange={(e) => setRegistrationNumber(e.target.value)}
-      />
-    </div>
-
-    {/* 車台番号 */}
-    <div>
-      <label className="block text-xs font-medium mb-1">
-        車台番号
-      </label>
-      <input
-        className="w-full rounded-md border border-gray-500 px-2 py-1"
-        value={chassisNumber}
-        onChange={(e) => setChassisNumber(e.target.value)}
-      />
-    </div>
-
-    {/* 車検日・点検日 */}
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-      <div>
-        <label className="block text-xs font-medium mb-1">
-          車検満了日
-        </label>
-        <input
-          type="date"
-          className="w-full rounded-md border border-gray-500 px-2 py-1"
-          value={shakenDate}
-          onChange={(e) => setShakenDate(e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-medium mb-1">
-          点検予定日
-        </label>
-        <input
-          type="date"
-          className="w-full rounded-md border border-gray-500 px-2 py-1"
-          value={inspectionDate}
-          onChange={(e) => setInspectionDate(e.target.value)}
-        />
-      </div>
-    </div>
-
-    <div className="flex justify-end gap-2 pt-2">
-      <button
-        type="button"
-        onClick={handleSaveCar}
-        className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700"
-      >
-        車両情報を保存
-      </button>
-    </div>
-  </form>
-)}
-
+          {/* 選択中の車両編集フォーム */}
+          {selectedCar ? (
+            <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
+              <p className="text-xs font-semibold text-gray-600">✏️ 選択中の車両を編集</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">車名</label>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                  value={carName}
+                  onChange={(e) => setCarName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">登録番号</label>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                  placeholder="福岡300あ12-34 など"
+                  value={registrationNumber}
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">車台番号</label>
+                <input
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                  value={chassisNumber}
+                  onChange={(e) => setChassisNumber(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">車検満了日</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                    value={shakenDate}
+                    onChange={(e) => setShakenDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">点検予定日</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                    value={inspectionDate}
+                    onChange={(e) => setInspectionDate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveCar}
+                  className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700"
+                >
+                  車両情報を保存
+                </button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-2">上の一覧から車両を選択してください</p>
+          )}
         </div>
+      </div>
       </div>
     </div>
   </div>
