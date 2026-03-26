@@ -245,22 +245,15 @@ export default function PublicBookingForm({
               { value: 'AFTERNOON', label: '午後', sub: '13:00〜17:00 ごろ' },
               { value: 'EVENING', label: '夕方', sub: '17:00〜19:00 ごろ' },
             ].map((opt) => (
-              <label
+              <div
                 key={opt.value}
+                onClick={() => setTimeSlot(opt.value)}
                 className={`flex items-center gap-4 rounded-xl border-2 px-4 py-3 cursor-pointer transition-colors ${
                   timeSlot === opt.value
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-white'
                 }`}
               >
-                <input
-                  type="radio"
-                  name="timeSlot"
-                  value={opt.value}
-                  checked={timeSlot === opt.value}
-                  onChange={() => setTimeSlot(opt.value)}
-                  className="sr-only"
-                />
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                   timeSlot === opt.value ? 'border-green-500' : 'border-gray-300'
                 }`}>
@@ -272,7 +265,7 @@ export default function PublicBookingForm({
                   <p className="font-semibold text-gray-900">{opt.label}</p>
                   <p className="text-xs text-gray-500">{opt.sub}</p>
                 </div>
-              </label>
+              </div>
             ))}
             <p className="text-xs text-gray-500 pt-1">
               正確な入庫時間は折り返しのご連絡にてご相談いたします
@@ -290,22 +283,15 @@ export default function PublicBookingForm({
               { value: 'NEED', label: '必要', sub: '代車をご利用希望' },
               { value: 'NO', label: '不要', sub: '代車は必要ありません' },
             ].map((opt) => (
-              <label
+              <div
                 key={opt.value}
+                onClick={() => setLoanerCar(opt.value as 'NEED' | 'NO')}
                 className={`flex items-center gap-4 rounded-xl border-2 px-4 py-3 cursor-pointer transition-colors ${
                   loanerCar === opt.value
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-white'
                 }`}
               >
-                <input
-                  type="radio"
-                  name="loanerCar"
-                  value={opt.value}
-                  checked={loanerCar === opt.value}
-                  onChange={() => setLoanerCar(opt.value as 'NEED' | 'NO')}
-                  className="sr-only"
-                />
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                   loanerCar === opt.value ? 'border-green-500' : 'border-gray-300'
                 }`}>
@@ -317,7 +303,7 @@ export default function PublicBookingForm({
                   <p className="font-semibold text-gray-900">{opt.label}</p>
                   <p className="text-xs text-gray-500">{opt.sub}</p>
                 </div>
-              </label>
+              </div>
             ))}
           </div>
         </div>
