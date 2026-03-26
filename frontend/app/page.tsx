@@ -23,7 +23,6 @@ type MeResponse = {
 
 const SAVED_EMAIL_KEY = 'pitlink_saved_login_email';
 
-
 export default function LoginPage() {
   const router = useRouter();
 
@@ -34,7 +33,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  // ★ サブスク関連エラー用の情報（billingError はやめて一本化）
   const [tenantErrorInfo, setTenantErrorInfo] = useState<{
     errorCode: 'TENANT_INACTIVE' | 'TENANT_EXPIRED';
     tenantId: number;
@@ -44,9 +42,7 @@ export default function LoginPage() {
     rawMessage: string;
   } | null>(null);
 
-
-  // すでにトークンがある場合は自動遷移
-      useEffect(() => {
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedEmail = window.localStorage.getItem(SAVED_EMAIL_KEY);
       if (savedEmail) {
@@ -54,7 +50,6 @@ export default function LoginPage() {
         setRememberEmail(true);
       }
 
-      // ★ Stripe 決済の戻りクエリを window.location.search から読む
       const qs = new URLSearchParams(window.location.search);
       const billingStatus = qs.get('billing');
 
@@ -67,11 +62,9 @@ export default function LoginPage() {
           '決済がキャンセルされました。\n必要に応じて、もう一度サブスク登録をお試しください。',
         );
       } else {
-        // クエリが無ければメッセージはクリア
         setInfoMessage(null);
       }
     } else {
-      // SSR中など window がないときは一旦クリア
       setInfoMessage(null);
     }
 
@@ -88,9 +81,7 @@ export default function LoginPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
-
         const data = (await res.json()) as MeResponse;
-
         if (data.role === 'DEVELOPER') {
           router.replace('/admin/tenants');
         } else {
@@ -100,8 +91,7 @@ export default function LoginPage() {
     };
 
     run();
-  }, [router]); // ★ searchParams を依存配列から削除
-
+  }, [router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -126,7 +116,6 @@ export default function LoginPage() {
 
       const raw = (await res.json().catch(() => null)) as any;
 
-// ★ 1) TENANT_INACTIVE / TENANT_EXPIRED を最初に判定
       if (
         res.status === 403 &&
         raw &&
@@ -143,50 +132,35 @@ export default function LoginPage() {
             raw.message ??
             'このテナントは現在ご利用いただけません。サブスク再開で利用できます。',
         });
-
-        // 赤いエラーは一応メッセージだけ見せておく
-        setError(
-          raw.message ??
-            'このテナントは現在ご利用いただけません。サブスク再開で利用できます。',
-        );
-
+        setError(raw.message ?? 'このテナントは現在ご利用いただけません。サブスク再開で利用できます。');
         setLoading(false);
-        return; // ★ ここで終了（通常のログイン処理には進まない）
+        return;
       }
 
-      // ★ ここから下は「今まで通りの判定」に少し書き換えるだけ
       const data = raw as LoginResponse | { message?: string } | null;
 
-       if (!res.ok || !data || (data as any).token === undefined) {
-      const anyData = data as any;
+      if (!res.ok || !data || (data as any).token === undefined) {
+        const anyData = data as any;
 
-      // ★ テナント停止 or 期限切れのときだけ専用処理
-      if (
-        anyData &&
-        (anyData.error === 'TENANT_INACTIVE' ||
-          anyData.error === 'TENANT_EXPIRED') &&
-        anyData.tenantId
-      ) {
-        setTenantErrorInfo({
-          errorCode: anyData.error,
-          tenantId: Number(anyData.tenantId),
-          tenantName: anyData.tenantName,
-          plan: anyData.plan,
-          validUntil: anyData.validUntil,
-          rawMessage:
-            anyData.message ??
-            'このテナントは現在ご利用いただけません。サブスク再開で利用できます。',
-        });
-
-        // 通常のエラーメッセージも一応セット
-        setError(
-          anyData.message ??
-            'このテナントは現在ご利用いただけません。サブスク再開で利用できます。',
-        );
-
-        setLoading(false);
-        return; // ★ ここで終了（例外は投げない）
-      }
+        if (
+          anyData &&
+          (anyData.error === 'TENANT_INACTIVE' || anyData.error === 'TENANT_EXPIRED') &&
+          anyData.tenantId
+        ) {
+          setTenantErrorInfo({
+            errorCode: anyData.error,
+            tenantId: Number(anyData.tenantId),
+            tenantName: anyData.tenantName,
+            plan: anyData.plan,
+            validUntil: anyData.validUntil,
+            rawMessage:
+              anyData.message ??
+              'このテナントは現在ご利用いただけません。サブスク再開で利用できます。',
+          });
+          setError(anyData.message ?? 'このテナントは現在ご利用いただけません。サブスク再開で利用できます。');
+          setLoading(false);
+          return;
+        }
 
         const msg =
           (data as any)?.message ||
@@ -208,14 +182,10 @@ export default function LoginPage() {
       } else {
         router.replace('/dashboard');
       }
-
-
     } catch (err: any) {
       console.error(err);
       if (err?.name === 'TypeError') {
-        setError(
-          'サーバーに接続できませんでした。\nbackend が起動しているかを確認してください。',
-        );
+        setError('サーバーに接続できませんでした。\nbackend が起動しているかを確認してください。');
       } else {
         setError(err?.message || 'ログイン処理中にエラーが発生しました。');
       }
@@ -224,7 +194,7 @@ export default function LoginPage() {
     }
   };
 
-    const handleStartSubscriptionFromLogin = async (
+  const handleStartSubscriptionFromLogin = async (
     plan: 'BASIC' | 'STANDARD' | 'PRO' = 'BASIC',
   ) => {
     if (!tenantErrorInfo) return;
@@ -237,27 +207,18 @@ export default function LoginPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/billing/create-checkout-session`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // ★ いまは「期限切れでログインできていない状態」から叩く想定なので
-            // Authorization ヘッダーは付けていない。
-            // もしここで 401 が出るようなら、次のステップで backend 側の Guard を調整する。
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tenantId: tenantErrorInfo.tenantId,
             plan,
-            fromLogin: true, 
+            fromLogin: true,
           }),
         },
       );
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        console.error('create-checkout-session error', data);
-        setError(
-          data?.message ??
-            '決済用セッションの作成に失敗しました。時間をおいて再度お試しください。',
-        );
+        setError(data?.message ?? '決済用セッションの作成に失敗しました。時間をおいて再度お試しください。');
         setLoading(false);
         return;
       }
@@ -270,7 +231,6 @@ export default function LoginPage() {
         return;
       }
 
-      // Stripe のチェックアウト画面へ遷移
       window.location.href = data.url;
     } catch (e) {
       console.error(e);
@@ -282,187 +242,167 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen flex items-center justify-center">
+        <main className="min-h-screen flex items-center justify-center bg-gray-50">
           <p className="text-sm text-gray-600">読み込み中です...</p>
         </main>
       }
     >
-      <main className="min-h-screen flex flex-col items-center justify-between px-4 py-6">
-            <div className="w-full max-w-md">
-        {/* ロゴ・タイトル */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-[200px] mx-auto mb-4">
-            <Image
-              src="/pitlink-logo.png"
-              alt="PitLink ロゴ"
-              width={200}
-              height={200}
-              className="w-full h-auto"
-              priority
-            />
-          </div>
-          <p className="text-sm text-gray-700">
-            自動車業界向け LINE 連携プラットフォーム
-          </p>
-        </div>
+      <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-gray-50 flex flex-col items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md">
 
-        {/* ログインカード */}
-        <div className="w-full bg-white shadow-lg rounded-2xl p-6 border border-green-100">
-          <h1 className="text-lg font-bold mb-4 text-center text-gray-800">
-            ログイン
-          </h1>
-
-           {/* ★ 追加：サブスク完了/キャンセルのお知らせ */}
-          {infoMessage && (
-            <div className="mb-4 border border-blue-300 bg-blue-50 text-xs text-blue-900 rounded px-3 py-3 whitespace-pre-wrap">
-              <div className="font-semibold text-[13px] mb-2">
-                サブスク登録手続きの結果
-              </div>
-              <p className="mb-3">{infoMessage}</p>
-
-              <button
-                type="button"
-                className="w-full border border-blue-400 text-blue-700 rounded-lg py-2 text-xs font-semibold hover:bg-blue-100 transition-colors"
-                onClick={() => {
-                  // クエリを消して「素のログイン画面」に戻す
-                  setInfoMessage(null);
-                  router.replace('/');
-                }}
-              >
-                ログイン画面に戻る
-              </button>
-            </div>
-          )}
-
-                    {tenantErrorInfo && (
-            <div className="mb-4 border border-yellow-300 bg-yellow-50 text-xs text-gray-800 rounded px-3 py-2 whitespace-pre-wrap">
-              <div className="font-semibold text-[13px] mb-1">
-                ご契約の有効期限をご確認ください
-              </div>
-              <p className="mb-2">
-                {tenantErrorInfo.rawMessage}
-              </p>
-
-              {tenantErrorInfo.tenantName && (
-                <p className="mb-1">
-                  対象テナント：
-                  <span className="font-semibold">
-                    {tenantErrorInfo.tenantName}
-                  </span>
-                </p>
-              )}
-              {tenantErrorInfo.plan && (
-                <p className="mb-1">
-                  契約プラン：
-                  <span className="font-semibold">{tenantErrorInfo.plan}</span>
-                </p>
-              )}
-              {tenantErrorInfo.validUntil && (
-                <p className="mb-2">
-                  有効期限：
-                  <span className="font-semibold">
-                    {new Date(
-                      tenantErrorInfo.validUntil,
-                    ).toLocaleString('ja-JP')}
-                  </span>
-                </p>
-              )}
-
-                            <button
-                type="button"
-                className="w-full mt-2 bg-[#00C300] text-white rounded-lg py-2 text-xs font-semibold hover:bg-green-500 transition-colors"
-                onClick={() => handleStartSubscriptionFromLogin('BASIC')}
-              >
-                サブスク登録・再開手続きへ進む
-              </button>
-
-            </div>
-          )}
-
-                    {/* ★ 通常のログインエラー表示 */}
-          {error && (
-            <div className="mb-4 border border-red-300 bg-red-50 text-xs text-red-800 rounded px-3 py-2 whitespace-pre-wrap">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-  <label className="block text-sm mb-1">メールアドレス</label>
-  <input
-    type="email"
-    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00C300]"
-    value={email}
-    onChange={(e) => setEmail(e.target.value)}
-    autoComplete="username"
-    // ★ ここから追加
-    inputMode="email"          // モバイルなどで英数キーボードを優先
-    autoCapitalize="off"       // 自動で大文字にしない
-    autoCorrect="off"          // 自動補正しない
-    lang="en"                  // フィールドとして英語扱い
-    style={{ imeMode: 'disabled' }} // IME 無効のヒント（対応ブラウザで有効）
-    // ★ ここまで追加
-    required
-  />
-</div>
-
-
-            <div>
-              <label className="block text-sm mb-1">パスワード</label>
-              <input
-                type="password"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00C300]"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
+          {/* ロゴ */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-[160px] mx-auto mb-3">
+              <Image
+                src="/pitlink-logo.png"
+                alt="PitLink ロゴ"
+                width={160}
+                height={160}
+                className="w-full h-auto"
+                priority
               />
             </div>
-
-            {/* メールアドレス記憶 */}
-            <div className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                id="remember-email"
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-[#00C300] focus:ring-[#00C300]"
-                checked={rememberEmail}
-                onChange={(e) => setRememberEmail(e.target.checked)}
-              />
-              <label htmlFor="remember-email" className="select-none">
-                メールアドレスを記憶する
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#00C300] text-white rounded-lg py-2 text-sm font-semibold 
-                disabled:opacity-50 hover:bg-green-500 transition-colors"
-            >
-              {loading ? 'ログイン中...' : 'ログイン'}
-            </button>
-          </form>
-
-          {/* ★ 新規登録ボタン（追加） */}
-          <div className="mt-4 border-t pt-4">
-            <p className="text-[11px] text-gray-600 mb-1">
-              初めてご利用の整備工場様はこちら
+            <p className="text-sm text-gray-500 tracking-wide">
+              自動車業界向け LINE 連携プラットフォーム
             </p>
-            <button
-              className="w-full py-2 border border-[#00C300] text-[#00C300] rounded-lg text-sm font-semibold hover:bg-green-50 transition-colors"
-              onClick={() => router.push('/signup')}
-            >
-              新規登録（無料ではじめる）
-            </button>
           </div>
-        </div>
-      </div>
 
-      {/* ★ コピーライト（追加） */}
-      <footer className="text-[11px] text-gray-500 mt-6">
-        © 556
-      </footer>
-    </main>
+          {/* ログインカード */}
+          <div className="w-full bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-100">
+            {/* カードヘッダー */}
+            <div className="bg-green-600 px-6 py-4">
+              <h1 className="text-base font-bold text-white">ログイン</h1>
+              <p className="text-xs text-green-100 mt-0.5">アカウント情報を入力してください</p>
+            </div>
+
+            <div className="px-6 py-6 space-y-5">
+
+              {/* サブスク結果お知らせ */}
+              {infoMessage && (
+                <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-4">
+                  <p className="text-sm font-semibold text-blue-800 mb-1">サブスク登録手続きの結果</p>
+                  <p className="text-sm text-blue-700 whitespace-pre-wrap mb-3">{infoMessage}</p>
+                  <button
+                    type="button"
+                    className="w-full border border-blue-400 text-blue-700 rounded-xl py-2 text-sm font-semibold hover:bg-blue-100 transition-colors"
+                    onClick={() => { setInfoMessage(null); router.replace('/'); }}
+                  >
+                    ログイン画面に戻る
+                  </button>
+                </div>
+              )}
+
+              {/* テナント契約エラー */}
+              {tenantErrorInfo && (
+                <div className="rounded-xl bg-amber-50 border border-amber-300 px-4 py-4">
+                  <p className="text-sm font-semibold text-amber-800 mb-2">ご契約の有効期限をご確認ください</p>
+                  <p className="text-sm text-amber-700 mb-2">{tenantErrorInfo.rawMessage}</p>
+                  {tenantErrorInfo.tenantName && (
+                    <p className="text-xs text-gray-700 mb-1">対象テナント：<span className="font-semibold">{tenantErrorInfo.tenantName}</span></p>
+                  )}
+                  {tenantErrorInfo.plan && (
+                    <p className="text-xs text-gray-700 mb-1">契約プラン：<span className="font-semibold">{tenantErrorInfo.plan}</span></p>
+                  )}
+                  {tenantErrorInfo.validUntil && (
+                    <p className="text-xs text-gray-700 mb-3">有効期限：<span className="font-semibold">{new Date(tenantErrorInfo.validUntil).toLocaleString('ja-JP')}</span></p>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full bg-green-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-green-700 transition-colors"
+                    onClick={() => handleStartSubscriptionFromLogin('BASIC')}
+                  >
+                    サブスク登録・再開手続きへ進む
+                  </button>
+                </div>
+              )}
+
+              {/* エラー */}
+              {error && !tenantErrorInfo && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 whitespace-pre-wrap">
+                  {error}
+                </div>
+              )}
+
+              {/* フォーム */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    メールアドレス
+                  </label>
+                  <input
+                    type="email"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="username"
+                    inputMode="email"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    placeholder="example@example.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    パスワード
+                  </label>
+                  <input
+                    type="password"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                {/* メールアドレス記憶 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    id="remember-email"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+                    checked={rememberEmail}
+                    onChange={(e) => setRememberEmail(e.target.checked)}
+                  />
+                  <label htmlFor="remember-email" className="text-sm text-gray-600 select-none">
+                    メールアドレスを記憶する
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-400 text-white rounded-xl py-3 text-sm font-bold transition-colors shadow-sm"
+                >
+                  {loading ? 'ログイン中...' : 'ログイン'}
+                </button>
+              </form>
+
+              {/* 新規登録リンク */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs text-gray-500 mb-2 text-center">
+                  初めてご利用の整備工場様はこちら
+                </p>
+                <button
+                  type="button"
+                  className="w-full py-3 border-2 border-green-600 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-colors"
+                  onClick={() => router.push('/signup')}
+                >
+                  新規登録（無料トライアルではじめる）
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <footer className="text-xs text-gray-400 mt-8 text-center">
+            © 556
+          </footer>
+        </div>
+      </main>
     </Suspense>
   );
 }
