@@ -107,7 +107,7 @@ export default function PublicBookingForm({
           carId,
           bookingDate,
           timeSlot,
-          needsLoanerCar: loanerCar === 'NEED',
+          needLoanerCar: loanerCar === 'NEED',
           note,
         }),
       });
