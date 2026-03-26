@@ -319,88 +319,88 @@ export class RemindersService {
     switch (kind) {
       case 'BIRTHDAY':
         return [
-          '【お誕生日おめでとうございます】',
+          '🎂 お誕生日おめでとうございます！',
           `${customerName} 様`,
           '',
-          'いつもご利用いただきありがとうございます。',
-          'ささやかではございますが、お誕生日のお祝いとしてご案内をお送りしました。',
+          'いつもご利用いただきありがとうございます🙏',
+          'お誕生日を心よりお祝い申し上げます🎉',
           '',
-          '今後ともよろしくお願いいたします。',
+          '今後ともどうぞよろしくお願いいたします。',
         ].join('\n');
 
       case 'SHAKEN_2M':
         return [
-          '【車検2ヶ月前のお知らせ】',
+          '🚗 車検2ヶ月前のお知らせ',
           `${customerName} 様`,
           '',
-          'いつも当店をご利用いただきありがとうございます。',
-          carLine,
+          'いつも当店をご利用いただきありがとうございます🙏',
+          carLine ? `📋 ${carLine}` : '',
           dateForDisplay
-            ? `車検の満了日が ${dateForDisplay} に近づいております。`
-            : 'お車の車検満了日が近づいております。',
+            ? `⏰ 車検の満了日（${dateForDisplay}）が2ヶ月後に近づいております。`
+            : '⏰ お車の車検満了日が近づいております。',
           '',
           'お早めのご予約をおすすめしております。',
-          urlLine,
+          urlLine ? `\n📅 ご予約はこちらから\n${bookingUrl}` : '',
         ]
           .filter(Boolean)
           .join('\n');
 
       case 'SHAKEN_1W':
         return [
-          '【車検1週間前のお知らせ】',
+          '⚠️ 車検まであと1週間です！',
           `${customerName} 様`,
           '',
-          carLine,
+          carLine ? `📋 ${carLine}` : '',
           dateForDisplay
-            ? `車検の満了日（${dateForDisplay}）まであと1週間となりました。`
-            : '車検満了日まであと1週間となりました。',
+            ? `🔔 車検の満了日（${dateForDisplay}）まであと1週間となりました。`
+            : '🔔 車検満了日まであと1週間となりました。',
           '',
-          'まだご予約がお済みでない場合は、お早めにご連絡ください。',
-          urlLine,
+          'まだご予約がお済みでない場合は、お早めにご連絡ください🙏',
+          urlLine ? `\n📅 ご予約はこちらから\n${bookingUrl}` : '',
         ]
           .filter(Boolean)
           .join('\n');
 
       case 'INSPECTION_1M':
         return [
-          '【点検1ヶ月前のお知らせ】',
+          '🔧 点検1ヶ月前のお知らせ',
           `${customerName} 様`,
           '',
-          carLine,
+          carLine ? `📋 ${carLine}` : '',
           dateForDisplay
-            ? `点検のご予定日が ${dateForDisplay} に近づいております。`
-            : '点検のご予定日が近づいております。',
+            ? `📅 点検のご予定日（${dateForDisplay}）が1ヶ月後に近づいております。`
+            : '📅 点検のご予定日が近づいております。',
           '',
-          '安全・安心のため、事前のご予約をお願いいたします。',
-          urlLine,
+          '安全・安心のため、お早めにご予約をお願いいたします🙏',
+          urlLine ? `\n📅 ご予約はこちらから\n${bookingUrl}` : '',
         ]
           .filter(Boolean)
           .join('\n');
 
       case 'CUSTOM':
         return [
-          '【お車に関するお知らせ】',
+          '📢 お車に関するお知らせ',
           `${customerName} 様`,
           '',
-          carLine,
+          carLine ? `📋 ${carLine}` : '',
           daysBefore != null && dateForDisplay
-            ? `${dateForDisplay} に設定していたお知らせの${daysBefore}日前となりました。`
-            : '事前に設定されていたお知らせのタイミングになりました。',
+            ? `🔔 ${dateForDisplay} に設定していたお知らせの${daysBefore}日前となりました。`
+            : '🔔 事前に設定されていたお知らせのタイミングになりました。',
           '',
-          'ご不明点やご相談がございましたら、お気軽にご返信ください。',
-          urlLine,
+          'ご不明点やご相談がございましたら、お気軽にご返信ください😊',
+          urlLine ? `\n📅 ご予約はこちらから\n${bookingUrl}` : '',
         ]
           .filter(Boolean)
           .join('\n');
 
       default:
         return [
-          '【お知らせ】',
+          '📢 お知らせ',
           `${customerName} 様`,
           '',
-          carLine,
-          dateForDisplay ? `対象日：${dateForDisplay}` : '',
-          urlLine,
+          carLine ? `📋 ${carLine}` : '',
+          dateForDisplay ? `📅 対象日：${dateForDisplay}` : '',
+          urlLine ? `\n📅 詳細はこちらから\n${bookingUrl}` : '',
         ]
           .filter(Boolean)
           .join('\n');
