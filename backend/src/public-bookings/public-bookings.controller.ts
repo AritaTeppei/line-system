@@ -174,7 +174,7 @@ export class PublicBookingsController {
         status: 'PENDING', // BookingStatus.PENDING
         source: 'LINE_PUBLIC_FORM', // 「どこから来たか」
         note: note ?? null,
-        needLoanerCar,
+        needsLoanerCar: needLoanerCar,
       },
     });
 
