@@ -241,6 +241,15 @@ function BookingsPageInner() {
     null,
   );
 
+  // 未確認一覧からの確定/キャンセル + LINE送信確認モーダル
+  const [pendingActionModal, setPendingActionModal] = useState<{
+    booking: Booking;
+    nextStatus: 'CONFIRMED' | 'CANCELED';
+  } | null>(null);
+  const [pendingActionMessage, setPendingActionMessage] = useState('');
+  const [pendingActionSending, setPendingActionSending] = useState(false);
+  const [pendingActionError, setPendingActionError] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -569,6 +578,97 @@ const filteredCustomers = useMemo(() => {
       booking.confirmationLineMessage || defaultMsgLines.join('\n'),
     );
     setConfirmError(null);
+  };
+
+  const openPendingActionModal = (
+    booking: Booking,
+    nextStatus: 'CONFIRMED' | 'CANCELED',
+  ) => {
+    const dateKey = toDateKey(booking.bookingDate).replace(/-/g, '/');
+    const customerName = booking.customer
+      ? `${booking.customer.lastName ?? ''} ${booking.customer.firstName ?? ''}`.trim()
+      : '';
+    const carLabel = booking.car
+      ? `${booking.car.carName ?? ''}${booking.car.registrationNumber ? `（${booking.car.registrationNumber}）` : ''}`
+      : '';
+
+    let defaultMsg = '';
+    if (nextStatus === 'CONFIRMED') {
+      defaultMsg = [
+        customerName ? `${customerName} 様` : '',
+        '',
+        'このたびはご予約ありがとうございます。',
+        '以下の内容でご予約を承りました。',
+        '',
+        dateKey ? `ご予約日：${dateKey}` : '',
+        booking.timeSlot ? `ご希望時間帯：${timeSlotLabel(booking.timeSlot)}` : '',
+        carLabel ? `対象のお車：${carLabel}` : '',
+        '',
+        '内容に変更がある場合は、お手数ですが店舗までご連絡ください。',
+      ].filter(Boolean).join('\n');
+    } else {
+      defaultMsg = [
+        customerName ? `${customerName} 様` : '',
+        '',
+        'ご予約についてご連絡いたします。',
+        '誠に恐れ入りますが、以下のご予約をキャンセルとさせていただきました。',
+        '',
+        dateKey ? `ご予約日：${dateKey}` : '',
+        booking.timeSlot ? `ご希望時間帯：${timeSlotLabel(booking.timeSlot)}` : '',
+        carLabel ? `対象のお車：${carLabel}` : '',
+        '',
+        'ご不明点がございましたら、お気軽にご連絡ください。',
+      ].filter(Boolean).join('\n');
+    }
+
+    setPendingActionModal({ booking, nextStatus });
+    setPendingActionMessage(defaultMsg);
+    setPendingActionError(null);
+  };
+
+  const handlePendingAction = async (sendLine: boolean) => {
+    if (!pendingActionModal) return;
+    const { booking, nextStatus } = pendingActionModal;
+
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('auth_token')
+        : null;
+    if (!token) {
+      alert('ログイン情報が見つかりません。再ログインしてください。');
+      return;
+    }
+
+    setPendingActionSending(true);
+    setPendingActionError(null);
+
+    try {
+      // 1) ステータス変更
+      await updateBookingStatus(booking.id, nextStatus, token);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === booking.id ? { ...b, status: nextStatus } : b)),
+      );
+
+      // 2) LINE送信（希望する場合かつ LINE UID あり）
+      if (sendLine && booking.customer?.lineUid) {
+        const updated = await sendConfirmationLine(booking.id, token, pendingActionMessage);
+        if (updated) {
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === updated.id
+                ? { ...b, confirmationLineSentAt: updated.confirmationLineSentAt, confirmationLineMessage: updated.confirmationLineMessage }
+                : b,
+            ),
+          );
+        }
+      }
+
+      setPendingActionModal(null);
+    } catch (e: any) {
+      setPendingActionError(e?.message ?? '処理に失敗しました。時間をおいて再度お試しください。');
+    } finally {
+      setPendingActionSending(false);
+    }
   };
 
   const handleSendConfirmLine = async () => {
@@ -1044,17 +1144,15 @@ if (modalNeedLoanerCar === null) {
                         <div className="flex flex-wrap gap-2 flex-shrink-0">
                           <button
                             type="button"
-                            disabled={updatingId === b.id}
-                            onClick={() => handleChangeStatus(b.id, 'CONFIRMED')}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 shadow-sm"
+                            onClick={() => openPendingActionModal(b, 'CONFIRMED')}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 shadow-sm"
                           >
                             ✅ 確定する
                           </button>
                           <button
                             type="button"
-                            disabled={updatingId === b.id}
-                            onClick={() => handleChangeStatus(b.id, 'CANCELED')}
-                            className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-white hover:bg-red-50 disabled:opacity-50 text-red-700 text-xs font-bold px-3 py-1.5"
+                            onClick={() => openPendingActionModal(b, 'CANCELED')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-white hover:bg-red-50 text-red-700 text-xs font-bold px-3 py-1.5"
                           >
                             ✕ キャンセル
                           </button>
@@ -1664,6 +1762,95 @@ if (isSelected) {
           </div>
         </div>
       )}
+
+      {/* 未確認一覧からの確定/キャンセル + LINE送信モーダル */}
+      {pendingActionModal && (() => {
+        const { booking, nextStatus } = pendingActionModal;
+        const customerName = booking.customer
+          ? `${booking.customer.lastName ?? ''} ${booking.customer.firstName ?? ''}`.trim()
+          : '-';
+        const dateKey = toDateKey(booking.bookingDate).replace(/-/g, '/');
+        const hasLineUid = !!booking.customer?.lineUid?.trim();
+        const isConfirm = nextStatus === 'CONFIRMED';
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 overflow-hidden">
+              {/* ヘッダー */}
+              <div className={`px-5 py-4 ${isConfirm ? 'bg-emerald-600' : 'bg-red-500'}`}>
+                <h3 className="text-base font-extrabold text-white">
+                  {isConfirm ? '✅ 予約を確定する' : '✕ 予約をキャンセルする'}
+                </h3>
+                <p className="text-sm text-white/80 mt-0.5">
+                  {customerName}｜{dateKey}｜{timeSlotLabel(booking.timeSlot)}
+                </p>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                {pendingActionError && (
+                  <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                    {pendingActionError}
+                  </div>
+                )}
+
+                {hasLineUid ? (
+                  <>
+                    <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
+                      📲 このお客様はLINE連携済みです。ステータス変更と同時にLINEメッセージを送信できます。
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        送信するメッセージ（編集可）
+                      </label>
+                      <textarea
+                        value={pendingActionMessage}
+                        onChange={(e) => setPendingActionMessage(e.target.value)}
+                        rows={8}
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-green-400 resize-y"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
+                    ℹ️ このお客様はLINE未連携のため、LINE送信はできません。ステータスのみ変更されます。
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 pt-1">
+                  {hasLineUid && (
+                    <button
+                      type="button"
+                      disabled={pendingActionSending}
+                      onClick={() => handlePendingAction(true)}
+                      className={`w-full rounded-xl py-3 text-sm font-extrabold text-white shadow-sm disabled:opacity-50 ${
+                        isConfirm ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-500 hover:bg-red-600'
+                      }`}
+                    >
+                      {pendingActionSending ? '処理中...' : `${isConfirm ? '確定' : 'キャンセル'}してLINEを送信する`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={pendingActionSending}
+                    onClick={() => handlePendingAction(false)}
+                    className="w-full rounded-xl border border-gray-300 bg-white hover:bg-gray-50 py-3 text-sm font-bold text-gray-700 disabled:opacity-50"
+                  >
+                    {pendingActionSending ? '処理中...' : `LINE送信なしで${isConfirm ? '確定' : 'キャンセル'}する`}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pendingActionSending}
+                    onClick={() => setPendingActionModal(null)}
+                    className="w-full rounded-xl border border-gray-200 bg-white hover:bg-gray-50 py-2 text-xs text-gray-500 disabled:opacity-50"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 日程編集モーダル */}
       {editingBooking && (
