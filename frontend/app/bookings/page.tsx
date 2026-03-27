@@ -497,6 +497,7 @@ const filteredCustomers = useMemo(() => {
     dateKey: string | null;
     totalCount: number;
     pendingCount: number;
+    canceledCount: number;
     morningCount: number;
     afternoonCount: number;
     eveningCount: number;
@@ -510,6 +511,7 @@ const filteredCustomers = useMemo(() => {
       dateKey: null,
       totalCount: 0,
       pendingCount: 0,
+      canceledCount: 0,
       morningCount: 0,
       afternoonCount: 0,
       eveningCount: 0,
@@ -522,10 +524,9 @@ const filteredCustomers = useMemo(() => {
     const key = toDateKey(d);
     const list = bookingsByDate.get(key) ?? [];
 
-    const totalCount = list.length;
-    const pendingCount = list.filter(
-      (b) => b.status === 'PENDING',
-    ).length;
+    const totalCount = list.filter((b) => b.status !== 'CANCELED').length;
+    const pendingCount = list.filter((b) => b.status === 'PENDING').length;
+    const canceledCount = list.filter((b) => b.status === 'CANCELED').length;
 
     const morningCount = list.filter(
       (b) => b.timeSlot === 'MORNING',
@@ -543,6 +544,7 @@ const filteredCustomers = useMemo(() => {
       dateKey: key,
       totalCount,
       pendingCount,
+      canceledCount,
       morningCount,
       afternoonCount,
       eveningCount,
@@ -1376,6 +1378,7 @@ if (modalNeedLoanerCar === null) {
 const isSelected = cell.dateKey === selectedDateKey;
 const hasBooking = cell.totalCount > 0;
 const hasPending = cell.pendingCount > 0;
+const hasCanceled = cell.canceledCount > 0;
 const hasMorning = cell.morningCount > 0;
 const hasAfternoon = cell.afternoonCount > 0;
 const hasEvening = cell.eveningCount > 0;
@@ -1433,6 +1436,11 @@ if (isSelected) {
         {hasPending && (
           <span className="inline-flex items-center rounded-full bg-amber-500 text-white text-[10px] px-1.5">
             未確認 {cell.pendingCount}
+          </span>
+        )}
+        {hasCanceled && (
+          <span className="inline-flex items-center rounded-full bg-gray-400 text-white text-[10px] px-1.5 line-through">
+            取消 {cell.canceledCount}
           </span>
         )}
 

@@ -67,6 +67,7 @@ export default function BillingPage() {
   const [changing, setChanging] = useState<Plan | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [changeResult, setChangeResult] = useState<string | null>(null);
+  const [confirmPlanChange, setConfirmPlanChange] = useState<Plan | null>(null);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -387,32 +388,61 @@ export default function BillingPage() {
             <p className="text-xs text-gray-500 mb-4">
               アップグレードは即時反映・差額請求。ダウングレードは次回更新時に適用されます。
             </p>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-5 md:grid-cols-3">
               {VALID_PLANS.map((plan) => {
                 const isCurrent = plan === currentPlan;
                 const isUpgrade = PLAN_RANK[plan] > PLAN_RANK[currentPlan];
+                const planFeatures: Record<Plan, string[]> = {
+                  BASIC: ['顧客・車両・予約管理', 'LINEリマインド送信', '基本メッセージ機能', 'スタッフ1名ログイン', 'ダッシュボード確認'],
+                  STANDARD: ['BASICの全機能', 'スタッフ2名ログイン', '高度なメッセージ配信', '予約の一括管理', 'カスタムリマインド'],
+                  PRO: ['STANDARDの全機能', 'スタッフ3名ログイン', '複数拠点対応', '優先サポート', '大量データ対応'],
+                };
                 const prices: Record<Plan, string> = { BASIC: '9,800', STANDARD: '15,000', PRO: '20,000' };
+                const s = {
+                  BASIC: { border: isCurrent ? 'border-green-400' : 'border-gray-200', bg: isCurrent ? 'bg-green-50' : 'bg-white', icon: '🔵', priceColor: 'text-gray-900', tagColor: 'text-gray-500', tagline: 'まずはここから' },
+                  STANDARD: { border: isCurrent ? 'border-green-400' : 'border-green-300', bg: isCurrent ? 'bg-green-50' : 'bg-gradient-to-b from-green-50 to-white', icon: '⭐', priceColor: 'text-green-700', tagColor: 'text-green-600', tagline: '一番人気のプラン' },
+                  PRO: { border: isCurrent ? 'border-green-400' : 'border-purple-200', bg: isCurrent ? 'bg-green-50' : 'bg-gradient-to-b from-purple-50 to-white', icon: '💎', priceColor: 'text-purple-700', tagColor: 'text-purple-500', tagline: '大型店舗・多店舗向け' },
+                }[plan];
                 return (
-                  <div key={plan} className={`rounded-2xl border-2 p-4 flex flex-col gap-3 ${
-                    isCurrent ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-black text-gray-900">{plan}</p>
-                        <p className="text-xs text-gray-500">月額 {prices[plan]}円</p>
+                  <div key={plan} className={`relative rounded-2xl border-2 ${s.border} ${s.bg} p-5 flex flex-col gap-3 ${plan === 'STANDARD' && !isCurrent ? 'shadow-xl scale-[1.02]' : 'shadow-sm'}`}>
+                    {plan === 'STANDARD' && !isCurrent && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="bg-green-500 text-white text-xs font-black px-4 py-1 rounded-full shadow-sm whitespace-nowrap">🌟 一番人気</span>
                       </div>
-                      {isCurrent && (
-                        <span className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">現在のプラン</span>
-                      )}
+                    )}
+                    {isCurrent && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <span className="bg-green-600 text-white text-xs font-black px-4 py-1 rounded-full shadow-sm whitespace-nowrap">✓ 現在のプラン</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-2xl">{s.icon}</span>
+                      <div>
+                        <p className="font-black text-gray-900 text-lg">{plan}</p>
+                        <p className={`text-xs font-semibold ${s.tagColor}`}>{s.tagline}</p>
+                      </div>
                     </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xs text-gray-400">月額</span>
+                      <span className={`text-3xl font-black ${s.priceColor}`}>{prices[plan]}</span>
+                      <span className="text-xs text-gray-400">円</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {planFeatures[plan].map((f, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
+                          <span className="text-emerald-500 flex-shrink-0 font-bold">✓</span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
                     {!isCurrent && (
                       <button
-                        className={`w-full py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
+                        className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${
                           isUpgrade
                             ? 'bg-green-500 hover:bg-green-600 text-white'
                             : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
                         }`}
-                        onClick={() => handleChangePlan(plan)}
+                        onClick={() => setConfirmPlanChange(plan)}
                         disabled={changing !== null}
                       >
                         {changing === plan ? '⏳ 処理中...' : isUpgrade ? `⬆️ ${plan}にアップグレード` : `⬇️ ${plan}にダウングレード`}
@@ -424,6 +454,54 @@ export default function BillingPage() {
             </div>
           </div>
         )}
+
+        {/* プラン変更確認モーダル */}
+        {confirmPlanChange && billingStatus && (() => {
+          const isUpgrade = PLAN_RANK[confirmPlanChange] > PLAN_RANK[currentPlan];
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+              <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl p-6 space-y-4">
+                <div className="text-2xl text-center">{isUpgrade ? '⬆️' : '⬇️'}</div>
+                <h3 className="text-lg font-black text-gray-900 text-center">
+                  プラン変更の確認
+                </h3>
+                <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1 text-sm text-gray-700">
+                  <p>現在のプラン：<span className="font-bold">{currentPlan}</span></p>
+                  <p>変更後のプラン：<span className="font-bold text-green-700">{confirmPlanChange}</span></p>
+                  <p className="text-xs text-gray-500 pt-1">
+                    {isUpgrade
+                      ? '✅ アップグレードは即時反映されます（差額は日割りで請求）。'
+                      : '📅 ダウングレードは次回更新日から適用されます。'}
+                  </p>
+                </div>
+                <p className="text-sm text-gray-700 text-center">
+                  <span className="font-bold">{currentPlan} → {confirmPlanChange}</span> に変更してもよろしいですか？
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                    onClick={() => setConfirmPlanChange(null)}
+                    disabled={changing !== null}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 ${
+                      isUpgrade ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-600 hover:bg-gray-700'
+                    }`}
+                    onClick={async () => {
+                      await handleChangePlan(confirmPlanChange);
+                      setConfirmPlanChange(null);
+                    }}
+                    disabled={changing !== null}
+                  >
+                    {changing ? '⏳ 処理中...' : '変更する'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 解約・支払い方法変更 */}
         <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4">
