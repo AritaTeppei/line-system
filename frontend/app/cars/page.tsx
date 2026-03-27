@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import TenantLayout from "../components/TenantLayout";
 
 type Me = {
@@ -99,22 +99,11 @@ export default function CarsPage() {
     useState(false);
   const [isLogListModalOpen, setIsLogListModalOpen] = useState(false);
 
-  // QRスキャン関連
-  const [qrScanMode, setQrScanMode] = useState<'none' | 'camera' | 'mobile'>('none');
-  const [qrRawData, setQrRawData] = useState<string | null>(null);
-  const [qrParsed, setQrParsed] = useState<{ registrationNumber?: string; chassisNumber?: string; shakenDate?: string } | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [scanSessionId, setScanSessionId] = useState<string | null>(null);
-  const [scanQrImageUrl, setScanQrImageUrl] = useState<string | null>(null);
-  const [scanPolling, setScanPolling] = useState(false);
-  const [qrSegmentCount, setQrSegmentCount] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const segmentsRef = useRef<Array<{ seq: number; parity: number; data: string }>>([]);
-  const seenDataRef = useRef<Set<string>>(new Set());
+  // CSVアップロード関連
+  const [csvDragging, setCsvDragging] = useState(false);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const [csvSuccess, setCsvSuccess] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
    // 検索・ソート・ページング
  const [searchQuery, setSearchQuery] = useState("");
@@ -399,24 +388,9 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     setIsCarModalOpen(true);
   };
 
-  const stopCamera = useCallback(() => {
-    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
-    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
-    setQrScanMode('none');
-    setCameraError(null);
-    setScanPolling(false);
-  }, []);
-
   const closeCarModal = () => {
-    stopCamera();
-    setQrRawData(null);
-    setQrParsed(null);
-    setQrSegmentCount(0);
-    segmentsRef.current = [];
-    seenDataRef.current = new Set();
-    setScanSessionId(null);
-    setScanQrImageUrl(null);
+    setCsvError(null);
+    setCsvSuccess(null);
     setIsCarModalOpen(false);
     setEditingCarId(null);
     resetFormFields();
@@ -425,224 +399,105 @@ const filteredCustomersForSelect = normalizedCustomerQuery
   };
 
   // ──────────────────────────────────────────────────────────────
-  // 電子車検証 QR パーサー（国土交通省 新様式 スラッシュ区切り）
-  //   普通車 QR2: 2/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
-  //   普通車 QR3: 2/<打刻位置>/<型式指定+類別>/<YYMMDD>/<初度登録>/<型式>/...
-  //   軽自動車: K/22/<全角登録番号>/... K/31/<打刻>/<型式>/<YYMMDD>/...
+  // 車検証閲覧アプリ CSV パーサー
+  // 標準CSV（1行目ヘッダー）と転置CSV（列1=項目名、列2=値）の両形式に対応
+  // UTF-8 BOM / Shift-JIS 両対応
   // ──────────────────────────────────────────────────────────────
-  const parseShakenQR = useCallback((raw: string) => {
-    const result: { registrationNumber?: string; chassisNumber?: string } = {};
-    const f = raw.split('/');
-
-    // 全角数字→半角、全角スペース除去
-    const toHalf = (s: string) =>
-      s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-       .replace(/[　]+/g, ' ').trim();
-
-    // 完全な登録番号の検証: 漢字+スペース+数字+ひらがな+数字 で終わる
-    const isCompleteReg = (s: string) => /[\u3040-\u309f]\d{1,4}$/.test(s.trim());
-
-    // 普通車
-    if (f[0] === '2') {
-      const reg = f[1] ?? '';
-      // QR2: field[1] に全角文字（漢字・ひらがな・全角数字）
-      if (/[\u3040-\u30FF\u4E00-\u9FFF\uFF10-\uFF19]/.test(reg)) {
-        const normalized = toHalf(reg);
-        if (isCompleteReg(normalized)) result.registrationNumber = normalized;
-        // 車台番号: field[3]（半角英数ハイフン、職権打刻は[XX]prefix）
-        const ch = (f[3] ?? '').trim().replace(/^\[.{1,3}\]/, '');
-        if (/^[A-Z0-9\-]{4,25}$/.test(ch)) result.chassisNumber = ch;
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let cur = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuote = !inQuote;
+      } else if (ch === ',' && !inQuote) {
+        result.push(cur); cur = '';
+      } else {
+        cur += ch;
       }
     }
-
-    // 軽自動車 K/22
-    if (f[0] === 'K' && f[1] === '22') {
-      const normalized = toHalf(f[2] ?? '');
-      if (isCompleteReg(normalized)) result.registrationNumber = normalized;
-      const ch = (f[4] ?? '').trim().replace(/^\[.{1,3}\]/, '');
-      if (ch) result.chassisNumber = ch;
-    }
-
+    result.push(cur);
     return result;
-  }, []);
+  };
 
-  const applyQrData = useCallback((parsed: { registrationNumber?: string; chassisNumber?: string }) => {
-    if (parsed.registrationNumber) setRegistrationNumber(parsed.registrationNumber);
-    if (parsed.chassisNumber) setChassisNumber(parsed.chassisNumber);
-    setQrParsed(parsed);
-  }, [setRegistrationNumber, setChassisNumber]);
-
-  // 収集したセグメント文字列から有効データを探す
-  // Structured Append では1セグメントが文字列の途中で分割されているため
-  // 全ての順列組み合わせ（1個・2個・3個）を試みる
-  const tryExtractFromSegments = useCallback((segs: Array<{ seq: number; parity: number; data: string }>) => {
-    const arr = segs.map((s) => s.data);
-
-    // 1. 単独パース
-    for (const d of arr) {
-      const p = parseShakenQR(d);
-      if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined: d };
-    }
-    // 2. 2段結合（全順列）
-    for (let i = 0; i < arr.length; i++) {
-      for (let j = 0; j < arr.length; j++) {
-        if (i === j) continue;
-        const combined = arr[i] + arr[j];
-        const p = parseShakenQR(combined);
-        if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+  const handleCsvFile = async (file: File) => {
+    setCsvError(null);
+    setCsvSuccess(null);
+    try {
+      // UTF-8（BOM除去）→ Shift-JIS フォールバック
+      const buffer = await file.arrayBuffer();
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^\uFEFF/, '');
+      } catch {
+        text = new TextDecoder('shift_jis').decode(buffer);
       }
-    }
-    // 3. 3段結合（全順列、最大5×4×3=60通り）
-    for (let i = 0; i < arr.length; i++) {
-      for (let j = 0; j < arr.length; j++) {
-        if (j === i) continue;
-        for (let k = 0; k < arr.length; k++) {
-          if (k === i || k === j) continue;
-          const combined = arr[i] + arr[j] + arr[k];
-          const p = parseShakenQR(combined);
-          if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) {
+        setCsvError('CSVの形式が正しくありません（データ行がありません）');
+        return;
+      }
+
+      const firstLineFields = parseCsvLine(lines[0]);
+
+      // 転置形式（列1=項目名、列2=値）の判定: 1行目の2列目にデータがあり、かつ各行が2列程度
+      const isTransposed = firstLineFields.length <= 3 && lines.length > 3;
+
+      let reg = '';
+      let chassis = '';
+      let name = '';
+
+      if (isTransposed) {
+        // 転置CSV: 各行が「項目名,値」
+        const map: Record<string, string> = {};
+        for (const line of lines) {
+          const cols = parseCsvLine(line);
+          if (cols.length >= 2) map[cols[0].trim()] = cols[1].trim();
+        }
+        for (const [k, v] of Object.entries(map)) {
+          if (!reg && (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号'))) reg = v;
+          if (!chassis && k.includes('車台番号')) chassis = v;
+          if (!name && k.includes('車名') && !k.includes('番号')) name = v;
+        }
+      } else {
+        // 標準CSV: 1行目ヘッダー、2行目以降データ
+        const headers = parseCsvLine(lines[0]);
+        const values = parseCsvLine(lines[1]);
+        const row: Record<string, string> = {};
+        headers.forEach((h, i) => { row[h.trim()] = (values[i] ?? '').trim(); });
+        for (const [k, v] of Object.entries(row)) {
+          if (!reg && (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号'))) reg = v;
+          if (!chassis && k.includes('車台番号')) chassis = v;
+          if (!name && k.includes('車名') && !k.includes('番号')) name = v;
         }
       }
-    }
-    return null;
-  }, [parseShakenQR]);
 
-  const startCamera = useCallback(async () => {
-    setCameraError(null);
-    setQrScanMode('camera');
-    setQrRawData(null);
-    setQrParsed(null);
-    setQrSegmentCount(0);
-    segmentsRef.current = [];
-    seenDataRef.current = new Set();
-    try {
-      // 高解像度でリクエスト（QRの細かいモジュールを読み取るため）
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      // 全角数字→半角に正規化
+      const normalize = (s: string) =>
+        s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+         .replace(/[　]+/g, ' ').trim();
 
-      // BarcodeDetector (Chrome/Edge) があれば優先使用 → 1フレームで複数QR同時検出可能
-      const hasBD = 'BarcodeDetector' in window;
-      const bd = hasBD ? new (window as any).BarcodeDetector({ formats: ['qr_code'] }) : null;
-      const jsQR = !hasBD ? (await import('jsqr')).default : null;
+      reg = normalize(reg);
+      chassis = normalize(chassis);
 
-      let busy = false;
-      scanTimerRef.current = setInterval(async () => {
-        if (busy) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
+      if (!reg && !chassis && !name) {
+        setCsvError('登録番号・車台番号・車名のいずれも見つかりませんでした。CSVの形式を確認してください。');
+        return;
+      }
 
-        busy = true;
-        try {
-          const rawValues: string[] = [];
+      if (reg) setRegistrationNumber(reg);
+      if (chassis) setChassisNumber(chassis);
+      if (name) setCarName(name);
 
-          if (bd) {
-            // BarcodeDetector: 1フレームで全QRコードを検出
-            const bitmap = await createImageBitmap(canvas);
-            const codes: any[] = await bd.detect(bitmap);
-            bitmap.close();
-            for (const c of codes) rawValues.push(c.rawValue);
-          } else if (jsQR) {
-            // jsQR: 1回に1つのみ検出
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-            if (code?.data) rawValues.push(code.data);
-          }
-
-          let foundNew = false;
-          for (const raw of rawValues) {
-            if (seenDataRef.current.has(raw)) continue;
-            seenDataRef.current.add(raw);
-            const saChunk = (jsQR as any)?.chunks?.find((c: any) => c.type === 'structuredAppend') as any;
-            segmentsRef.current = [
-              ...segmentsRef.current,
-              { seq: saChunk?.symbolSequence ?? segmentsRef.current.length,
-                parity: saChunk?.parityData ?? -segmentsRef.current.length,
-                data: raw },
-            ];
-            foundNew = true;
-          }
-
-          if (foundNew) {
-            setQrSegmentCount(segmentsRef.current.length);
-            const result = tryExtractFromSegments(segmentsRef.current);
-            if (result) {
-              if (scanTimerRef.current) clearInterval(scanTimerRef.current);
-              if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
-              setQrScanMode('none');
-              setQrRawData(result.combined);
-              applyQrData(result.parsed);
-            }
-          }
-        } finally {
-          busy = false;
-        }
-      }, 400);
+      const applied = [reg && '登録番号', chassis && '車台番号', name && '車名'].filter(Boolean).join('・');
+      setCsvSuccess(`${applied}を反映しました`);
     } catch {
-      setCameraError('カメラへのアクセスに失敗しました。ブラウザの設定でカメラを許可してください。');
-      setQrScanMode('none');
+      setCsvError('ファイルの読み込みに失敗しました。');
     }
-  }, [applyQrData, tryExtractFromSegments]);
-
-  const startMobileScan = useCallback(async () => {
-    setQrScanMode('mobile');
-    setScanPolling(false);
-    setScanQrImageUrl(null);
-    setScanSessionId(null);
-    setQrSegmentCount(0);
-    segmentsRef.current = [];
-    seenDataRef.current = new Set();
-    try {
-      const res = await fetch(`${apiBase}/public/car-scan/session`, { method: 'POST' });
-      const data = await res.json();
-      const sid = data.sessionId as string;
-      setScanSessionId(sid);
-
-      const frontendBase = process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin;
-      const scanUrl = `${frontendBase}/public/car-scan?sid=${sid}`;
-
-      const QRCode = (await import('qrcode')).default;
-      const dataUrl = await QRCode.toDataURL(scanUrl, { width: 200 });
-      setScanQrImageUrl(dataUrl);
-      setScanPolling(true);
-
-      pollTimerRef.current = setInterval(async () => {
-        try {
-          const r = await fetch(`${apiBase}/public/car-scan/${sid}`);
-          const d = await r.json();
-          if (d.ready && d.rawData) {
-            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-            pollTimerRef.current = null;
-            setScanPolling(false);
-            setQrScanMode('none');
-            // モバイル送信データをセグメントとして追加・解析
-            const seg = { seq: segmentsRef.current.length, parity: -99, data: d.rawData };
-            segmentsRef.current = [...segmentsRef.current, seg];
-            setQrSegmentCount(segmentsRef.current.length);
-            const result = tryExtractFromSegments(segmentsRef.current);
-            if (result) {
-              setQrRawData(result.combined);
-              applyQrData(result.parsed);
-            } else {
-              // パース失敗でも生データを表示
-              setQrRawData(d.rawData);
-            }
-          }
-        } catch { /* ignore */ }
-      }, 2000);
-    } catch {
-      setCameraError('スキャンセッションの作成に失敗しました。');
-      setQrScanMode('none');
-    }
-  }, [parseShakenQR, applyQrData, tryExtractFromSegments]);
+  };
 
   const handleDeleteClick = async (id: number) => {
     if (!token) {
@@ -1247,87 +1102,42 @@ const filteredCustomersForSelect = normalizedCustomerQuery
 
             <div className="p-5 overflow-y-auto max-h-[80vh]">
 
-            {/* 車検証QRスキャン */}
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs font-semibold text-gray-600 mb-2">📄 車検証QRから自動入力</p>
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  disabled={qrScanMode !== 'none'}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  📷 PCカメラ
-                </button>
-                <button
-                  type="button"
-                  onClick={startMobileScan}
-                  disabled={qrScanMode !== 'none'}
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  📱 スマホ連携
-                </button>
-                {qrScanMode !== 'none' && (
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    停止
-                  </button>
-                )}
+            {/* 車検証閲覧アプリ CSV アップロード */}
+            <div
+              className={`mb-4 rounded-xl border-2 border-dashed p-4 transition-colors ${
+                csvDragging ? 'border-green-400 bg-green-50' : 'border-gray-300 bg-gray-50'
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setCsvDragging(true); }}
+              onDragLeave={() => setCsvDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setCsvDragging(false);
+                const file = e.dataTransfer.files[0];
+                if (file) handleCsvFile(file);
+              }}
+            >
+              <p className="text-xs font-semibold text-gray-600 mb-1">📄 車検証閲覧アプリのCSVから自動入力</p>
+              <p className="text-xs text-gray-400 mb-3">
+                国土交通省「車検証閲覧アプリ」でダウンロードしたCSVをアップロードすると登録番号・車台番号・車名が自動入力されます。
+              </p>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
+                  <span className="inline-block rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 active:bg-green-800">
+                    📂 CSVファイルを選択
+                  </span>
+                  <input
+                    ref={csvInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); e.target.value = ''; }}
+                  />
+                </label>
+                <span className="text-xs text-gray-400">またはここにドロップ</span>
               </div>
-
-              {/* カメラプレビュー */}
-              {qrScanMode === 'camera' && (
-                <div className="mb-2">
-                  <div className="rounded-lg overflow-hidden bg-black aspect-video relative">
-                    <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-32 h-32 border-2 border-green-400 rounded-xl opacity-80" />
-                    </div>
-                  </div>
-                  {qrSegmentCount > 0 ? (
-                    <p className="mt-1 text-xs text-green-600 text-center font-medium">
-                      ✅ {qrSegmentCount}個のQRを検出 — 他のQRにも向けてください
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-xs text-gray-400 text-center animate-pulse">
-                      車検証下部のQRコードが全部映るよう引いてください（5個あります）
-                    </p>
-                  )}
-                </div>
-              )}
-              <canvas ref={canvasRef} className="hidden" />
-
-              {/* スマホ連携QR表示 */}
-              {qrScanMode === 'mobile' && (
-                <div className="text-center py-2">
-                  {scanQrImageUrl ? (
-                    <>
-                      <img src={scanQrImageUrl} alt="スキャン用QR" className="mx-auto w-36 h-36 rounded-lg border border-gray-200" />
-                      <p className="mt-1 text-xs text-gray-600">スマホでこのQRを読み取り → 車検証のQRをスキャン</p>
-                      <p className="mt-0.5 text-xs text-gray-400">複数あるQRコードを順番にスキャンして送信してください</p>
-                      {qrSegmentCount > 0 && <p className="mt-1 text-xs text-green-600 font-medium">{qrSegmentCount}個受信済み</p>}
-                      {scanPolling && <p className="mt-0.5 text-xs text-blue-500 animate-pulse">次のQRコードを待機中…</p>}
-                    </>
-                  ) : (
-                    <p className="text-xs text-gray-500 animate-pulse">QRコード生成中…</p>
-                  )}
-                </div>
-              )}
-
-              {/* エラー */}
-              {cameraError && (
-                <p className="text-xs text-red-600 mt-1">{cameraError}</p>
-              )}
-
-              {/* 読み取り結果 */}
-              {qrRawData && (
-                <div className="mt-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
-                  <p className="text-xs font-semibold text-green-700 mb-1">✅ QR読み取り完了 — フォームに反映しました</p>
-                  <p className="text-xs text-gray-500 break-all font-mono line-clamp-2">{qrRawData}</p>
-                </div>
+              {csvError && <p className="mt-2 text-xs text-red-600">⚠️ {csvError}</p>}
+              {csvSuccess && (
+                <p className="mt-2 text-xs font-semibold text-green-700">✅ {csvSuccess}</p>
               )}
             </div>
 
