@@ -83,7 +83,7 @@ export default function LoginPage() {
         if (!res.ok) return;
         const data = (await res.json()) as MeResponse;
         if (data.role === 'DEVELOPER') {
-          router.replace('/admin/tenants');
+          router.replace('/admin/overview');
         } else {
           router.replace('/dashboard');
         }
@@ -178,7 +178,7 @@ export default function LoginPage() {
       }
 
       if (loginData.role === 'DEVELOPER') {
-        router.replace('/admin/tenants');
+        router.replace('/admin/overview');
       } else {
         router.replace('/dashboard');
       }

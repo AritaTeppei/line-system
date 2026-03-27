@@ -139,16 +139,16 @@ export default function DeveloperOverviewPage() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              onClick={() => router.push('/admin/tenants')}
-              className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
+              onClick={() => router.push('/admin/tenants/new')}
+              className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-700 hover:border-emerald-500 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
             >
-              テナント管理
+              ＋ 新規テナント
             </button>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => { if (typeof window !== 'undefined') { window.localStorage.removeItem('auth_token'); } router.push('/admin/login'); }}
               className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors"
             >
-              ← 戻る
+              ログアウト
             </button>
           </div>
         </div>
