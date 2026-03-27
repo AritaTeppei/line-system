@@ -27,6 +27,9 @@ type DayAvailability = {
 // 将来的にテナントごとの設定にしたい場合はここをテーブル参照に変える
 const SLOT_CAPACITY = 1;
 
+// テナント全体の空き枠キャパシティ（LINE問い合わせ予約用）
+const TENANT_SLOT_CAPACITY = 3;
+
 @Controller('public/bookings')
 export class PublicBookingsController {
   constructor(private readonly prisma: PrismaService) {}
@@ -264,6 +267,172 @@ export class PublicBookingsController {
       carId,
       month: monthParam,
       capacityPerSlot: SLOT_CAPACITY,
+      days,
+    };
+  }
+
+  /**
+   * LINE問い合わせ予約（ゲスト予約）
+   * POST /public/bookings/inquiry
+   *
+   * body: {
+   *   tenantId: number;
+   *   guestName: string;
+   *   guestPhone?: string;
+   *   lineUid?: string;
+   *   bookingDate: string; // "YYYY-MM-DD"
+   *   timeSlot: string;    // "MORNING" | "AFTERNOON" | "EVENING"
+   *   purpose: string;     // 整備依頼・乗換相談・その他
+   *   note?: string;
+   * }
+   */
+  @Post('inquiry')
+  async createInquiryBooking(
+    @Body()
+    body: {
+      tenantId: number;
+      guestName: string;
+      guestPhone?: string;
+      lineUid?: string;
+      bookingDate: string;
+      timeSlot: string;
+      purpose: string;
+      note?: string;
+    },
+  ) {
+    const { tenantId, guestName, guestPhone, lineUid, bookingDate, timeSlot, purpose, note } = body;
+
+    if (!tenantId) {
+      throw new BadRequestException('tenantId は必須です。');
+    }
+    if (!guestName || !guestName.trim()) {
+      throw new BadRequestException('お名前は必須です。');
+    }
+    if (!bookingDate) {
+      throw new BadRequestException('bookingDate は必須です。');
+    }
+    if (!purpose || !purpose.trim()) {
+      throw new BadRequestException('purpose（目的）は必須です。');
+    }
+
+    const date = new Date(bookingDate);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException('bookingDate の形式が不正です。');
+    }
+
+    const slotKey = this.normalizeSlot(timeSlot);
+
+    const prisma: any = this.prisma;
+
+    // テナント存在チェック
+    const tenant = await prisma.tenant.findUnique({ where: { id: Number(tenantId) } });
+    if (!tenant) {
+      throw new BadRequestException('テナントが存在しません。');
+    }
+
+    // lineUid があれば既存の Customer を探す
+    let foundCustomerId: number | null = null;
+    if (lineUid) {
+      const existingCustomer = await prisma.customer.findFirst({
+        where: { tenantId: Number(tenantId), lineUid },
+      });
+      if (existingCustomer) {
+        foundCustomerId = existingCustomer.id;
+      }
+    }
+
+    // 予約レコードを作成
+    const booking = await prisma.booking.create({
+      data: {
+        tenantId: Number(tenantId),
+        customerId: foundCustomerId ?? null,
+        carId: null,
+        bookingDate: date,
+        timeSlot: slotKey,
+        status: 'PENDING',
+        source: 'LINE_PUBLIC_FORM',
+        purpose: purpose.trim(),
+        guestName: guestName.trim(),
+        guestPhone: guestPhone?.trim() ?? null,
+        lineUid: lineUid ?? null,
+        note: note ?? null,
+      },
+    });
+
+    return {
+      ok: true,
+      bookingId: booking.id,
+    };
+  }
+
+  /**
+   * テナント全体の月別空き状況（LINE公開フォーム用）
+   * GET /public/bookings/tenant-availability?tenantId=X&month=YYYY-MM
+   */
+  @Get('tenant-availability')
+  async getTenantAvailability(
+    @Query('tenantId') tenantIdParam: string,
+    @Query('month') monthParam: string, // "YYYY-MM"
+  ) {
+    const tenantId = Number(tenantIdParam);
+
+    if (!tenantId || Number.isNaN(tenantId)) {
+      throw new BadRequestException('tenantId が不正です');
+    }
+    if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
+      throw new BadRequestException('month は YYYY-MM 形式で指定してください');
+    }
+
+    const [yStr, mStr] = monthParam.split('-');
+    const year = Number(yStr);
+    const month = Number(mStr); // 1〜12
+
+    if (!year || !month || month < 1 || month > 12) {
+      throw new BadRequestException('month の値が不正です');
+    }
+
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const prisma: any = this.prisma;
+
+    const days: DayAvailability[] = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+      const end = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0));
+      const dateStr = start.toISOString().slice(0, 10);
+
+      const bookings = await prisma.booking.findMany({
+        where: {
+          tenantId,
+          bookingDate: { gte: start, lt: end },
+          status: { in: [BookingStatus.PENDING, BookingStatus.CONFIRMED] },
+        },
+      });
+
+      const counts: Record<SlotKey, number> = {
+        MORNING: 0,
+        AFTERNOON: 0,
+        EVENING: 0,
+      };
+
+      for (const b of bookings) {
+        const key = this.normalizeSlot(b.timeSlot);
+        counts[key] += 1;
+      }
+
+      const slots = {
+        MORNING: counts.MORNING >= TENANT_SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+        AFTERNOON: counts.AFTERNOON >= TENANT_SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+        EVENING: counts.EVENING >= TENANT_SLOT_CAPACITY ? 'FULL' : 'AVAILABLE',
+      } as const;
+
+      days.push({ date: dateStr, slots });
+    }
+
+    return {
+      tenantId,
+      month: monthParam,
+      capacityPerSlot: TENANT_SLOT_CAPACITY,
       days,
     };
   }

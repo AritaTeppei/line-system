@@ -135,8 +135,8 @@ model MessageLog {
 model Booking {
   id                      Int           @id @default(autoincrement())
   tenantId                Int
-  customerId              Int
-  carId                   Int
+  customerId              Int?
+  carId                   Int?
   bookingDate             DateTime
   timeSlot                String?
   status                  BookingStatus @default(PENDING)
@@ -147,8 +147,12 @@ model Booking {
   confirmationLineMessage String?
   confirmationLineSentAt  DateTime?
   needsLoanerCar          Boolean       @default(false)
-  car                     Car           @relation(fields: [carId], references: [id])
-  customer                Customer      @relation(fields: [customerId], references: [id])
+  purpose                 String?
+  guestName               String?
+  guestPhone              String?
+  lineUid                 String?
+  car                     Car?          @relation(fields: [carId], references: [id])
+  customer                Customer?     @relation(fields: [customerId], references: [id])
   tenant                  Tenant        @relation(fields: [tenantId], references: [id])
 }
 

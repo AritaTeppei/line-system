@@ -26,6 +26,9 @@ type Booking = {
   status: BookingStatus;
   note?: string | null;
   source?: string | null;
+  purpose?: string | null;
+  guestName?: string | null;
+  guestPhone?: string | null;
   customer?: {
     id: number;                     // ★ 追加
     lastName: string;
@@ -825,6 +828,17 @@ const filteredCustomers = useMemo(() => {
     }
   };
 
+  const purposeBadgeClass = (p: string) => {
+    switch (p) {
+      case '整備依頼':
+        return 'bg-blue-50 text-blue-800 border-blue-300';
+      case '乗換相談':
+        return 'bg-green-50 text-green-800 border-green-300';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-300';
+    }
+  };
+
   const openEditModal = (booking: Booking) => {
   setEditingBooking(booking);
 
@@ -1191,11 +1205,11 @@ if (modalNeedLoanerCar === null) {
                   {pendingBookings.map((b) => {
                     const customerName = b.customer
                       ? `${b.customer.lastName ?? ''} ${b.customer.firstName ?? ''}`.trim()
-                      : '-';
-                    const tel = (b.customer?.mobilePhone ?? '').trim() || null;
+                      : b.guestName || '-';
+                    const tel = (b.customer?.mobilePhone ?? b.guestPhone ?? '').trim() || null;
                     const carLabel = b.car
                       ? `${b.car.carName ?? ''}${b.car.registrationNumber ? `（${b.car.registrationNumber}）` : ''}`
-                      : '-';
+                      : b.guestName ? '（ゲスト予約・車両未登録）' : '-';
                     const dateStr = toDateKey(b.bookingDate).replace(/-/g, '/');
                     const sourceLabel =
                       b.source === 'LINE_PUBLIC_FORM' ? '📲 LINE予約フォーム'
@@ -1220,8 +1234,16 @@ if (modalNeedLoanerCar === null) {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-bold text-gray-900 truncate">{customerName}</p>
+                            {b.guestName && !b.customer && (
+                              <span className="inline-flex items-center rounded-full bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5">ゲスト</span>
+                            )}
                             {isLineBooking && (
                               <span className="inline-flex items-center rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5">📲 LINE新着</span>
+                            )}
+                            {b.purpose && (
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${purposeBadgeClass(b.purpose)}`}>
+                                {b.purpose}
+                              </span>
                             )}
                           </div>
                           <p className="text-xs text-gray-600 truncate">{carLabel}</p>
@@ -1481,11 +1503,11 @@ if (isSelected) {
                 .map((b) => {
                   const customerName = b.customer
                     ? `${b.customer.lastName ?? ''} ${b.customer.firstName ?? ''}`.trim()
-                    : '-';
-                  const tel = (b.customer?.mobilePhone ?? '').trim() || null;
+                    : b.guestName || '-';
+                  const tel = (b.customer?.mobilePhone ?? b.guestPhone ?? '').trim() || null;
                   const carLabel = b.car
                     ? `${b.car.carName ?? ''}${b.car.registrationNumber ? `（${b.car.registrationNumber}）` : ''}`
-                    : '-';
+                    : b.guestName ? '（ゲスト予約・車両未登録）' : '-';
                   const hasLineUid = !!b.customer?.lineUid?.trim();
                   const shakenLabel = formatDateLabel(b.car?.shakenDate);
                   const inspectionLabel = formatDateLabel(b.car?.inspectionDate);
@@ -1516,6 +1538,16 @@ if (isSelected) {
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadgeClass(b.status)}`}>
                           {statusLabel(b.status)}
                         </span>
+                        {b.purpose && (
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${purposeBadgeClass(b.purpose)}`}>
+                            {b.purpose}
+                          </span>
+                        )}
+                        {b.guestName && !b.customer && (
+                          <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-300 px-2.5 py-0.5 text-xs font-bold">
+                            ゲスト
+                          </span>
+                        )}
                         <span className="text-xs text-gray-500">{sourceLabel}</span>
                         {b.confirmationLineSentAt && (
                           <span className="text-xs text-emerald-600 font-semibold">✅ LINE確定済み</span>
@@ -1525,7 +1557,7 @@ if (isSelected) {
                       {/* 中段：顧客・車両情報 */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                         <div>
-                          <p className="text-xs text-gray-500 mb-0.5">顧客</p>
+                          <p className="text-xs text-gray-500 mb-0.5">{b.guestName && !b.customer ? 'ゲスト' : '顧客'}</p>
                           <p className="font-bold text-gray-900 text-sm">{customerName}</p>
                           {tel ? (
                             <a href={`tel:${tel}`} className="text-sm text-emerald-700 hover:underline">{tel}</a>
