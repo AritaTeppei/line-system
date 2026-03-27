@@ -45,18 +45,31 @@ export class LineWebhookController {
     console.log('=== LINE Webhook Received ===');
     console.log('destination:', destination);
 
-    if (!destination) {
-      return 'OK';
-    }
+    // Look up tenant: first try by destination, then fall back to first configured lineSettings
+    let lineSettings = destination
+      ? await (this.prisma as any).lineSettings.findFirst({
+          where: { destination },
+        })
+      : null;
 
-    // Look up tenant by LineSettings.destination
-    const lineSettings = await (this.prisma as any).lineSettings.findFirst({
-      where: { destination },
-    });
+    if (!lineSettings) {
+      // Fallback: find any lineSettings with an accessToken (single-tenant or first match)
+      lineSettings = await (this.prisma as any).lineSettings.findFirst({
+        where: { accessToken: { not: null } },
+      });
+    }
 
     if (!lineSettings) {
       console.warn(`No lineSettings found for destination: ${destination}`);
       return 'OK';
+    }
+
+    // Update destination if it was missing
+    if (destination && !lineSettings.destination) {
+      await (this.prisma as any).lineSettings.update({
+        where: { id: lineSettings.id },
+        data: { destination },
+      });
     }
 
     const tenantId: number = lineSettings.tenantId;
