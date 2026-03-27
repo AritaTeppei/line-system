@@ -87,8 +87,12 @@ export class AdminTenantsController {
       customersCount: t._count?.customers ?? 0,
       carsCount: t._count?.cars ?? 0,
       bookingsCount: t._count?.bookings ?? 0,
-
-      // ★ 契約者情報（一覧で使うかどうかはフロント次第）
+      // 課金情報
+      subscriptionStatus: t.subscriptionStatus ?? null,
+      stripeSubscriptionId: t.stripeSubscriptionId ?? null,
+      trialEnd: t.trialEnd ?? null,
+      currentPeriodEnd: t.currentPeriodEnd ?? null,
+      // 契約者情報
       companyName: t.companyName ?? null,
       companyAddress1: t.companyAddress1 ?? null,
       companyAddress2: t.companyAddress2 ?? null,
