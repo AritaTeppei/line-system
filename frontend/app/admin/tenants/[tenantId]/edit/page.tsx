@@ -15,6 +15,8 @@ type TenantDetail = {
   customersCount: number;
   carsCount: number;
   bookingsCount: number;
+  subscriptionStatus: string | null;
+  stripeSubscriptionId: string | null;
   companyName: string | null;
   companyAddress1: string | null;
   companyAddress2: string | null;
@@ -52,9 +54,12 @@ export default function AdminTenantEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Form state
   const [name, setName] = useState('');
@@ -139,6 +144,27 @@ export default function AdminTenantEditPage() {
       setError(e?.message ?? 'リセットに失敗しました');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleDeleteTenant = async () => {
+    const token = getToken();
+    if (!token || !tenant) return;
+    setDeleting(true); setDeleteError(null);
+    try {
+      const res = await fetch(`${apiBase}/admin/tenants/${tenant.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message ?? 'テナントの削除に失敗しました');
+      }
+      router.replace('/admin/overview');
+    } catch (e: any) {
+      setDeleteError(e?.message ?? 'テナントの削除に失敗しました');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -300,22 +326,63 @@ export default function AdminTenantEditPage() {
           </button>
         </form>
 
-        {/* データリセット */}
+        {/* データリセット＆テナント削除 */}
         <div className="rounded-2xl bg-gray-900 border border-red-900/50 overflow-hidden">
           <div className="px-5 py-3 border-b border-red-900/50 bg-red-950/20">
             <p className="text-xs font-bold text-red-400 uppercase tracking-wide">⚠️ 危険操作</p>
           </div>
-          <div className="px-5 py-4 space-y-3">
-            <p className="text-xs text-gray-400 leading-relaxed">
-              このテナントの<span className="text-red-400 font-semibold">顧客・車両・予約データをすべて削除</span>します。元に戻せません。本番テナントでは実行しないでください。
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowResetConfirm(true)}
-              className="rounded-xl border border-red-800 text-red-400 hover:bg-red-950/50 text-xs font-bold px-4 py-2 transition-colors"
-            >
-              🗑️ テナントデータをリセットする
-            </button>
+          <div className="px-5 py-4 space-y-4">
+            {/* データリセット */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-400">顧客・予約データのリセット</p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                このテナントの<span className="text-red-400 font-semibold">顧客・車両・予約データをすべて削除</span>します。元に戻せません。
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(true)}
+                className="rounded-xl border border-red-800 text-red-400 hover:bg-red-950/50 text-xs font-bold px-4 py-2 transition-colors"
+              >
+                🗑️ テナントデータをリセットする
+              </button>
+            </div>
+
+            <div className="border-t border-red-900/40 pt-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-400">テナント削除（完全削除）</p>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                テナントとすべての関連データを<span className="text-red-400 font-semibold">完全に削除</span>します。<br />
+                <span className="text-amber-400">サブスクが有効（active / trialing / past_due）の場合は削除できません。</span>先に解約してください。
+              </p>
+              {tenant && (() => {
+                const activeStatuses = ['active', 'trialing', 'past_due'];
+                const isBlocked = tenant.subscriptionStatus && activeStatuses.includes(tenant.subscriptionStatus);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">サブスク状態:</span>
+                      <span className={`font-bold px-2 py-0.5 rounded-full border text-[11px] ${
+                        tenant.subscriptionStatus === 'active' ? 'bg-green-900/40 text-green-300 border-green-700' :
+                        tenant.subscriptionStatus === 'trialing' ? 'bg-blue-900/40 text-blue-300 border-blue-700' :
+                        tenant.subscriptionStatus === 'past_due' ? 'bg-orange-900/40 text-orange-300 border-orange-700' :
+                        tenant.subscriptionStatus === 'canceled' ? 'bg-gray-800 text-gray-400 border-gray-700' :
+                        'bg-gray-800 text-gray-500 border-gray-700'
+                      }`}>
+                        {tenant.subscriptionStatus ?? 'なし（TRIAL/未契約）'}
+                      </span>
+                      {isBlocked && <span className="text-red-400">← 削除不可</span>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!!isBlocked}
+                      onClick={() => { setShowDeleteConfirm(true); setDeleteError(null); }}
+                      className="rounded-xl border border-red-700 bg-red-950/30 text-red-400 hover:bg-red-950/70 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold px-4 py-2 transition-colors"
+                    >
+                      🚨 テナントを完全削除する
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       </div>
@@ -335,6 +402,44 @@ export default function AdminTenantEditPage() {
               <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white">キャンセル</button>
               <button onClick={handleResetData} disabled={resetting} className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white text-sm font-bold disabled:opacity-50">
                 {resetting ? '削除中...' : '削除する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* テナント完全削除確認モーダル */}
+      {showDeleteConfirm && tenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-red-700 p-6 space-y-4">
+            <div className="text-center text-3xl">🚨</div>
+            <h3 className="text-base font-black text-white text-center">テナントを完全削除しますか？</h3>
+            <div className="rounded-xl bg-red-950/40 border border-red-800 px-4 py-3 text-xs text-red-300 space-y-1.5">
+              <p>テナント: <span className="font-bold text-white">{tenant.name}</span> (#{tenant.id})</p>
+              <p>顧客 {tenant.customersCount} 件 / 車両 {tenant.carsCount} 件 / 予約 {tenant.bookingsCount} 件</p>
+              <p className="font-bold mt-1 text-red-400">全ユーザー・全データが完全に削除されます。</p>
+              <p className="font-bold text-red-400">この操作は絶対に取り消せません。</p>
+            </div>
+            {deleteError && (
+              <div className="rounded-xl bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300">
+                {deleteError}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 text-center">本当に削除する場合のみ「完全削除」を押してください</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowDeleteConfirm(false); setDeleteError(null); }}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteTenant}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white text-sm font-bold disabled:opacity-50 transition-colors"
+              >
+                {deleting ? '削除中...' : '完全削除'}
               </button>
             </div>
           </div>

@@ -138,8 +138,10 @@ export class AdminTenantsController {
       customersCount: t._count?.customers ?? 0,
       carsCount: t._count?.cars ?? 0,
       bookingsCount: t._count?.bookings ?? 0,
-
-      // ★ 契約者情報
+      // 課金情報（削除可否の判断に使用）
+      subscriptionStatus: t.subscriptionStatus ?? null,
+      stripeSubscriptionId: t.stripeSubscriptionId ?? null,
+      // 契約者情報
       companyName: t.companyName ?? null,
       companyAddress1: t.companyAddress1 ?? null,
       companyAddress2: t.companyAddress2 ?? null,
@@ -357,42 +359,58 @@ export class AdminTenantsController {
       throw new NotFoundException('テナントが見つかりません');
     }
 
-    // ★ 関連データをまとめて削除するトランザクション
+    // ★ アクティブなサブスクがある場合は削除不可
+    const ACTIVE_STATUSES = ['active', 'trialing', 'past_due'];
+    if (existingTenant.subscriptionStatus && ACTIVE_STATUSES.includes(existingTenant.subscriptionStatus)) {
+      throw new BadRequestException(
+        `サブスクリプションが有効です（status: ${existingTenant.subscriptionStatus}）。` +
+        `先に Stripe ダッシュボードまたはビリング設定からサブスクを解約してください。`,
+      );
+    }
+
+    // ★ 関連データをすべてカスケード削除するトランザクション
     const deletedTenant = await this.prisma.$transaction(async (tx) => {
-      // 1) このテナントに属するユーザー一覧を取得
+      // 1) ユーザーID一覧を取得（セッション・PWリセットトークン削除に必要）
       const users = await tx.user.findMany({
         where: { tenantId },
         select: { id: true },
       });
       const userIds = users.map((u) => u.id);
 
-      // 2) ユーザーセッションを削除
-      //    ※ モデル名は schema.prisma に合わせて修正してください
+      // 2) ユーザーセッション・パスワードリセットトークンを削除
       if (userIds.length > 0) {
-        await tx.userSession.deleteMany({
-          where: {
-            userId: { in: userIds },
-          },
-        });
+        await tx.userSession.deleteMany({ where: { userId: { in: userIds } } });
+        await tx.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } });
       }
 
-      // 3) このテナントに紐づく各種データを削除
+      // 3) ブロードキャストログ（子→親の順）
+      const broadcastLogs = await tx.broadcastLog.findMany({
+        where: { tenantId },
+        select: { id: true },
+      });
+      if (broadcastLogs.length > 0) {
+        await tx.broadcastLogCustomer.deleteMany({
+          where: { broadcastLogId: { in: broadcastLogs.map((b) => b.id) } },
+        });
+      }
+      await tx.broadcastLog.deleteMany({ where: { tenantId } });
+
+      // 4) その他テナント直属のデータ
       await tx.reminderSentLog.deleteMany({ where: { tenantId } });
+      await tx.reminderMessageTemplate.deleteMany({ where: { tenantId } });
+      await tx.messageLog.deleteMany({ where: { tenantId } });
+      await tx.lineBookingToken.deleteMany({ where: { tenantId } });
+      await tx.customerRegisterToken.deleteMany({ where: { tenantId } });
       await tx.booking.deleteMany({ where: { tenantId } });
       await tx.car.deleteMany({ where: { tenantId } });
       await tx.customer.deleteMany({ where: { tenantId } });
       await tx.lineSettings.deleteMany({ where: { tenantId } });
 
-      // 4) ユーザー本体を削除
-      await tx.user.deleteMany({
-        where: { tenantId },
-      });
+      // 5) ユーザー本体を削除
+      await tx.user.deleteMany({ where: { tenantId } });
 
-      // 5) 最後にテナント本体を削除
-      const t = await tx.tenant.delete({
-        where: { id: tenantId },
-      });
-
+      // 6) テナント本体を削除
+      const t = await tx.tenant.delete({ where: { id: tenantId } });
       return t;
     });
 
