@@ -72,19 +72,20 @@ private readonly PLAN_RANK: Record<Plan, number> = {
   private sanitizeStripeError(err: unknown): never {
     let message = '決済処理中にエラーが発生しました。しばらくしてから再度お試しください。';
     if (err instanceof Stripe.errors.StripeError) {
-      // キータイプ別に日本語メッセージに変換
       if (err.type === 'StripeAuthenticationError') {
         message = 'Stripe APIキーが無効または期限切れです（管理者に連絡してください）。';
       } else if (err.type === 'StripeConnectionError') {
         message = 'Stripeへの接続に失敗しました。ネットワーク状態を確認してください。';
       } else if (err.type === 'StripeRateLimitError') {
         message = 'リクエストが集中しています。しばらくしてから再度お試しください。';
-      } else if (err.message) {
-        // API キーが含まれる場合はデフォルトメッセージを使用、含まれない場合のみ表示
-        const hasSensitiveData = /sk_(test|live)_/.test(err.message);
-        if (!hasSensitiveData) {
-          message = err.message;
+      } else if (err.type === 'StripeInvalidRequestError') {
+        const m = err.message ?? '';
+        if (m.includes('No such subscription') || m.includes('No such customer')) {
+          message = 'サブスクリプション情報が見つかりません。再度プラン登録を行ってください。';
+        } else if (m.includes('No such price') || m.includes('No such product')) {
+          message = '指定されたプランが見つかりません（管理者に連絡してください）。';
         }
+        // その他の StripeInvalidRequestError はデフォルトメッセージのまま
       }
       this.logger.error(`Stripe error [${err.type}]: ${err.message}`);
     } else if (err instanceof Error) {
@@ -533,6 +534,22 @@ async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
       tenant.stripeSubscriptionId,
     );
   } catch (err) {
+    // サブスクがStripeに存在しない場合はDBをクリアして再登録を促す
+    if (
+      err instanceof Stripe.errors.StripeInvalidRequestError &&
+      (err.message?.includes('No such subscription') || err.message?.includes('No such customer'))
+    ) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          subscriptionStatus: null,
+          nextPlan: null,
+          nextPlanStartAt: null,
+        },
+      });
+    }
     this.sanitizeStripeError(err);
   }
 
@@ -636,6 +653,21 @@ async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
       tenant.stripeSubscriptionId,
     );
   } catch (err) {
+    if (
+      err instanceof Stripe.errors.StripeInvalidRequestError &&
+      (err.message?.includes('No such subscription') || err.message?.includes('No such customer'))
+    ) {
+      await this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          subscriptionStatus: null,
+          nextPlan: null,
+          nextPlanStartAt: null,
+        },
+      });
+    }
     this.sanitizeStripeError(err);
   }
 
