@@ -21,6 +21,32 @@ type TenantUser = {
   phone: string | null;
 };
 
+const inputCls =
+  "w-full rounded-xl bg-gray-800 border border-gray-700 text-white text-sm px-4 py-2.5 placeholder-gray-600 outline-none focus:border-green-500 transition-colors";
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-gray-400 flex items-center gap-1">
+        {label}
+        {required && <span className="text-red-400">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-[11px] text-gray-600">{hint}</p>}
+    </div>
+  );
+}
+
 export default function AdminTenantUsersPage() {
   const router = useRouter();
   const params = useParams<{ tenantId: string }>();
@@ -37,14 +63,21 @@ export default function AdminTenantUsersPage() {
   const [newPhone, setNewPhone] = useState("");
   const [newRole, setNewRole] = useState<"MANAGER" | "CLIENT">("MANAGER");
   const [newInitialPassword, setNewInitialPassword] = useState("");
-
   const [creating, setCreating] = useState(false);
-  const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState(false);
 
-  // パスワードリセット用
+  // パスワードリセット
   const [resettingUserId, setResettingUserId] = useState<number | null>(null);
   const [resetPasswordInput, setResetPasswordInput] = useState("");
-  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resettingPw, setResettingPw] = useState(false);
+
+  // 削除確認モーダル
+  const [deleteTargetUser, setDeleteTargetUser] = useState<TenantUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -68,46 +101,26 @@ export default function AdminTenantUsersPage() {
       const headers = { Authorization: `Bearer ${savedToken}` };
 
       try {
-        // /auth/me で開発者チェック
         const meRes = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/auth/me`,
           { headers },
         );
-        if (!meRes.ok) {
-          const data = await meRes.json().catch(() => null);
-          let msg = "auth me error";
-          const m = data?.message;
-          if (typeof m === "string") msg = m;
-          else if (Array.isArray(m) && m[0]) msg = String(m[0]);
-          throw new Error(msg);
-        }
+        if (!meRes.ok) throw new Error("auth me error");
         const meJson = (await meRes.json()) as Me;
         if (meJson.role !== "DEVELOPER") {
           throw new Error("このページは開発者ユーザー専用です");
         }
         setMe(meJson);
 
-        // テナント配下ユーザー一覧
         const usersRes = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users`,
           { headers },
         );
-        if (!usersRes.ok) {
-          const data = await usersRes.json().catch(() => null);
-          let msg = "ユーザー一覧の取得に失敗しました";
-          const m = data?.message;
-          if (typeof m === "string") msg = m;
-          else if (Array.isArray(m) && m[0]) msg = String(m[0]);
-          throw new Error(msg);
-        }
+        if (!usersRes.ok) throw new Error("ユーザー一覧の取得に失敗しました");
         const usersJson = (await usersRes.json()) as TenantUser[];
         setUsers(usersJson);
       } catch (err: any) {
-        console.error(err);
-        setError(
-          err?.message ??
-            "テナントユーザー情報の取得に失敗しました。権限やIDを確認してください。",
-        );
+        setError(err?.message ?? "データ取得に失敗しました");
       } finally {
         setLoading(false);
       }
@@ -116,34 +129,17 @@ export default function AdminTenantUsersPage() {
     run();
   }, [tenantId]);
 
-  const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("auth_token");
-      document.cookie = "Authentication=; Max-Age=0; path=/";
-      document.cookie = "access_token=; Max-Age=0; path=/";
-    }
-    router.replace("/");
-  };
-
-  const handleBackToEdit = () => {
-    router.push(`/admin/tenants/${tenantId}/edit`);
-  };
-
   const handleCreateUser = async () => {
-    setCreateMessage(null);
-    setResetMessage(null);
+    setCreateError(null);
+    setCreateSuccess(false);
 
     const savedToken =
       typeof window !== "undefined"
         ? window.localStorage.getItem("auth_token")
         : null;
-    if (!savedToken) {
-      setCreateMessage("トークンがありません。再ログインしてください。");
-      return;
-    }
-
+    if (!savedToken) { setCreateError("再ログインしてください。"); return; }
     if (!newEmail.trim() || !newInitialPassword.trim()) {
-      setCreateMessage("メールアドレスと初期パスワードは必須です。");
+      setCreateError("メールアドレスと初期パスワードは必須です。");
       return;
     }
 
@@ -169,54 +165,35 @@ export default function AdminTenantUsersPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        let msg = "ユーザー作成に失敗しました";
         const m = data?.message;
-        if (typeof m === "string") msg = m;
-        else if (Array.isArray(m) && m[0]) msg = String(m[0]);
+        const msg = typeof m === "string" ? m : Array.isArray(m) ? m[0] : "ユーザー作成に失敗しました";
         throw new Error(msg);
       }
 
       const created = (await res.json()) as TenantUser;
       setUsers((prev) => [...prev, created]);
-
-      setCreateMessage("ユーザーを作成しました。");
-      setNewEmail("");
-      setNewName("");
-      setNewPhone("");
-      setNewInitialPassword("");
+      setCreateSuccess(true);
+      setNewEmail(""); setNewName(""); setNewPhone(""); setNewInitialPassword("");
     } catch (err: any) {
-      console.error(err);
-      setCreateMessage(
-        err?.message ?? "ユーザー作成に失敗しました。（詳細はコンソールを参照）",
-      );
+      setCreateError(err?.message ?? "ユーザー作成に失敗しました。");
     } finally {
       setCreating(false);
     }
   };
 
-  const handleStartReset = (userId: number) => {
-    setResetMessage(null);
-    setResetPasswordInput("");
-    setResettingUserId(userId);
-  };
-
   const handleResetPassword = async () => {
     if (resettingUserId == null) return;
+    setResetError(null);
+    setResetSuccess(false);
 
     const savedToken =
       typeof window !== "undefined"
         ? window.localStorage.getItem("auth_token")
         : null;
-    if (!savedToken) {
-      setResetMessage("トークンがありません。再ログインしてください。");
-      return;
-    }
+    if (!savedToken) { setResetError("再ログインしてください。"); return; }
+    if (!resetPasswordInput.trim()) { setResetError("新しいパスワードを入力してください。"); return; }
 
-    if (!resetPasswordInput.trim()) {
-      setResetMessage("初期パスワードを入力してください。");
-      return;
-    }
-
+    setResettingPw(true);
     try {
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users/${resettingUserId}/reset-password`,
@@ -226,105 +203,76 @@ export default function AdminTenantUsersPage() {
             Authorization: `Bearer ${savedToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            initialPassword: resetPasswordInput,
-          }),
+          body: JSON.stringify({ initialPassword: resetPasswordInput }),
         },
       );
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        let msg = "パスワードリセットに失敗しました";
         const m = data?.message;
-        if (typeof m === "string") msg = m;
-        else if (Array.isArray(m) && m[0]) msg = String(m[0]);
+        const msg = typeof m === "string" ? m : Array.isArray(m) ? m[0] : "リセットに失敗しました";
         throw new Error(msg);
       }
 
-      setResetMessage("初期パスワードをリセットしました。");
+      setResetSuccess(true);
       setResettingUserId(null);
       setResetPasswordInput("");
     } catch (err: any) {
-      console.error(err);
-      setResetMessage(
-        err?.message ??
-          "パスワードリセットに失敗しました。（詳細はコンソールを参照）",
-      );
+      setResetError(err?.message ?? "パスワードリセットに失敗しました。");
+    } finally {
+      setResettingPw(false);
     }
   };
 
-  // ★ 追加：ユーザー削除
-  const handleDeleteUser = async (userId: number) => {
+  const handleDeleteUser = async () => {
+    if (!deleteTargetUser) return;
     const savedToken =
       typeof window !== "undefined"
         ? window.localStorage.getItem("auth_token")
         : null;
+    if (!savedToken) { setDeleteError("再ログインしてください。"); return; }
 
-    if (!savedToken) {
-      alert("トークンがありません。再ログインしてください。");
-      return;
-    }
-
-    const ok = window.confirm("このユーザーを削除します。よろしいですか？");
-    if (!ok) return;
-
+    setDeleting(true);
+    setDeleteError(null);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users/${userId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}/users/${deleteTargetUser.id}`,
         {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${savedToken}`,
-          },
+          headers: { Authorization: `Bearer ${savedToken}` },
         },
       );
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(
-          `削除に失敗しました (${res.status}): ${
-            text || res.statusText || "不明なエラー"
-          }`,
-        );
+        throw new Error(`削除に失敗しました (${res.status})`);
       }
 
-      // 一覧から即時削除
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-
-      alert("ユーザーを削除しました。");
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTargetUser.id));
+      setDeleteTargetUser(null);
     } catch (err: any) {
-      console.error(err);
-      alert(err?.message ?? "削除に失敗しました。");
+      setDeleteError(err?.message ?? "削除に失敗しました。");
+    } finally {
+      setDeleting(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold">テナント ログインユーザー管理</h1>
-        </div>
-        <p>読み込み中...</p>
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-400 text-sm animate-pulse">読み込み中...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold">テナント ログインユーザー管理</h1>
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
+      <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4 px-4">
+        <div className="rounded-xl bg-red-950/60 border border-red-800 px-6 py-4 text-red-300 text-sm max-w-sm w-full text-center">
+          {error}
         </div>
-        <p className="mb-3 text-red-600 text-sm whitespace-pre-wrap">{error}</p>
         <button
-          onClick={handleBackToEdit}
-          className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
+          className="text-sm text-gray-500 hover:text-gray-300 underline underline-offset-2"
+          onClick={() => router.push(`/admin/tenants/${tenantId}/edit`)}
         >
           テナント編集に戻る
         </button>
@@ -332,209 +280,285 @@ export default function AdminTenantUsersPage() {
     );
   }
 
-  return (
-    <div className="p-4">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">
-            テナント ログインユーザー管理（ID: {tenantId}）
-          </h1>
-          {me && (
-            <div className="mt-1 text-sm text-gray-700">
-              ログイン中: {me.email}（role: {me.role}
-              {me.tenantId != null
-                ? ` / tenantId: ${me.tenantId}`
-                : " / 全テナント管理"}
-              ）
-            </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleBackToEdit}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            テナント編集に戻る
-          </button>
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
-        </div>
-      </div>
+  const resettingUser = users.find((u) => u.id === resettingUserId);
 
-      {/* 新規作成フォーム */}
-      <section className="mb-6 border rounded px-4 py-3 bg-white max-w-xl">
-        <h2 className="font-semibold text-sm mb-2">
-          ログインユーザー追加（MANAGER / CLIENT）
-        </h2>
-        {createMessage && (
-          <div className="mb-2 text-xs whitespace-pre-wrap">
-            {createMessage}
+  return (
+    <div className="min-h-screen bg-gray-950 text-white">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-30 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 sm:px-6 py-3 flex items-center gap-3">
+        <button
+          onClick={() => router.push(`/admin/tenants/${tenantId}/edit`)}
+          className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          テナント編集へ
+        </button>
+        <span className="text-gray-700">|</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-purple-400 font-bold text-sm">👤</span>
+          <h1 className="text-sm font-semibold text-white truncate">
+            ユーザー管理 — テナントID: {tenantId}
+          </h1>
+        </div>
+        <button
+          onClick={() => router.push("/admin/overview")}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors hidden sm:block"
+        >
+          オーバービューへ
+        </button>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+        {/* Success banners */}
+        {createSuccess && (
+          <div className="rounded-xl bg-green-950/60 border border-green-700 px-4 py-3 flex items-center gap-3">
+            <span className="text-green-400">✓</span>
+            <p className="text-green-300 text-sm font-medium">ユーザーを作成しました。</p>
+            <button onClick={() => setCreateSuccess(false)} className="ml-auto text-green-600 hover:text-green-400 text-lg leading-none">×</button>
+          </div>
+        )}
+        {resetSuccess && (
+          <div className="rounded-xl bg-green-950/60 border border-green-700 px-4 py-3 flex items-center gap-3">
+            <span className="text-green-400">✓</span>
+            <p className="text-green-300 text-sm font-medium">初期パスワードをリセットしました。</p>
+            <button onClick={() => setResetSuccess(false)} className="ml-auto text-green-600 hover:text-green-400 text-lg leading-none">×</button>
           </div>
         )}
 
-        <div className="space-y-2 text-sm">
-          <div>
-            <label className="block text-xs mb-1">
-              メールアドレス <span className="text-red-500">*</span>
-            </label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-            />
+        {/* ユーザー一覧 */}
+        <div className="rounded-2xl bg-gray-900 border border-gray-800 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-white">ログインユーザー一覧</h2>
+            <span className="text-xs text-gray-500">{users.length} 名</span>
           </div>
-          <div>
-            <label className="block text-xs mb-1">氏名</label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
+
+          {users.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-gray-500">
+              まだ MANAGER / CLIENT ユーザーが登録されていません。
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-800">
+              {users.map((u) => (
+                <div key={u.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300 flex-shrink-0">
+                      {(u.name ?? u.email).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{u.name ?? "（名前なし）"}</p>
+                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                      {u.phone && <p className="text-xs text-gray-500">{u.phone}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      u.role === "MANAGER"
+                        ? "bg-blue-900/60 text-blue-300 border border-blue-700"
+                        : "bg-gray-800 text-gray-400 border border-gray-700"
+                    }`}>
+                      {u.role}
+                    </span>
+                    <span className="text-[11px] text-gray-600">#{u.id}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResettingUserId(u.id);
+                        setResetPasswordInput("");
+                        setResetError(null);
+                        setResetSuccess(false);
+                      }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-amber-900/40 text-amber-300 border border-amber-800 hover:bg-amber-900/70 transition-colors"
+                    >
+                      PW リセット
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDeleteTargetUser(u); setDeleteError(null); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-red-950/40 text-red-400 border border-red-900 hover:bg-red-950/70 transition-colors"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 新規ユーザー作成 */}
+        <div className="rounded-2xl bg-gray-900 border border-gray-800 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800">
+            <h2 className="text-sm font-bold text-white">➕ ユーザーを追加</h2>
+            <p className="text-xs text-gray-500 mt-0.5">MANAGER または CLIENT ユーザーを作成します</p>
           </div>
-          <div>
-            <label className="block text-xs mb-1">連絡先（電話・携帯など）</label>
-            <input
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={newPhone}
-              onChange={(e) => setNewPhone(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-xs mb-1">ロール</label>
-            <select
-              className="border rounded px-2 py-1 text-sm"
-              value={newRole}
-              onChange={(e) =>
-                setNewRole(
-                  e.target.value === "CLIENT" ? "CLIENT" : "MANAGER",
-                )
-              }
+          <div className="px-5 py-5 space-y-4">
+            {createError && (
+              <div className="rounded-xl bg-red-950/60 border border-red-800 px-4 py-3 flex items-center gap-2">
+                <p className="text-red-300 text-xs flex-1">{createError}</p>
+                <button onClick={() => setCreateError(null)} className="text-red-600 hover:text-red-400 text-lg leading-none">×</button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="メールアドレス" required>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="user@garage.jp"
+                />
+              </Field>
+              <Field label="氏名">
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="山田 太郎"
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="連絡先">
+                <input
+                  type="text"
+                  className={inputCls}
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="09012345678"
+                />
+              </Field>
+              <Field label="ロール">
+                <select
+                  className={inputCls + " cursor-pointer"}
+                  value={newRole}
+                  onChange={(e) =>
+                    setNewRole(e.target.value === "CLIENT" ? "CLIENT" : "MANAGER")
+                  }
+                >
+                  <option value="MANAGER">MANAGER（管理者）</option>
+                  <option value="CLIENT">CLIENT（一般ユーザー）</option>
+                </select>
+              </Field>
+            </div>
+            <Field
+              label="初期パスワード"
+              required
+              hint="ユーザーはログイン後に任意のパスワードへ変更できます"
             >
-              <option value="MANAGER">MANAGER（管理者）</option>
-              <option value="CLIENT">CLIENT（一般ユーザー）</option>
-            </select>
-            <p className="mt-1 text-[11px] text-gray-500">
-              CLIENT は開発者画面からのみ追加可能とする運用。
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs mb-1">
-              初期パスワード <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              className="w-full border rounded px-2 py-1 text-sm"
-              value={newInitialPassword}
-              onChange={(e) => setNewInitialPassword(e.target.value)}
-            />
-            <p className="mt-1 text-[11px] text-gray-500">
-              初回ログイン用のパスワードを手動で設定。ユーザーはログイン後に任意のパスワードへ変更できます。
-            </p>
-          </div>
-          <div className="pt-1">
+              <input
+                type="text"
+                className={inputCls + " font-mono"}
+                value={newInitialPassword}
+                onChange={(e) => setNewInitialPassword(e.target.value)}
+                placeholder="初回ログイン用パスワード"
+              />
+            </Field>
             <button
               type="button"
               disabled={creating}
               onClick={handleCreateUser}
-              className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              className="w-full sm:w-auto sm:px-8 rounded-xl bg-green-600 hover:bg-green-500 active:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold py-3 transition-colors"
             >
-              {creating ? "作成中..." : "ユーザーを作成"}
+              {creating ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  作成中...
+                </span>
+              ) : "ユーザーを作成する"}
             </button>
           </div>
         </div>
-      </section>
 
-      {/* パスワードリセット */}
-      <section className="mb-6 border rounded px-4 py-3 bg-white max-w-xl">
-        <h2 className="font-semibold text-sm mb-2">初期パスワード再発行</h2>
-        {resetMessage && (
-          <div className="mb-2 text-xs whitespace-pre-wrap">
-            {resetMessage}
-          </div>
-        )}
-        <div className="text-xs text-gray-600 mb-2">
-          一覧の「初期PWリセット」ボタンから対象ユーザーを選択し、ここで新しい初期パスワードを入力してリセットします。
-        </div>
-        <div className="mb-2 text-xs">
-          対象ユーザーID:{" "}
-          {resettingUserId != null ? resettingUserId : "（未選択）"}
-        </div>
-        <div className="flex gap-2 items-center text-sm">
-          <input
-            type="text"
-            className="flex-1 border rounded px-2 py-1 text-sm"
-            placeholder="新しい初期パスワード"
-            value={resetPasswordInput}
-            onChange={(e) => setResetPasswordInput(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={handleResetPassword}
-            className="px-3 py-1 text-xs rounded bg-orange-600 text-white hover:bg-orange-700"
-          >
-            初期PWリセット実行
-          </button>
-        </div>
-      </section>
+      </main>
 
-      {/* 一覧 */}
-      <section className="border rounded px-4 py-3 bg-white max-w-3xl">
-        <h2 className="font-semibold text-sm mb-2">
-          テナントのログインユーザー一覧
-        </h2>
-        {users.length === 0 ? (
-          <p className="text-sm text-gray-600">
-            まだ MANAGER / CLIENT ユーザーが登録されていません。
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs border">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="border px-2 py-1 text-left">ID</th>
-                  <th className="border px-2 py-1 text-left">メールアドレス</th>
-                  <th className="border px-2 py-1 text-left">氏名</th>
-                  <th className="border px-2 py-1 text-left">ロール</th>
-                  <th className="border px-2 py-1 text-left">連絡先</th>
-                  <th className="border px-2 py-1 text-left">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="border px-2 py-1">{u.id}</td>
-                    <td className="border px-2 py-1">{u.email}</td>
-                    <td className="border px-2 py-1">{u.name ?? ""}</td>
-                    <td className="border px-2 py-1">{u.role}</td>
-                    <td className="border px-2 py-1">{u.phone ?? ""}</td>
-                    <td className="border px-2 py-1 space-x-1">
-                      <button
-                        type="button"
-                        onClick={() => handleStartReset(u.id)}
-                        className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-700 hover:bg-orange-200"
-                      >
-                        初期PWリセット
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
-                      >
-                        削除
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* PW リセットモーダル */}
+      {resettingUserId != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-amber-800 p-6 space-y-4">
+            <h3 className="text-base font-black text-white">🔑 初期パスワードリセット</h3>
+            {resettingUser && (
+              <div className="rounded-xl bg-gray-800 border border-gray-700 px-4 py-3 text-xs text-gray-300 space-y-0.5">
+                <p>対象: <span className="font-semibold text-white">{resettingUser.name ?? resettingUser.email}</span></p>
+                <p className="text-gray-500">{resettingUser.email}</p>
+              </div>
+            )}
+            {resetError && (
+              <div className="rounded-xl bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300">
+                {resetError}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-400">新しい初期パスワード</label>
+              <input
+                type="text"
+                className={inputCls + " font-mono"}
+                placeholder="新しいパスワードを入力"
+                value={resetPasswordInput}
+                onChange={(e) => setResetPasswordInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setResettingUserId(null); setResetPasswordInput(""); setResetError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={resettingPw}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold disabled:opacity-50 transition-colors"
+              >
+                {resettingPw ? "リセット中..." : "リセット実行"}
+              </button>
+            </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
+
+      {/* 削除確認モーダル */}
+      {deleteTargetUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-red-800 p-6 space-y-4">
+            <div className="text-center text-3xl">⚠️</div>
+            <h3 className="text-base font-black text-white text-center">このユーザーを削除しますか？</h3>
+            <div className="rounded-xl bg-red-950/40 border border-red-800 px-4 py-3 text-xs text-red-300 space-y-1">
+              <p>名前: <span className="font-bold text-white">{deleteTargetUser.name ?? "（名前なし）"}</span></p>
+              <p>メール: {deleteTargetUser.email}</p>
+              <p>ロール: {deleteTargetUser.role}</p>
+              <p className="font-bold mt-1">この操作は取り消せません。</p>
+            </div>
+            {deleteError && (
+              <div className="rounded-xl bg-red-950/60 border border-red-800 px-3 py-2 text-xs text-red-300">
+                {deleteError}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteTargetUser(null); setDeleteError(null); }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white text-sm font-bold disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "削除中..." : "削除する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
