@@ -516,8 +516,14 @@ export class LineService {
         text.includes('予約') || text.includes('よやく');
 
       if (isBookingRequest && replyToken) {
-        const url = `${this.frontendBaseUrl}/public/booking/line?t=${tenantId}&u=${encodeURIComponent(userId)}`;
-        const replyText = `ご予約フォームはこちらです 👇\n${url}\n\nご希望の日時・目的をご入力ください。`;
+        // 24時間有効・1回限りのトークンを生成
+        const bookingToken = this.generateSecureToken(40);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await this.prisma.lineBookingToken.create({
+          data: { tenantId, lineUid: userId, token: bookingToken, expiresAt },
+        });
+        const url = `${this.frontendBaseUrl}/public/booking/line?token=${bookingToken}`;
+        const replyText = `ご予約フォームはこちらです 👇\n${url}\n\nリンクは24時間有効です。ご希望の日時・目的をご入力ください。`;
         try {
           await this.lineSettingsService.sendReplyMessage(
             tenantId,

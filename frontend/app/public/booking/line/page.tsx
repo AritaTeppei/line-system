@@ -46,10 +46,40 @@ function toMonthKey(date: Date): string {
 
 function LineBookingFormInner() {
   const searchParams = useSearchParams();
-  const tenantIdParam = searchParams?.get('t') ?? null;
-  const lineUidParam = searchParams?.get('u') ?? null;
+  const tokenParam = searchParams?.get('token') ?? null;
 
-  const tenantId = tenantIdParam ? Number(tenantIdParam) : null;
+  const [tokenStatus, setTokenStatus] = useState<'loading' | 'valid' | 'invalid' | 'expired' | 'used'>('loading');
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<number | null>(null);
+  const [lineUid, setLineUid] = useState<string | null>(null);
+
+  // トークン検証
+  useEffect(() => {
+    if (!tokenParam) {
+      setTokenStatus('invalid');
+      setTokenError('リンクの情報が不足しています。LINEで「予約」と送って新しいリンクを受け取ってください。');
+      return;
+    }
+    fetch(`${apiBase}/public/bookings/verify-token/${encodeURIComponent(tokenParam)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.ok) {
+          setTenantId(data.tenantId);
+          setLineUid(data.lineUid);
+          setTokenStatus('valid');
+        } else {
+          const msg: string = data?.message ?? 'このリンクは無効です。';
+          if (msg.includes('使用済み')) setTokenStatus('used');
+          else if (msg.includes('有効期限')) setTokenStatus('expired');
+          else setTokenStatus('invalid');
+          setTokenError(msg);
+        }
+      })
+      .catch(() => {
+        setTokenStatus('invalid');
+        setTokenError('通信エラーが発生しました。');
+      });
+  }, [tokenParam]);
 
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
@@ -172,10 +202,9 @@ function LineBookingFormInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId,
+          token: tokenParam,
           guestName: guestName.trim(),
           guestPhone: guestPhone.trim() || undefined,
-          lineUid: lineUidParam ?? undefined,
           bookingDate: selectedDate,
           timeSlot,
           purpose,
@@ -199,19 +228,28 @@ function LineBookingFormInner() {
     }
   };
 
-  // Invalid link
-  if (!tenantIdParam || !tenantId || Number.isNaN(tenantId)) {
+  // トークン検証中
+  if (tokenStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <p className="text-gray-400">リンクを確認しています...</p>
+      </div>
+    );
+  }
+
+  // 無効・期限切れ・使用済み
+  if (tokenStatus !== 'valid') {
+    const icon = tokenStatus === 'used' ? '✅' : '⚠️';
+    const title = tokenStatus === 'used' ? 'このリンクは使用済みです' : tokenStatus === 'expired' ? 'リンクの有効期限切れ' : 'リンクが無効です';
     return (
       <div className="min-h-screen bg-gray-900 flex flex-col">
         <div className="bg-gray-800 px-5 pt-10 pb-8 text-white">
-          <div className="text-3xl font-black">⚠️</div>
-          <h1 className="mt-2 text-xl font-extrabold">リンクが無効です</h1>
+          <div className="text-3xl font-black">{icon}</div>
+          <h1 className="mt-2 text-xl font-extrabold">{title}</h1>
         </div>
-        <div className="flex-1 px-4 py-6">
+        <div className="flex-1 px-4 py-6 space-y-4">
           <div className="rounded-2xl bg-gray-800 border border-gray-700 p-5">
-            <p className="text-sm text-gray-300 leading-relaxed">
-              リンクの情報が不足しています。お手数ですが店舗までお電話にてご連絡ください。
-            </p>
+            <p className="text-sm text-gray-300 leading-relaxed">{tokenError}</p>
           </div>
         </div>
       </div>

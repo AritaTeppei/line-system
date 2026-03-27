@@ -6,6 +6,7 @@ import {
   Get,
   Post,
   Query,
+  Param,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingStatus } from '@prisma/client'; // ★ これを追加
@@ -272,6 +273,30 @@ export class PublicBookingsController {
   }
 
   /**
+   * LINEトークンの検証
+   * GET /public/bookings/verify-token/:token
+   */
+  @Get('verify-token/:token')
+  async verifyBookingToken(@Param('token') token: string) {
+    const prisma: any = this.prisma;
+    const record = await prisma.lineBookingToken.findUnique({
+      where: { token },
+    });
+
+    if (!record) {
+      throw new BadRequestException('このリンクは無効です。');
+    }
+    if (record.usedAt) {
+      throw new BadRequestException('このリンクはすでに使用済みです。新しい予約をご希望の場合は、LINEで「予約」とメッセージをお送りください。');
+    }
+    if (new Date() > new Date(record.expiresAt)) {
+      throw new BadRequestException('このリンクは有効期限切れです。LINEで「予約」とメッセージをお送りください。');
+    }
+
+    return { ok: true, tenantId: record.tenantId, lineUid: record.lineUid };
+  }
+
+  /**
    * LINE問い合わせ予約（ゲスト予約）
    * POST /public/bookings/inquiry
    *
@@ -290,7 +315,8 @@ export class PublicBookingsController {
   async createInquiryBooking(
     @Body()
     body: {
-      tenantId: number;
+      token?: string;
+      tenantId?: number;
       guestName: string;
       guestPhone?: string;
       lineUid?: string;
@@ -300,7 +326,35 @@ export class PublicBookingsController {
       note?: string;
     },
   ) {
-    const { tenantId, guestName, guestPhone, lineUid, bookingDate, timeSlot, purpose, note } = body;
+    const { guestName, guestPhone, bookingDate, timeSlot, purpose, note } = body;
+    const prismaAny: any = this.prisma;
+
+    let tenantId: number;
+    let lineUid: string | undefined;
+
+    // トークンベースの場合：検証＆使用済みマーク
+    if (body.token) {
+      const record = await prismaAny.lineBookingToken.findUnique({
+        where: { token: body.token },
+      });
+      if (!record) throw new BadRequestException('このリンクは無効です。');
+      if (record.usedAt) throw new BadRequestException('このリンクはすでに使用済みです。');
+      if (new Date() > new Date(record.expiresAt)) throw new BadRequestException('このリンクは有効期限切れです。');
+
+      tenantId = record.tenantId;
+      lineUid = record.lineUid;
+
+      // 使用済みにする
+      await prismaAny.lineBookingToken.update({
+        where: { token: body.token },
+        data: { usedAt: new Date() },
+      });
+    } else {
+      // 後方互換：tenantId直指定（旧フォームなど）
+      if (!body.tenantId) throw new BadRequestException('token または tenantId は必須です。');
+      tenantId = Number(body.tenantId);
+      lineUid = body.lineUid;
+    }
 
     if (!tenantId) {
       throw new BadRequestException('tenantId は必須です。');
@@ -322,10 +376,8 @@ export class PublicBookingsController {
 
     const slotKey = this.normalizeSlot(timeSlot);
 
-    const prisma: any = this.prisma;
-
     // テナント存在チェック
-    const tenant = await prisma.tenant.findUnique({ where: { id: Number(tenantId) } });
+    const tenant = await prismaAny.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) {
       throw new BadRequestException('テナントが存在しません。');
     }
@@ -333,8 +385,8 @@ export class PublicBookingsController {
     // lineUid があれば既存の Customer を探す
     let foundCustomerId: number | null = null;
     if (lineUid) {
-      const existingCustomer = await prisma.customer.findFirst({
-        where: { tenantId: Number(tenantId), lineUid },
+      const existingCustomer = await prismaAny.customer.findFirst({
+        where: { tenantId, lineUid },
       });
       if (existingCustomer) {
         foundCustomerId = existingCustomer.id;
@@ -342,9 +394,9 @@ export class PublicBookingsController {
     }
 
     // 予約レコードを作成
-    const booking = await prisma.booking.create({
+    const booking = await prismaAny.booking.create({
       data: {
-        tenantId: Number(tenantId),
+        tenantId,
         customerId: foundCustomerId ?? null,
         carId: null,
         bookingDate: date,

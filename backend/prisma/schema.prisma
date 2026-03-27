@@ -36,6 +36,7 @@ model Tenant {
   cars                     Car[]
   customers                Customer[]
   customerRegisterTokens   CustomerRegisterToken[]
+  lineBookingTokens        LineBookingToken[]
   lineSettings             LineSettings?
   messageLogs              MessageLog[]
   reminderMessageTemplates ReminderMessageTemplate[]
@@ -90,6 +91,17 @@ model Customer {
 }
 
 model CustomerRegisterToken {
+  id        Int       @id @default(autoincrement())
+  tenantId  Int
+  lineUid   String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+}
+
+model LineBookingToken {
   id        Int       @id @default(autoincrement())
   tenantId  Int
   lineUid   String
