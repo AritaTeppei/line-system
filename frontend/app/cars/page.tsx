@@ -107,11 +107,14 @@ export default function CarsPage() {
   const [scanSessionId, setScanSessionId] = useState<string | null>(null);
   const [scanQrImageUrl, setScanQrImageUrl] = useState<string | null>(null);
   const [scanPolling, setScanPolling] = useState(false);
+  const [qrSegmentCount, setQrSegmentCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const segmentsRef = useRef<Array<{ seq: number; parity: number; data: string }>>([]);
+  const seenDataRef = useRef<Set<string>>(new Set());
 
    // 検索・ソート・ページング
  const [searchQuery, setSearchQuery] = useState("");
@@ -409,6 +412,9 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     stopCamera();
     setQrRawData(null);
     setQrParsed(null);
+    setQrSegmentCount(0);
+    segmentsRef.current = [];
+    seenDataRef.current = new Set();
     setScanSessionId(null);
     setScanQrImageUrl(null);
     setIsCarModalOpen(false);
@@ -418,42 +424,60 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     setFormSuccess(null);
   };
 
-  // 車検証QRデータパーサー（パイプ区切り対応）
+  // 電子車検証QRデータパーサー（国土交通省 新様式 / スラッシュ区切り）
+  // 普通車 QR2: 2/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
+  // 普通車 QR3: 2/<打刻位置>/<型式指定+類別>/<YYMMDD満了日>/<初度登録>/<型式>/...
+  // 軽自動車: K/22/<全角登録番号>/...  K/31/<打刻>/<型式>/<YYMMDD>/...
   const parseShakenQR = useCallback((raw: string) => {
     const result: { registrationNumber?: string; chassisNumber?: string; shakenDate?: string } = {};
-    const parts = raw.split(/[|,\t]/);
+    const f = raw.split('/');
 
-    // 登録番号パターン探索
-    const regPattern = /[\u4e00-\u9fff]{1,4}\d{1,4}[\u3041-\u3096]\d{1,4}/;
-    for (const p of parts) {
-      const m = p.trim().match(regPattern);
-      if (m) { result.registrationNumber = m[0]; break; }
-    }
+    // 全角→半角変換ユーティリティ（数字のみ）
+    const toHalf = (s: string) =>
+      s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+       .replace(/[　\s]+/g, ' ')
+       .trim();
 
-    // 車台番号：英大文字+数字 6文字以上
-    const chassisPattern = /^[A-Z0-9\-]{6,20}$/;
-    for (const p of parts) {
-      const t = p.trim();
-      if (chassisPattern.test(t) && t !== result.registrationNumber) {
-        result.chassisNumber = t; break;
+    // ── 普通車 ──────────────────────────────────────
+    if (f[0] === '2') {
+      const reg = f[1] ?? '';
+      // QR2 判定: field[1]に全角文字（ひらがな・漢字・全角数字）が含まれる
+      const isQR2 = /[\u3040-\u30FF\u4E00-\u9FFF\uFF01-\uFF60]/.test(reg);
+
+      if (isQR2) {
+        result.registrationNumber = toHalf(reg);
+        // 車台番号は field[3]（半角英数ハイフン、角括弧prefixあり）
+        const chassis = (f[3] ?? '').trim().replace(/^\[.{2}\]/, '');
+        if (/^[A-Z0-9\-]{4,25}$/.test(chassis)) result.chassisNumber = chassis;
+      } else {
+        // QR3: field[3] = YYMMDD（新電子車検証では 999999 固定）
+        const dateStr = (f[3] ?? '').trim();
+        if (/^\d{6}$/.test(dateStr) && dateStr !== '999999') {
+          const yy = parseInt(dateStr.slice(0, 2), 10);
+          const mm = dateStr.slice(2, 4);
+          const dd = dateStr.slice(4, 6);
+          result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
+        }
       }
     }
 
-    // 車検満了日：YYYYMM or 令和YY年MM月
-    for (const p of parts) {
-      const m1 = p.trim().match(/^(20\d{2})(0[1-9]|1[0-2])$/);
-      if (m1) {
-        const lastDay = new Date(+m1[1], +m1[2], 0).getDate();
-        result.shakenDate = `${m1[1]}-${m1[2]}-${String(lastDay).padStart(2, '0')}`;
-        break;
+    // ── 軽自動車 ─────────────────────────────────────
+    if (f[0] === 'K') {
+      if (f[1] === '22') {
+        // K/22/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
+        result.registrationNumber = toHalf(f[2] ?? '');
+        const chassis = (f[4] ?? '').trim().replace(/^\[.{2}\]/, '');
+        if (chassis) result.chassisNumber = chassis;
       }
-      const m2 = p.trim().match(/令和(\d{1,2})年(\d{1,2})月/);
-      if (m2) {
-        const year = 2018 + +m2[1];
-        const month = +m2[2];
-        const lastDay = new Date(year, month, 0).getDate();
-        result.shakenDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-        break;
+      if (f[1] === '31') {
+        // K/31/<打刻>/<型式+類別>/<YYMMDD>/<初度登録>/<型式>/...
+        const dateStr = (f[4] ?? '').trim();
+        if (/^\d{6}$/.test(dateStr) && dateStr !== '999999') {
+          const yy = parseInt(dateStr.slice(0, 2), 10);
+          const mm = dateStr.slice(2, 4);
+          const dd = dateStr.slice(4, 6);
+          result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
+        }
       }
     }
 
@@ -467,11 +491,39 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     setQrParsed(parsed);
   }, [setRegistrationNumber, setChassisNumber, setShakenDate]);
 
+  // 収集したセグメントから登録番号・車台番号を探す
+  // 1) 各セグメント単独でパース
+  // 2) 同じparityグループを sequence 順に結合してパース（Structured Append）
+  const tryExtractFromSegments = useCallback((segs: Array<{ seq: number; parity: number; data: string }>) => {
+    // 単独
+    for (const seg of segs) {
+      const p = parseShakenQR(seg.data);
+      if (p.registrationNumber) return { parsed: p, combined: seg.data };
+    }
+    // グループ結合
+    const groups = new Map<number, typeof segs>();
+    for (const seg of segs) {
+      const g = groups.get(seg.parity) ?? [];
+      g.push(seg);
+      groups.set(seg.parity, g);
+    }
+    for (const [, group] of groups) {
+      const sorted = [...group].sort((a, b) => a.seq - b.seq);
+      const combined = sorted.map((s) => s.data).join('');
+      const p = parseShakenQR(combined);
+      if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+    }
+    return null;
+  }, [parseShakenQR]);
+
   const startCamera = useCallback(async () => {
     setCameraError(null);
     setQrScanMode('camera');
     setQrRawData(null);
     setQrParsed(null);
+    setQrSegmentCount(0);
+    segmentsRef.current = [];
+    seenDataRef.current = new Set();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 } },
@@ -491,26 +543,43 @@ const filteredCustomersForSelect = normalizedCustomerQuery
         ctx.drawImage(video, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code?.data) {
+        if (!code?.data) return;
+        if (seenDataRef.current.has(code.data)) return; // 重複スキップ
+        seenDataRef.current.add(code.data);
+
+        // Structured Append のシーケンス情報を取得
+        const saChunk = code.chunks?.find((c: any) => c.type === 'structuredAppend') as any;
+        const seg = {
+          seq: saChunk?.symbolSequence ?? segmentsRef.current.length,
+          parity: saChunk?.parityData ?? -1 * segmentsRef.current.length,
+          data: code.data,
+        };
+        segmentsRef.current = [...segmentsRef.current, seg];
+        setQrSegmentCount(segmentsRef.current.length);
+
+        const result = tryExtractFromSegments(segmentsRef.current);
+        if (result) {
           if (scanTimerRef.current) clearInterval(scanTimerRef.current);
           if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
           setQrScanMode('none');
-          setQrRawData(code.data);
-          const parsed = parseShakenQR(code.data);
-          applyQrData(parsed);
+          setQrRawData(result.combined);
+          applyQrData(result.parsed);
         }
       }, 300);
     } catch {
       setCameraError('カメラへのアクセスに失敗しました。ブラウザの設定でカメラを許可してください。');
       setQrScanMode('none');
     }
-  }, [parseShakenQR, applyQrData]);
+  }, [parseShakenQR, applyQrData, tryExtractFromSegments]);
 
   const startMobileScan = useCallback(async () => {
     setQrScanMode('mobile');
     setScanPolling(false);
     setScanQrImageUrl(null);
     setScanSessionId(null);
+    setQrSegmentCount(0);
+    segmentsRef.current = [];
+    seenDataRef.current = new Set();
     try {
       const res = await fetch(`${apiBase}/public/car-scan/session`, { method: 'POST' });
       const data = await res.json();
@@ -534,9 +603,18 @@ const filteredCustomersForSelect = normalizedCustomerQuery
             pollTimerRef.current = null;
             setScanPolling(false);
             setQrScanMode('none');
-            setQrRawData(d.rawData);
-            const parsed = parseShakenQR(d.rawData);
-            applyQrData(parsed);
+            // モバイル送信データをセグメントとして追加・解析
+            const seg = { seq: segmentsRef.current.length, parity: -99, data: d.rawData };
+            segmentsRef.current = [...segmentsRef.current, seg];
+            setQrSegmentCount(segmentsRef.current.length);
+            const result = tryExtractFromSegments(segmentsRef.current);
+            if (result) {
+              setQrRawData(result.combined);
+              applyQrData(result.parsed);
+            } else {
+              // パース失敗でも生データを表示
+              setQrRawData(d.rawData);
+            }
           }
         } catch { /* ignore */ }
       }, 2000);
@@ -544,7 +622,7 @@ const filteredCustomersForSelect = normalizedCustomerQuery
       setCameraError('スキャンセッションの作成に失敗しました。');
       setQrScanMode('none');
     }
-  }, [parseShakenQR, applyQrData]);
+  }, [parseShakenQR, applyQrData, tryExtractFromSegments]);
 
   const handleDeleteClick = async (id: number) => {
     if (!token) {
@@ -1182,12 +1260,22 @@ const filteredCustomersForSelect = normalizedCustomerQuery
 
               {/* カメラプレビュー */}
               {qrScanMode === 'camera' && (
-                <div className="rounded-lg overflow-hidden bg-black aspect-video relative mb-2">
-                  <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-32 h-32 border-2 border-green-400 rounded-xl opacity-80" />
+                <div className="mb-2">
+                  <div className="rounded-lg overflow-hidden bg-black aspect-video relative">
+                    <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-32 h-32 border-2 border-green-400 rounded-xl opacity-80" />
+                    </div>
                   </div>
-                  <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white animate-pulse">QRコードを枠内に合わせてください…</p>
+                  {qrSegmentCount > 0 ? (
+                    <p className="mt-1 text-xs text-green-600 text-center font-medium">
+                      ✅ {qrSegmentCount}個のQRコードを読み取り済み — 別のQRコードにも向けてください
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-400 text-center animate-pulse">
+                      車検証下部のQRコードに順番にカメラを向けてください
+                    </p>
+                  )}
                 </div>
               )}
               <canvas ref={canvasRef} className="hidden" />
@@ -1198,8 +1286,10 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                   {scanQrImageUrl ? (
                     <>
                       <img src={scanQrImageUrl} alt="スキャン用QR" className="mx-auto w-36 h-36 rounded-lg border border-gray-200" />
-                      <p className="mt-1 text-xs text-gray-600">スマホでこのQRを読み取り→車検証QRをスキャン</p>
-                      {scanPolling && <p className="mt-1 text-xs text-green-600 animate-pulse">スマホからのデータを待機中…</p>}
+                      <p className="mt-1 text-xs text-gray-600">スマホでこのQRを読み取り → 車検証のQRをスキャン</p>
+                      <p className="mt-0.5 text-xs text-gray-400">複数あるQRコードを順番にスキャンして送信してください</p>
+                      {qrSegmentCount > 0 && <p className="mt-1 text-xs text-green-600 font-medium">{qrSegmentCount}個受信済み</p>}
+                      {scanPolling && <p className="mt-0.5 text-xs text-blue-500 animate-pulse">次のQRコードを待機中…</p>}
                     </>
                   ) : (
                     <p className="text-xs text-gray-500 animate-pulse">QRコード生成中…</p>
