@@ -507,8 +507,41 @@ export class LineService {
       return;
     }
 
-    // 2) それ以外のイベントはとりあえずログだけ
-    //    必要になったらここに message / postback などの処理を追加していく
+    // 2) テキストメッセージ処理
+    if (type === 'message' && event?.message?.type === 'text') {
+      const text: string = (event.message.text ?? '').trim();
+      const replyToken: string | undefined = event?.replyToken;
+
+      const isBookingRequest =
+        text.includes('予約') || text.includes('よやく');
+
+      if (isBookingRequest && replyToken) {
+        const url = `${this.frontendBaseUrl}/public/booking/line?t=${tenantId}&u=${encodeURIComponent(userId)}`;
+        const replyText = `ご予約フォームはこちらです 👇\n${url}\n\nご希望の日時・目的をご入力ください。`;
+        try {
+          await this.lineSettingsService.sendReplyMessage(
+            tenantId,
+            replyToken,
+            replyText,
+          );
+          this.logger.log(
+            `[LineService] 予約フォームURLを送信: userId=${userId}, tenantId=${tenantId}`,
+          );
+        } catch (e: any) {
+          this.logger.error(
+            `[LineService] 予約フォームURL送信失敗: ${e?.message ?? e}`,
+          );
+        }
+        return;
+      }
+
+      this.logger.log(
+        `[LineService] handleWebhookEvent: message="${text}" は予約キーワードなし、スキップ`,
+      );
+      return;
+    }
+
+    // 3) その他のイベントはログのみ
     this.logger.log(
       `[LineService] handleWebhookEvent: type=${type} は今のところ特別な処理をしていません`,
     );
