@@ -1,7 +1,7 @@
 // frontend/app/bookings/page.tsx
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import TenantLayout from '../components/TenantLayout';
 import { useSearchParams } from 'next/navigation';  // ★追加
 
@@ -358,6 +358,55 @@ const filteredCustomers = useMemo(() => {
       .finally(() => setLoading(false));
   }, []);
 
+  // 初回ロード完了後に knownBookingIds を初期化し、30秒ポーリング開始
+  useEffect(() => {
+    if (loading) return;
+
+    // 初回は現在の予約IDを「既知」として登録（音を鳴らさない）
+    knownBookingIdsRef.current = new Set(bookings.map((b) => b.id));
+
+    const token =
+      typeof window !== 'undefined'
+        ? window.localStorage.getItem('auth_token')
+        : null;
+    if (!token) return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${apiBase}/bookings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data: Booking[] = await res.json();
+
+        // 新着PENDING LINE予約を検知
+        const known = knownBookingIdsRef.current!;
+        const newLineBookings = data.filter(
+          (b) => !known.has(b.id) && b.status === 'PENDING' && b.source === 'LINE_PUBLIC_FORM',
+        );
+
+        // 全予約IDを既知として更新
+        knownBookingIdsRef.current = new Set(data.map((b) => b.id));
+        setBookings(data);
+
+        if (newLineBookings.length > 0) {
+          playNotificationSound();
+          setNewBookingFlash(true);
+          setShowPendingList(true);
+          setTimeout(() => setNewBookingFlash(false), 3000);
+        }
+      } catch {
+        // ポーリングエラーは無視
+      }
+    };
+
+    pollBookingTimerRef.current = setInterval(poll, 30_000);
+    return () => {
+      if (pollBookingTimerRef.current) clearInterval(pollBookingTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
   // ★ ダッシュボードなどから `/bookings?date=YYYY-MM-DD` で来たとき、
   //   該当日の月を開いて、その日を選択状態にする
   useEffect(() => {
@@ -400,6 +449,37 @@ const filteredCustomers = useMemo(() => {
   }, [bookings]);
 
   const [showPendingList, setShowPendingList] = useState(true);
+
+  // 新着LINE予約の通知アニメーション
+  const [newBookingFlash, setNewBookingFlash] = useState(false);
+  // 既知の予約IDセット（新着検知用）
+  const knownBookingIdsRef = useRef<Set<number> | null>(null);
+  // ポーリングタイマー
+  const pollBookingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Web Audio API で通知音を鳴らす（外部ファイル不要）
+  const playNotificationSound = () => {
+    try {
+      const ctx = new AudioContext();
+      const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.18);
+        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
+        gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + i * 0.18 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.35);
+        osc.start(ctx.currentTime + i * 0.18);
+        osc.stop(ctx.currentTime + i * 0.18 + 0.35);
+      });
+      setTimeout(() => ctx.close(), 1500);
+    } catch {
+      // AudioContext が使えない環境では無視
+    }
+  };
 
   const monthInfo = useMemo(() => {
   const year = currentMonth.getFullYear();
@@ -1076,7 +1156,7 @@ if (modalNeedLoanerCar === null) {
         {(() => {
           const lineBookingCount = pendingBookings.filter(b => b.source === 'LINE_PUBLIC_FORM').length;
           return (
-        <section className={`rounded-2xl shadow-sm overflow-hidden border-2 ${lineBookingCount > 0 ? 'border-red-400 bg-red-50 animate-pulse-slow' : 'border-amber-200 bg-amber-50'}`}>
+        <section className={`rounded-2xl shadow-sm overflow-hidden border-2 transition-all ${newBookingFlash ? 'border-red-500 bg-red-100 ring-4 ring-red-300 ring-offset-2 scale-[1.01]' : lineBookingCount > 0 ? 'border-red-400 bg-red-50 animate-pulse-slow' : 'border-amber-200 bg-amber-50'}`}>
           <button
             type="button"
             onClick={() => setShowPendingList((v) => !v)}
