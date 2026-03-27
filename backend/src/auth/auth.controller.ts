@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -187,6 +188,30 @@ export class AuthController {
     };
   }
 
+
+  @Post('request-password-reset')
+  async requestPasswordReset(@Body() body: { email: string }) {
+    if (!body.email) throw new BadRequestException('メールアドレスは必須です。');
+    await this.auth.requestPasswordReset(body.email);
+    // 存在しなくても同じレスポンス（enumeration attack防止）
+    return { message: 'メールアドレスが登録されている場合、パスワード再設定メールを送信しました。' };
+  }
+
+  @Post('verify-reset-token')
+  async verifyResetToken(@Body() body: { token: string }) {
+    if (!body.token) throw new BadRequestException('トークンは必須です。');
+    const result = await this.auth.verifyPasswordResetToken(body.token);
+    if (!result.valid) throw new BadRequestException('このリンクは無効または期限切れです。');
+    return { valid: true, email: result.email };
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: { token: string; newPassword: string }) {
+    if (!body.token) throw new BadRequestException('トークンは必須です。');
+    if (!body.newPassword) throw new BadRequestException('新しいパスワードは必須です。');
+    await this.auth.resetPasswordWithToken(body.token, body.newPassword);
+    return { message: 'パスワードを再設定しました。新しいパスワードでログインしてください。' };
+  }
 
   @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {

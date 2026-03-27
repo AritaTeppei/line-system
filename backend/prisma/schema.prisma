@@ -57,6 +57,7 @@ model User {
   plan                  Plan?         @default(BASIC)
   tenant                Tenant?       @relation(fields: [tenantId], references: [id])
   sessions              UserSession[]
+  passwordResetTokens   PasswordResetToken[]
 }
 
 model UserSession {
@@ -99,6 +100,16 @@ model CustomerRegisterToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
   tenant    Tenant    @relation(fields: [tenantId], references: [id])
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model LineBookingToken {

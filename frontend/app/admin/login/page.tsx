@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -125,6 +126,15 @@ export default function DevLoginPage() {
                 </span>
               ) : 'ログイン'}
             </button>
+
+            <div className="text-center">
+              <Link
+                href="/forgot-password"
+                className="text-xs text-gray-500 hover:text-gray-300 underline underline-offset-2"
+              >
+                パスワードをお忘れですか？
+              </Link>
+            </div>
           </form>
         </div>
 

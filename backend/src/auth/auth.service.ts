@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import * as jwt from 'jsonwebtoken';
 import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
@@ -60,7 +61,10 @@ export class AuthService {
   private readonly JWT_SECRET =
     process.env.JWT_SECRET ?? 'development-only-secret';
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
     // ★ 追加：いまから30分前の境界時刻を返す
   private getSessionActiveCutoff(): Date {
@@ -538,4 +542,73 @@ async revokeAllSessionsForUser(userId: number): Promise<void> {
     },
   });
 }
+
+  /**
+   * パスワードリセットトークンを発行してメール送信
+   * メールアドレスが存在しない場合でも成功レスポンスを返す（enumeration attack防止）
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) return; // 存在しなくてもエラーにしない
+
+    // 既存の未使用トークンを無効化
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    // 新トークン生成（crypto）
+    const crypto = await import('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1時間
+
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, token, expiresAt },
+    });
+
+    const frontendBase = process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
+    const resetUrl = `${frontendBase}/reset-password?token=${token}`;
+
+    await this.mailService.sendPasswordResetEmail({
+      to: user.email,
+      resetUrl,
+      userName: user.name,
+    });
+  }
+
+  /**
+   * トークンの有効性を確認して関連情報を返す
+   */
+  async verifyPasswordResetToken(token: string): Promise<{ valid: boolean; email?: string }> {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { token } });
+    if (!record || record.usedAt || new Date() > record.expiresAt) {
+      return { valid: false };
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: record.userId } });
+    return { valid: true, email: user?.email };
+  }
+
+  /**
+   * トークンを使ってパスワードをリセット
+   */
+  async resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { token } });
+    if (!record) throw new BadRequestException('リンクが無効です。');
+    if (record.usedAt) throw new BadRequestException('このリンクはすでに使用済みです。');
+    if (new Date() > record.expiresAt) throw new BadRequestException('リンクの有効期限が切れています。もう一度やり直してください。');
+
+    if (newPassword.length < 8) throw new BadRequestException('パスワードは8文字以上で設定してください。');
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: record.userId },
+      data: { password: newHash },
+    });
+
+    await this.prisma.passwordResetToken.update({
+      where: { token },
+      data: { usedAt: new Date() },
+    });
+  }
 }

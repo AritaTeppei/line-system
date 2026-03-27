@@ -60,4 +60,36 @@ export class MailService {
       this.logger.error(`Failed to send trial end mail: ${e?.message ?? e}`);
     }
   }
+
+  async sendPasswordResetEmail(params: { to: string; resetUrl: string; userName?: string | null }) {
+    const { to, resetUrl, userName } = params;
+    const subject = '【PitLink】パスワード再設定のご案内';
+    const text = [
+      userName ? `${userName} 様` : 'お客様',
+      '',
+      'PitLinkへのパスワード再設定リクエストを受け付けました。',
+      '',
+      '以下のリンクをクリックしてパスワードを再設定してください。',
+      'リンクは1時間有効です。',
+      '',
+      resetUrl,
+      '',
+      '※ このメールに心当たりがない場合は、このまま無視していただいて構いません。',
+      '',
+      '――――――――――――――――',
+      'PitLink 運営',
+    ].join('\n');
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM ?? 'no-reply@pitlink.example',
+        to,
+        subject,
+        text,
+      });
+      this.logger.log(`PasswordResetEmail sent to ${to}`);
+    } catch (e: any) {
+      this.logger.error(`Failed to send password reset mail: ${e?.message ?? e}`);
+      throw e;
+    }
+  }
 }

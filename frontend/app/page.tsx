@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 
 type Role = 'DEVELOPER' | 'MANAGER' | 'CLIENT';
 
@@ -379,6 +380,15 @@ export default function LoginPage() {
                 >
                   {loading ? 'ログイン中...' : 'ログイン'}
                 </button>
+
+                <div className="text-center">
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-gray-500 hover:text-green-700 underline underline-offset-2"
+                  >
+                    パスワードをお忘れですか？
+                  </Link>
+                </div>
               </form>
 
               {/* 新規登録リンク */}
