@@ -424,94 +424,85 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     setFormSuccess(null);
   };
 
-  // 電子車検証QRデータパーサー（国土交通省 新様式 / スラッシュ区切り）
-  // 普通車 QR2: 2/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
-  // 普通車 QR3: 2/<打刻位置>/<型式指定+類別>/<YYMMDD満了日>/<初度登録>/<型式>/...
-  // 軽自動車: K/22/<全角登録番号>/...  K/31/<打刻>/<型式>/<YYMMDD>/...
+  // ──────────────────────────────────────────────────────────────
+  // 電子車検証 QR パーサー（国土交通省 新様式 スラッシュ区切り）
+  //   普通車 QR2: 2/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
+  //   普通車 QR3: 2/<打刻位置>/<型式指定+類別>/<YYMMDD>/<初度登録>/<型式>/...
+  //   軽自動車: K/22/<全角登録番号>/... K/31/<打刻>/<型式>/<YYMMDD>/...
+  // ──────────────────────────────────────────────────────────────
   const parseShakenQR = useCallback((raw: string) => {
-    const result: { registrationNumber?: string; chassisNumber?: string; shakenDate?: string } = {};
+    const result: { registrationNumber?: string; chassisNumber?: string } = {};
     const f = raw.split('/');
 
-    // 全角→半角変換ユーティリティ（数字のみ）
+    // 全角数字→半角、全角スペース除去
     const toHalf = (s: string) =>
       s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-       .replace(/[　\s]+/g, ' ')
-       .trim();
+       .replace(/[　]+/g, ' ').trim();
 
-    // ── 普通車 ──────────────────────────────────────
+    // 完全な登録番号の検証: 漢字+スペース+数字+ひらがな+数字 で終わる
+    const isCompleteReg = (s: string) => /[\u3040-\u309f]\d{1,4}$/.test(s.trim());
+
+    // 普通車
     if (f[0] === '2') {
       const reg = f[1] ?? '';
-      // QR2 判定: field[1]に全角文字（ひらがな・漢字・全角数字）が含まれる
-      const isQR2 = /[\u3040-\u30FF\u4E00-\u9FFF\uFF01-\uFF60]/.test(reg);
-
-      if (isQR2) {
-        result.registrationNumber = toHalf(reg);
-        // 車台番号は field[3]（半角英数ハイフン、角括弧prefixあり）
-        const chassis = (f[3] ?? '').trim().replace(/^\[.{2}\]/, '');
-        if (/^[A-Z0-9\-]{4,25}$/.test(chassis)) result.chassisNumber = chassis;
-      } else {
-        // QR3: field[3] = YYMMDD（新電子車検証では 999999 固定）
-        const dateStr = (f[3] ?? '').trim();
-        if (/^\d{6}$/.test(dateStr) && dateStr !== '999999') {
-          const yy = parseInt(dateStr.slice(0, 2), 10);
-          const mm = dateStr.slice(2, 4);
-          const dd = dateStr.slice(4, 6);
-          result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
-        }
+      // QR2: field[1] に全角文字（漢字・ひらがな・全角数字）
+      if (/[\u3040-\u30FF\u4E00-\u9FFF\uFF10-\uFF19]/.test(reg)) {
+        const normalized = toHalf(reg);
+        if (isCompleteReg(normalized)) result.registrationNumber = normalized;
+        // 車台番号: field[3]（半角英数ハイフン、職権打刻は[XX]prefix）
+        const ch = (f[3] ?? '').trim().replace(/^\[.{1,3}\]/, '');
+        if (/^[A-Z0-9\-]{4,25}$/.test(ch)) result.chassisNumber = ch;
       }
     }
 
-    // ── 軽自動車 ─────────────────────────────────────
-    if (f[0] === 'K') {
-      if (f[1] === '22') {
-        // K/22/<全角登録番号>/<標板区分>/<車台番号>/<原動機型式>/<帳票種別>
-        result.registrationNumber = toHalf(f[2] ?? '');
-        const chassis = (f[4] ?? '').trim().replace(/^\[.{2}\]/, '');
-        if (chassis) result.chassisNumber = chassis;
-      }
-      if (f[1] === '31') {
-        // K/31/<打刻>/<型式+類別>/<YYMMDD>/<初度登録>/<型式>/...
-        const dateStr = (f[4] ?? '').trim();
-        if (/^\d{6}$/.test(dateStr) && dateStr !== '999999') {
-          const yy = parseInt(dateStr.slice(0, 2), 10);
-          const mm = dateStr.slice(2, 4);
-          const dd = dateStr.slice(4, 6);
-          result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
-        }
-      }
+    // 軽自動車 K/22
+    if (f[0] === 'K' && f[1] === '22') {
+      const normalized = toHalf(f[2] ?? '');
+      if (isCompleteReg(normalized)) result.registrationNumber = normalized;
+      const ch = (f[4] ?? '').trim().replace(/^\[.{1,3}\]/, '');
+      if (ch) result.chassisNumber = ch;
     }
 
     return result;
   }, []);
 
-  const applyQrData = useCallback((parsed: { registrationNumber?: string; chassisNumber?: string; shakenDate?: string }) => {
+  const applyQrData = useCallback((parsed: { registrationNumber?: string; chassisNumber?: string }) => {
     if (parsed.registrationNumber) setRegistrationNumber(parsed.registrationNumber);
     if (parsed.chassisNumber) setChassisNumber(parsed.chassisNumber);
-    if (parsed.shakenDate) setShakenDate(parsed.shakenDate);
     setQrParsed(parsed);
-  }, [setRegistrationNumber, setChassisNumber, setShakenDate]);
+  }, [setRegistrationNumber, setChassisNumber]);
 
-  // 収集したセグメントから登録番号・車台番号を探す
-  // 1) 各セグメント単独でパース
-  // 2) 同じparityグループを sequence 順に結合してパース（Structured Append）
+  // 収集したセグメント文字列から有効データを探す
+  // Structured Append では1セグメントが文字列の途中で分割されているため
+  // 全ての順列組み合わせ（1個・2個・3個）を試みる
   const tryExtractFromSegments = useCallback((segs: Array<{ seq: number; parity: number; data: string }>) => {
-    // 単独
-    for (const seg of segs) {
-      const p = parseShakenQR(seg.data);
-      if (p.registrationNumber) return { parsed: p, combined: seg.data };
+    const arr = segs.map((s) => s.data);
+
+    // 1. 単独パース
+    for (const d of arr) {
+      const p = parseShakenQR(d);
+      if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined: d };
     }
-    // グループ結合
-    const groups = new Map<number, typeof segs>();
-    for (const seg of segs) {
-      const g = groups.get(seg.parity) ?? [];
-      g.push(seg);
-      groups.set(seg.parity, g);
+    // 2. 2段結合（全順列）
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = 0; j < arr.length; j++) {
+        if (i === j) continue;
+        const combined = arr[i] + arr[j];
+        const p = parseShakenQR(combined);
+        if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+      }
     }
-    for (const [, group] of groups) {
-      const sorted = [...group].sort((a, b) => a.seq - b.seq);
-      const combined = sorted.map((s) => s.data).join('');
-      const p = parseShakenQR(combined);
-      if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+    // 3. 3段結合（全順列、最大5×4×3=60通り）
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = 0; j < arr.length; j++) {
+        if (j === i) continue;
+        for (let k = 0; k < arr.length; k++) {
+          if (k === i || k === j) continue;
+          const combined = arr[i] + arr[j] + arr[k];
+          const p = parseShakenQR(combined);
+          if (p.registrationNumber || p.chassisNumber) return { parsed: p, combined };
+        }
+      }
     }
     return null;
   }, [parseShakenQR]);
@@ -525,14 +516,21 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     segmentsRef.current = [];
     seenDataRef.current = new Set();
     try {
+      // 高解像度でリクエスト（QRの細かいモジュールを読み取るため）
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 } },
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       streamRef.current = stream;
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
 
-      const jsQR = (await import('jsqr')).default;
-      scanTimerRef.current = setInterval(() => {
+      // BarcodeDetector (Chrome/Edge) があれば優先使用 → 1フレームで複数QR同時検出可能
+      const hasBD = 'BarcodeDetector' in window;
+      const bd = hasBD ? new (window as any).BarcodeDetector({ formats: ['qr_code'] }) : null;
+      const jsQR = !hasBD ? (await import('jsqr')).default : null;
+
+      let busy = false;
+      scanTimerRef.current = setInterval(async () => {
+        if (busy) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
         if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
@@ -541,36 +539,58 @@ const filteredCustomersForSelect = normalizedCustomerQuery
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (!code?.data) return;
-        if (seenDataRef.current.has(code.data)) return; // 重複スキップ
-        seenDataRef.current.add(code.data);
 
-        // Structured Append のシーケンス情報を取得
-        const saChunk = code.chunks?.find((c: any) => c.type === 'structuredAppend') as any;
-        const seg = {
-          seq: saChunk?.symbolSequence ?? segmentsRef.current.length,
-          parity: saChunk?.parityData ?? -1 * segmentsRef.current.length,
-          data: code.data,
-        };
-        segmentsRef.current = [...segmentsRef.current, seg];
-        setQrSegmentCount(segmentsRef.current.length);
+        busy = true;
+        try {
+          const rawValues: string[] = [];
 
-        const result = tryExtractFromSegments(segmentsRef.current);
-        if (result) {
-          if (scanTimerRef.current) clearInterval(scanTimerRef.current);
-          if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
-          setQrScanMode('none');
-          setQrRawData(result.combined);
-          applyQrData(result.parsed);
+          if (bd) {
+            // BarcodeDetector: 1フレームで全QRコードを検出
+            const bitmap = await createImageBitmap(canvas);
+            const codes: any[] = await bd.detect(bitmap);
+            bitmap.close();
+            for (const c of codes) rawValues.push(c.rawValue);
+          } else if (jsQR) {
+            // jsQR: 1回に1つのみ検出
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code?.data) rawValues.push(code.data);
+          }
+
+          let foundNew = false;
+          for (const raw of rawValues) {
+            if (seenDataRef.current.has(raw)) continue;
+            seenDataRef.current.add(raw);
+            const saChunk = (jsQR as any)?.chunks?.find((c: any) => c.type === 'structuredAppend') as any;
+            segmentsRef.current = [
+              ...segmentsRef.current,
+              { seq: saChunk?.symbolSequence ?? segmentsRef.current.length,
+                parity: saChunk?.parityData ?? -segmentsRef.current.length,
+                data: raw },
+            ];
+            foundNew = true;
+          }
+
+          if (foundNew) {
+            setQrSegmentCount(segmentsRef.current.length);
+            const result = tryExtractFromSegments(segmentsRef.current);
+            if (result) {
+              if (scanTimerRef.current) clearInterval(scanTimerRef.current);
+              if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+              setQrScanMode('none');
+              setQrRawData(result.combined);
+              applyQrData(result.parsed);
+            }
+          }
+        } finally {
+          busy = false;
         }
-      }, 300);
+      }, 400);
     } catch {
       setCameraError('カメラへのアクセスに失敗しました。ブラウザの設定でカメラを許可してください。');
       setQrScanMode('none');
     }
-  }, [parseShakenQR, applyQrData, tryExtractFromSegments]);
+  }, [applyQrData, tryExtractFromSegments]);
 
   const startMobileScan = useCallback(async () => {
     setQrScanMode('mobile');
@@ -1269,11 +1289,11 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                   </div>
                   {qrSegmentCount > 0 ? (
                     <p className="mt-1 text-xs text-green-600 text-center font-medium">
-                      ✅ {qrSegmentCount}個のQRコードを読み取り済み — 別のQRコードにも向けてください
+                      ✅ {qrSegmentCount}個のQRを検出 — 他のQRにも向けてください
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-gray-400 text-center animate-pulse">
-                      車検証下部のQRコードに順番にカメラを向けてください
+                      車検証下部のQRコードが全部映るよう引いてください（5個あります）
                     </p>
                   )}
                 </div>
