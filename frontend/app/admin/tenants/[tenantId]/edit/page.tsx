@@ -1,20 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { Rubik_Doodle_Shadow } from "next/font/google";
+import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 
-type Role = "DEVELOPER" | "MANAGER" | "CLIENT";
+const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-type Me = {
-  id: number;
-  email: string;
-  name: string | null;
-  tenantId: number | null;
-  role: Role;
-};
-
-type TenantOverview = {
+type TenantDetail = {
   id: number;
   name: string;
   email: string | null;
@@ -24,582 +15,331 @@ type TenantOverview = {
   customersCount: number;
   carsCount: number;
   bookingsCount: number;
-
-    // ★ 追加
   companyName: string | null;
   companyAddress1: string | null;
   companyAddress2: string | null;
   representativeName: string | null;
   contactPhone: string | null;
   contactMobile: string | null;
-
 };
+
+function getToken() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('auth_token');
+}
+
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-gray-400 flex items-center gap-1">
+        {label}
+        {required && <span className="text-red-400">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-[11px] text-gray-600">{hint}</p>}
+    </div>
+  );
+}
+
+const inputCls = 'w-full rounded-xl bg-gray-800 border border-gray-700 text-white text-sm px-4 py-2.5 placeholder-gray-600 outline-none focus:border-green-500 transition-colors';
 
 export default function AdminTenantEditPage() {
   const router = useRouter();
   const params = useParams<{ tenantId: string }>();
-  const tenantIdParam = params.tenantId;
-  const tenantId = Number(tenantIdParam);
+  const tenantId = Number(params.tenantId);
 
-  const [me, setMe] = useState<Me | null>(null);
-  const [tenant, setTenant] = useState<TenantOverview | null>(null);
-
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [plan, setPlan] = useState("");
-  const [isActive, setIsActive] = useState(true);
-  const [validUntil, setValidUntil] = useState<string>(""); // yyyy-MM-dd
-
+  const [tenant, setTenant] = useState<TenantDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [companyName, setCompanyName] = useState("");
-  const [companyAddress1, setCompanyAddress1] = useState("");
-  const [companyAddress2, setCompanyAddress2] = useState("");
-  const [representativeName, setRepresentativeName] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-  const [contactMobile, setContactMobile] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Form state
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [plan, setPlan] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [validUntil, setValidUntil] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress1, setCompanyAddress1] = useState('');
+  const [companyAddress2, setCompanyAddress2] = useState('');
+  const [representativeName, setRepresentativeName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactMobile, setContactMobile] = useState('');
 
   useEffect(() => {
-    if (!tenantIdParam || Number.isNaN(tenantId)) {
-      setError("URL の ID が不正です");
-      setLoading(false);
-      return;
-    }
+    const token = getToken();
+    if (!token) { setError('先にログインしてください'); setLoading(false); return; }
 
-    const savedToken =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
-        : null;
+    const headers = { Authorization: `Bearer ${token}` };
 
-    if (!savedToken) {
-      setError("先にログインしてください（トップページからログイン）");
-      setLoading(false);
-      return;
-    }
-
-    const headers = { Authorization: `Bearer ${savedToken}` };
-
-    const fetchMe = fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { headers })
-      .then((res) => {
-        if (!res.ok) throw new Error("auth me error");
-        return res.json() as Promise<Me>;
-      })
-      .then((data) => {
-        setMe(data);
-        if (data.role !== "DEVELOPER") {
-          throw new Error("このページは開発者ユーザー専用です");
-        }
-      });
-
-    const fetchTenant = fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenantId}`,
-      { headers },
-    )
-      .then((res) => {
-        if (!res.ok) throw new Error("tenant detail api error");
-        return res.json() as Promise<TenantOverview>;
-      })
-      .then((data) => {
+    Promise.all([
+      fetch(`${apiBase}/auth/me`, { headers }).then(r => r.json()),
+      fetch(`${apiBase}/admin/tenants/${tenantId}`, { headers }).then(r => r.ok ? r.json() : Promise.reject('テナント取得失敗')),
+    ])
+      .then(([me, data]: [any, TenantDetail]) => {
+        if (me.role !== 'DEVELOPER') throw new Error('開発者専用ページです');
         setTenant(data);
-        setName(data.name ?? "");
-        setEmail(data.email ?? "");
-        setPlan(data.plan ?? "");
+        setName(data.name ?? '');
+        setEmail(data.email ?? '');
+        const p = (data.plan ?? '').toUpperCase();
+        setPlan(['BASIC', 'STANDARD', 'PRO'].includes(p) ? p : '');
         setIsActive(data.isActive);
-
-                // ★ プランを大文字にそろえて、BASIC / STANDARD / PRO 以外なら「未選択」にする
-        const planValue = (data.plan ?? "").toUpperCase();
-        if (["BASIC", "STANDARD", "PRO"].includes(planValue)) {
-          setPlan(planValue);
-        } else {
-          setPlan("");
-        }
-
-        setIsActive(data.isActive);
-
-        // ★ 契約者情報も state に詰める
-        setCompanyName(data.companyName ?? "");
-        setCompanyAddress1(data.companyAddress1 ?? "");
-        setCompanyAddress2(data.companyAddress2 ?? "");
-        setRepresentativeName(data.representativeName ?? "");
-        setContactPhone(data.contactPhone ?? "");
-        setContactMobile(data.contactMobile ?? "");
-
-        // validUntil を yyyy-MM-dd に変換（input[type=date] 用）
+        setCompanyName(data.companyName ?? '');
+        setCompanyAddress1(data.companyAddress1 ?? '');
+        setCompanyAddress2(data.companyAddress2 ?? '');
+        setRepresentativeName(data.representativeName ?? '');
+        setContactPhone(data.contactPhone ?? '');
+        setContactMobile(data.contactMobile ?? '');
         if (data.validUntil) {
           const d = new Date(data.validUntil);
-          if (!Number.isNaN(d.getTime())) {
-            setValidUntil(d.toISOString().slice(0, 10));
-          }
+          if (!isNaN(d.getTime())) setValidUntil(d.toISOString().slice(0, 10));
         }
-      });
-
-    Promise.all([fetchMe, fetchTenant])
-      .catch((err: any) => {
-        console.error(err);
-        setError(
-          err?.message ??
-            "テナント情報の取得に失敗しました。権限やIDを確認してください。",
-        );
       })
+      .catch((e: any) => setError(e?.message ?? 'データ取得に失敗しました'))
       .finally(() => setLoading(false));
-  }, [tenantId, tenantIdParam]);
-
-  const handleLogout = async () => {
-  const savedToken =
-    typeof window !== "undefined"
-      ? window.localStorage.getItem("auth_token")
-      : null;
-
-  try {
-    if (savedToken) {
-      // ★ バックエンドの /auth/logout を叩いて、UserSession を revoked にする
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${savedToken}`,
-          "Content-Type": "application/json",
-        },
-      });
-    }
-  } catch (e) {
-    // 失敗しても、とりあえずフロント側のログアウト処理は続行
-    console.error("logout error", e);
-  }
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("auth_token");
-      document.cookie = "Authentication=; Max-Age=0; path=/";
-      document.cookie = "access_token=; Max-Age=0; path=/";
-    }
-    router.replace("/");
-  };
-
-  const handleBack = () => {
-    router.push("/admin/tenants");
-  };
+  }, [tenantId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenant) return;
-
-    const savedToken =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
-        : null;
-
-    if (!savedToken) {
-      alert("ログイン情報がありません。再ログインしてください。");
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
+    const token = getToken();
+    if (!token || !tenant) return;
+    setSaving(true); setError(null); setSaveSuccess(false);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenant.id}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${savedToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name,
-            email,
-            plan,
-            isActive,
-            validUntil: validUntil || null, // 空なら null クリア
-
-              // ★ 契約者情報
-            companyName: companyName || null,
-            companyAddress1: companyAddress1 || null,
-            companyAddress2: companyAddress2 || null,
-            representativeName: representativeName || null,
-            contactPhone: contactPhone || null,
-            contactMobile: contactMobile || null,
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        throw new Error("テナント更新APIエラー");
-      }
-
-      // 成功したら一覧に戻る
-      router.push("/admin/tenants");
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ?? "テナントの更新に失敗しました。コンソールを確認してください。",
-      );
+      const res = await fetch(`${apiBase}/admin/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, plan, isActive, validUntil: validUntil || null, companyName: companyName || null, companyAddress1: companyAddress1 || null, companyAddress2: companyAddress2 || null, representativeName: representativeName || null, contactPhone: contactPhone || null, contactMobile: contactMobile || null }),
+      });
+      if (!res.ok) throw new Error('保存に失敗しました');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e: any) {
+      setError(e?.message ?? '保存に失敗しました');
     } finally {
       setSaving(false);
     }
   };
 
-    const handleResetData = async () => {
-    if (!tenant) return;
-
-    const ok = window.confirm(
-      `テナント「${tenant.name}」 のデータをリセットします。\n\n` +
-        "このテナントに紐づく 顧客・車両・予約 データはすべて削除され、元に戻せません。\n\n" +
-        "本当に実行してもよろしいですか？",
-    );
-
-    if (!ok) return;
-
-    const savedToken =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
-        : null;
-
-    if (!savedToken) {
-      alert("ログイン情報がありません。再ログインしてください。");
-      return;
-    }
-
-    setResetting(true);
-    setError(null);
-
+  const handleResetData = async () => {
+    const token = getToken();
+    if (!token || !tenant) return;
+    setResetting(true); setError(null);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/tenants/${tenant.id}/reset-data`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${savedToken}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(
-          data?.message ?? "テナントデータリセットAPIエラー",
-        );
-      }
-
-      // フロント側のカウントもゼロにしておく
-      setTenant({
-        ...tenant,
-        customersCount: 0,
-        carsCount: 0,
-        bookingsCount: 0,
+      const res = await fetch(`${apiBase}/admin/tenants/${tenant.id}/reset-data`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
-
-      alert("このテナントの顧客・車両・予約データをリセットしました。");
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ??
-          "テナントデータのリセットに失敗しました。コンソールを確認してください。",
-      );
+      if (!res.ok) throw new Error('リセットに失敗しました');
+      setTenant({ ...tenant, customersCount: 0, carsCount: 0, bookingsCount: 0 });
+      setShowResetConfirm(false);
+    } catch (e: any) {
+      setError(e?.message ?? 'リセットに失敗しました');
     } finally {
       setResetting(false);
     }
   };
 
-  if (loading) {
-    return <div className="p-4">読み込み中...</div>;
-  }
+  if (loading) return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <p className="text-gray-400 animate-pulse text-sm">読み込み中...</p>
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold">テナント編集</h1>
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
-        </div>
-        <p className="text-red-600 text-sm whitespace-pre-wrap mb-4">
-          {error}
-        </p>
-        <button
-          onClick={handleBack}
-          className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-        >
-          一覧に戻る
-        </button>
+  if (error && !tenant) return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="rounded-2xl bg-red-950 border border-red-800 p-6 text-red-300 text-sm max-w-sm w-full text-center space-y-4">
+        <p>{error}</p>
+        <button onClick={() => router.push('/admin/overview')} className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">← 一覧に戻る</button>
       </div>
-    );
-  }
-
-  if (!tenant) {
-    return (
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h1 className="text-xl font-bold">テナント編集</h1>
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
-        </div>
-        <p className="text-sm">テナントが見つかりませんでした。</p>
-        <button
-          onClick={handleBack}
-          className="mt-3 px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-        >
-          一覧に戻る
-        </button>
-      </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="p-4">
-      {/* ヘッダー */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-bold">テナント編集（ID: {tenant.id}）</h1>
-          {me && (
-            <div className="mt-1 text-sm text-gray-700">
-              ログイン中: {me.email}（role: {me.role}
-              {me.tenantId != null
-                ? ` / tenantId: ${me.tenantId}`
-                : " / 全テナント管理"}
-              ）
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      {/* Header */}
+      <header className="sticky top-0 z-10 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 sm:px-6 py-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button onClick={() => router.push('/admin/overview')} className="text-gray-500 hover:text-white transition-colors text-sm">←</button>
+            <div className="min-w-0">
+              <h1 className="text-sm font-black text-white truncate">テナント編集 <span className="text-gray-500 font-normal text-xs">#{tenantId}</span></h1>
+              {tenant && <p className="text-[11px] text-gray-500 truncate">{tenant.name}</p>}
             </div>
-          )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => router.push(`/admin/tenants/${tenantId}/line-settings`)}
+              className="text-xs text-green-400 hover:text-green-300 border border-green-800 hover:border-green-600 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
+            >
+              📡 LINE設定
+            </button>
+            <button
+              onClick={() => router.push(`/admin/tenants/${tenantId}/user`)}
+              className="text-xs text-purple-400 hover:text-purple-300 border border-purple-800 hover:border-purple-600 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
+            >
+              👤 ユーザー管理
+            </button>
+            <button onClick={() => router.push('/admin/overview')} className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2.5 py-1.5 transition-colors">
+              一覧へ
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+        {/* Mobile nav buttons */}
+        <div className="flex gap-2 sm:hidden">
+          <button onClick={() => router.push(`/admin/tenants/${tenantId}/line-settings`)} className="flex-1 text-xs text-green-400 border border-green-800 rounded-xl py-2 text-center">📡 LINE設定</button>
+          <button onClick={() => router.push(`/admin/tenants/${tenantId}/user`)} className="flex-1 text-xs text-purple-400 border border-purple-800 rounded-xl py-2 text-center">👤 ユーザー管理</button>
         </div>
 
-                <div className="flex gap-2">
-          {/* ★ 追加：ログインユーザー管理ボタン */}
-          <button
-            type="button"
-            onClick={() => router.push(`/admin/tenants/${tenant.id}/user`)}
-            className="px-3 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-700"
-          >
-            ログインユーザー管理
-          </button>
+        {/* Stats bar */}
+        {tenant && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: '顧客', value: tenant.customersCount, icon: '👥' },
+              { label: '車両', value: tenant.carsCount, icon: '🚗' },
+              { label: '予約', value: tenant.bookingsCount, icon: '📅' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl bg-gray-900 border border-gray-800 px-4 py-3 flex items-center gap-3">
+                <span className="text-xl">{s.icon}</span>
+                <div>
+                  <p className="text-xl font-black text-white">{s.value}</p>
+                  <p className="text-[11px] text-gray-500">{s.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-          <button
-            onClick={handleBack}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            一覧に戻る
-          </button>
-          <button
-            onClick={handleLogout}
-            className="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300"
-          >
-            ログアウト
-          </button>
-        </div>
-      </div>
+        {/* Error / Success */}
+        {error && <div className="rounded-xl bg-red-950/60 border border-red-800 px-4 py-3 text-xs text-red-300">{error}</div>}
+        {saveSuccess && <div className="rounded-xl bg-emerald-950/60 border border-emerald-700 px-4 py-3 text-xs text-emerald-300">✅ 保存しました</div>}
 
-            {/* テナントデータ概要 & リセットボタン */}
-      <div className="mb-4 border rounded p-3 bg-red-50">
-        <h2 className="font-semibold mb-2 text-sm text-red-700">
-          テナントデータのリセット（開発・検証用）
-        </h2>
-        <p className="text-xs text-gray-700 mb-2">
-          このテナントに紐づく
-          <span className="font-semibold"> 顧客・車両・予約 </span>
-          データをすべて削除します。<br />
-          <span className="font-semibold text-red-700">
-            実行すると元に戻せません。
-          </span>
-          本番用テナントでは実行しないでください。
-        </p>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* 基本情報 */}
+          <div className="rounded-2xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-800 bg-gray-800/50">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">🏢 基本情報</p>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <Field label="テナント名" required>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} required className={inputCls} placeholder="例: ○○自動車" />
+              </Field>
+              <Field label="メールアドレス" required>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className={inputCls} placeholder="example@garage.jp" />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="プラン" required>
+                  <select value={plan} onChange={e => setPlan(e.target.value)} required className={inputCls + ' cursor-pointer'}>
+                    <option value="">選択してください</option>
+                    <option value="BASIC">BASIC（同時1名）</option>
+                    <option value="STANDARD">STANDARD（同時2名）</option>
+                    <option value="PRO">PRO（同時3名）</option>
+                  </select>
+                </Field>
+                <Field label="有効期限（空白=無期限）">
+                  <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} className={inputCls} />
+                </Field>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsActive(!isActive)}
+                  className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isActive ? 'bg-green-500' : 'bg-gray-700'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-sm text-gray-300">有効フラグ {isActive ? <span className="text-green-400 font-semibold">（有効）</span> : <span className="text-gray-500">（無効）</span>}</span>
+              </div>
+            </div>
+          </div>
 
-        <div className="text-xs text-gray-800 mb-2">
-          <div>顧客数: {tenant.customersCount} 件</div>
-          <div>車両数: {tenant.carsCount} 件</div>
-          <div>予約数: {tenant.bookingsCount} 件</div>
-        </div>
+          {/* 契約者情報 */}
+          <div className="rounded-2xl bg-gray-900 border border-gray-800 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-800 bg-gray-800/50">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">📋 契約者情報</p>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="会社名">
+                  <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} className={inputCls} placeholder="例: 株式会社○○モータース" />
+                </Field>
+                <Field label="代表者名">
+                  <input type="text" value={representativeName} onChange={e => setRepresentativeName(e.target.value)} className={inputCls} placeholder="例: 山田 太郎" />
+                </Field>
+              </div>
+              <Field label="住所1">
+                <input type="text" value={companyAddress1} onChange={e => setCompanyAddress1(e.target.value)} className={inputCls} placeholder="例: 福岡市博多区○○1-2-3" />
+              </Field>
+              <Field label="住所2">
+                <input type="text" value={companyAddress2} onChange={e => setCompanyAddress2(e.target.value)} className={inputCls} placeholder="ビル名・号室など" />
+              </Field>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="代表電話">
+                  <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)} className={inputCls} placeholder="0921234567" />
+                </Field>
+                <Field label="携帯・担当者">
+                  <input type="tel" value={contactMobile} onChange={e => setContactMobile(e.target.value)} className={inputCls} placeholder="09012345678" />
+                </Field>
+              </div>
+            </div>
+          </div>
 
-        <button
-          type="button"
-          onClick={handleResetData}
-          disabled={resetting}
-          className="mt-2 px-4 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
-        >
-          {resetting
-            ? "データリセット中..."
-            : "このテナントのデータをリセットする"}
-        </button>
-      </div>
-
-      {/* エラー表示 */}
-      {error && (
-        <p className="mb-3 text-red-600 text-sm whitespace-pre-wrap">
-          {error}
-        </p>
-      )}
-
-      {/* 編集フォーム */}
-      <form onSubmit={handleSubmit} className="max-w-lg space-y-3">
-      {/* 契約者情報 */}
-      <div className="mt-6 border-t pt-4">
-        <h2 className="font-semibold mb-2 text-sm">契約者情報（会社情報）</h2>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">会社名</label>
-          <input
-            type="text"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">住所1</label>
-          <input
-            type="text"
-            value={companyAddress1}
-            onChange={(e) => setCompanyAddress1(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 福岡市博多区◯◯1-2-3"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">住所2</label>
-          <input
-            type="text"
-            value={companyAddress2}
-            onChange={(e) => setCompanyAddress2(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="ビル名・号室など"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">代表者名</label>
-          <input
-            type="text"
-            value={representativeName}
-            onChange={(e) => setRepresentativeName(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">連絡先（代表）</label>
-          <input
-            type="tel"
-            value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 0921234567"
-          />
-        </div>
-
-        <div className="mb-3">
-          <label className="block text-sm font-medium mb-1">
-            連絡先（携帯・担当者など）
-          </label>
-          <input
-            type="tel"
-            value={contactMobile}
-            onChange={(e) => setContactMobile(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            placeholder="例: 09012345678"
-          />
-        </div>
-      </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            テナント名 <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            メールアドレス <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            プラン <span className="text-red-600">*</span>
-          </label>
-          <select
-            value={plan}
-            onChange={(e) => setPlan(e.target.value)}
-            className="w-full border px-2 py-1 text-sm rounded"
-            required
-          >
-            <option value="">プランを選択してください</option>
-            <option value="BASIC">Basic（同時ログイン 1）</option>
-            <option value="STANDARD">Standard（同時ログイン 2）</option>
-            <option value="PRO">Pro（同時ログイン 3）</option>
-          </select>
-          <p className="mt-1 text-xs text-gray-500">
-            ※ 将来の仕様：MANAGER はプランに応じて同時ログイン数を制限します
-            （BASIC:1 / STANDARD:2 / PRO:3）。CLIENT は常に 1、DEVELOPER は制限なし。
-          </p>
-        </div>
-
-
-
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">有効フラグ</label>
-          <input
-            type="checkbox"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-          />
-          <span className="text-xs text-gray-600">
-            チェックが入っている場合のみ有効（◯）として扱います
-          </span>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            有効期限（空欄で指定なし）
-          </label>
-          <input
-            type="date"
-            value={validUntil}
-            onChange={(e) => setValidUntil(e.target.value)}
-            className="w-48 border px-2 py-1 text-sm rounded"
-          />
-        </div>
-
-        <div className="flex gap-2 mt-4">
+          {/* 保存ボタン */}
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-1.5 text-sm rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+            className="w-full rounded-2xl bg-green-600 hover:bg-green-500 active:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 transition-colors"
           >
-            {saving ? "保存中..." : "保存する"}
+            {saving ? '保存中...' : '💾 変更を保存する'}
           </button>
-          <button
-            type="button"
-            onClick={handleBack}
-            className="px-4 py-1.5 text-sm rounded bg-gray-200 hover:bg-gray-300"
-          >
-            キャンセル
-          </button>
+        </form>
+
+        {/* データリセット */}
+        <div className="rounded-2xl bg-gray-900 border border-red-900/50 overflow-hidden">
+          <div className="px-5 py-3 border-b border-red-900/50 bg-red-950/20">
+            <p className="text-xs font-bold text-red-400 uppercase tracking-wide">⚠️ 危険操作</p>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              このテナントの<span className="text-red-400 font-semibold">顧客・車両・予約データをすべて削除</span>します。元に戻せません。本番テナントでは実行しないでください。
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowResetConfirm(true)}
+              className="rounded-xl border border-red-800 text-red-400 hover:bg-red-950/50 text-xs font-bold px-4 py-2 transition-colors"
+            >
+              🗑️ テナントデータをリセットする
+            </button>
+          </div>
         </div>
-      </form>
+      </div>
+
+      {/* リセット確認モーダル */}
+      {showResetConfirm && tenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-gray-900 border border-red-800 p-6 space-y-4">
+            <div className="text-center text-3xl">⚠️</div>
+            <h3 className="text-base font-black text-white text-center">本当に削除しますか？</h3>
+            <div className="rounded-xl bg-red-950/40 border border-red-800 px-4 py-3 text-xs text-red-300 space-y-1">
+              <p>テナント：<span className="font-bold">{tenant.name}</span></p>
+              <p>顧客 {tenant.customersCount} 件 / 車両 {tenant.carsCount} 件 / 予約 {tenant.bookingsCount} 件 を削除</p>
+              <p className="font-bold mt-1">この操作は取り消せません。</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowResetConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-gray-700 text-sm text-gray-400 hover:text-white">キャンセル</button>
+              <button onClick={handleResetData} disabled={resetting} className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white text-sm font-bold disabled:opacity-50">
+                {resetting ? '削除中...' : '削除する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
