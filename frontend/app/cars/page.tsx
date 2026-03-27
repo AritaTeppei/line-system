@@ -104,6 +104,10 @@ export default function CarsPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvSuccess, setCsvSuccess] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  // スマホ連携（モバイルでCSVアップロード → PC反映）
+  const [mobileQrUrl, setMobileQrUrl] = useState<string | null>(null);
+  const [mobilePolling, setMobilePolling] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
    // 検索・ソート・ページング
  const [searchQuery, setSearchQuery] = useState("");
@@ -389,8 +393,11 @@ const filteredCustomersForSelect = normalizedCustomerQuery
   };
 
   const closeCarModal = () => {
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
     setCsvError(null);
     setCsvSuccess(null);
+    setMobileQrUrl(null);
+    setMobilePolling(false);
     setIsCarModalOpen(false);
     setEditingCarId(null);
     resetFormFields();
@@ -400,7 +407,7 @@ const filteredCustomersForSelect = normalizedCustomerQuery
 
   // ──────────────────────────────────────────────────────────────
   // 車検証閲覧アプリ CSV パーサー
-  // 標準CSV（1行目ヘッダー）と転置CSV（列1=項目名、列2=値）の両形式に対応
+  // 国土交通省アプリ形式（英語列名）に対応
   // UTF-8 BOM / Shift-JIS 両対応
   // ──────────────────────────────────────────────────────────────
   const parseCsvLine = (line: string): string[] => {
@@ -422,11 +429,92 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     return result;
   };
 
+  // 全角英数→半角、全角スペース→半角スペースに正規化
+  const normalizeStr = (s: string) =>
+    s.replace(/[０-９Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+     .replace(/[　]+/g, ' ').trim();
+
+  type CsvCarData = { registrationNumber?: string; chassisNumber?: string; carName?: string; shakenDate?: string };
+
+  const parseCsvText = (text: string): CsvCarData => {
+    const result: CsvCarData = {};
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return result;
+
+    const headers = parseCsvLine(lines[0]);
+    const values = parseCsvLine(lines[1]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h.trim()] = (values[i] ?? '').trim(); });
+
+    // ── 国土交通省 車検証閲覧アプリ形式（英語列名）──────────────────
+    // 登録番号: TwodimensionCodeInfoEntryNoCarNo (QRデータ由来、スペース整形済み)
+    //           fallback: EntryNoCarNo
+    const regRaw = row['TwodimensionCodeInfoEntryNoCarNo'] || row['EntryNoCarNo'] || '';
+    if (regRaw) result.registrationNumber = normalizeStr(regRaw);
+
+    // 車台番号: TwodimensionCodeInfoCarNo (ハイフン区切り半角英数)
+    //           fallback: CarNo (全角の場合あり)
+    const chassisRaw = row['TwodimensionCodeInfoCarNo'] || row['CarNo'] || '';
+    if (chassisRaw) result.chassisNumber = normalizeStr(chassisRaw);
+
+    // 車名: CarName
+    if (row['CarName']) result.carName = row['CarName'].trim();
+
+    // 車検満了日: TwodimensionCodeInfoValidPeriodExpirdate (YYMMDD)
+    const expiryCode = row['TwodimensionCodeInfoValidPeriodExpirdate'] || '';
+    if (/^\d{6}$/.test(expiryCode) && expiryCode !== '999999') {
+      const yy = parseInt(expiryCode.slice(0, 2), 10);
+      const mm = expiryCode.slice(2, 4);
+      const dd = expiryCode.slice(4, 6);
+      result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
+    } else {
+      // 元号＋年月日から計算
+      const era = (row['ValidPeriodExpirdateE'] || '').trim();
+      const eraY = parseInt((row['ValidPeriodExpirdateY'] || '0').trim(), 10);
+      const m = (row['ValidPeriodExpirdateM'] || '').trim().padStart(2, '0');
+      const d = (row['ValidPeriodExpirdateD'] || '').trim().padStart(2, '0');
+      if (era && eraY > 0 && m !== '00' && d !== '00') {
+        const offsets: Record<string, number> = { '令和': 2018, '平成': 1988, '昭和': 1925 };
+        const off = offsets[era];
+        if (off) result.shakenDate = `${off + eraY}-${m}-${d}`;
+      }
+    }
+
+    // ── 汎用フォールバック（日本語列名） ─────────────────────────────
+    if (!result.registrationNumber) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号')) {
+          result.registrationNumber = normalizeStr(v); break;
+        }
+      }
+    }
+    if (!result.chassisNumber) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('車台番号')) { result.chassisNumber = normalizeStr(v); break; }
+      }
+    }
+    if (!result.carName) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('車名') && !k.includes('番号')) { result.carName = v.trim(); break; }
+      }
+    }
+
+    return result;
+  };
+
+  const applyCsvData = (d: CsvCarData) => {
+    if (d.registrationNumber) setRegistrationNumber(d.registrationNumber);
+    if (d.chassisNumber) setChassisNumber(d.chassisNumber);
+    if (d.carName) setCarName(d.carName);
+    if (d.shakenDate) setShakenDate(d.shakenDate);
+    const applied = [d.registrationNumber && '登録番号', d.chassisNumber && '車台番号', d.carName && '車名', d.shakenDate && '車検日'].filter(Boolean).join('・');
+    setCsvSuccess(`${applied}を反映しました`);
+  };
+
   const handleCsvFile = async (file: File) => {
     setCsvError(null);
     setCsvSuccess(null);
     try {
-      // UTF-8（BOM除去）→ Shift-JIS フォールバック
       const buffer = await file.arrayBuffer();
       let text: string;
       try {
@@ -434,68 +522,59 @@ const filteredCustomersForSelect = normalizedCustomerQuery
       } catch {
         text = new TextDecoder('shift_jis').decode(buffer);
       }
-
-      const lines = text.split(/\r?\n/).filter((l) => l.trim());
-      if (lines.length < 2) {
-        setCsvError('CSVの形式が正しくありません（データ行がありません）');
+      const data = parseCsvText(text);
+      if (!data.registrationNumber && !data.chassisNumber && !data.carName) {
+        setCsvError('登録番号・車台番号・車名が見つかりませんでした。車検証閲覧アプリのCSVか確認してください。');
         return;
       }
-
-      const firstLineFields = parseCsvLine(lines[0]);
-
-      // 転置形式（列1=項目名、列2=値）の判定: 1行目の2列目にデータがあり、かつ各行が2列程度
-      const isTransposed = firstLineFields.length <= 3 && lines.length > 3;
-
-      let reg = '';
-      let chassis = '';
-      let name = '';
-
-      if (isTransposed) {
-        // 転置CSV: 各行が「項目名,値」
-        const map: Record<string, string> = {};
-        for (const line of lines) {
-          const cols = parseCsvLine(line);
-          if (cols.length >= 2) map[cols[0].trim()] = cols[1].trim();
-        }
-        for (const [k, v] of Object.entries(map)) {
-          if (!reg && (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号'))) reg = v;
-          if (!chassis && k.includes('車台番号')) chassis = v;
-          if (!name && k.includes('車名') && !k.includes('番号')) name = v;
-        }
-      } else {
-        // 標準CSV: 1行目ヘッダー、2行目以降データ
-        const headers = parseCsvLine(lines[0]);
-        const values = parseCsvLine(lines[1]);
-        const row: Record<string, string> = {};
-        headers.forEach((h, i) => { row[h.trim()] = (values[i] ?? '').trim(); });
-        for (const [k, v] of Object.entries(row)) {
-          if (!reg && (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号'))) reg = v;
-          if (!chassis && k.includes('車台番号')) chassis = v;
-          if (!name && k.includes('車名') && !k.includes('番号')) name = v;
-        }
-      }
-
-      // 全角数字→半角に正規化
-      const normalize = (s: string) =>
-        s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-         .replace(/[　]+/g, ' ').trim();
-
-      reg = normalize(reg);
-      chassis = normalize(chassis);
-
-      if (!reg && !chassis && !name) {
-        setCsvError('登録番号・車台番号・車名のいずれも見つかりませんでした。CSVの形式を確認してください。');
-        return;
-      }
-
-      if (reg) setRegistrationNumber(reg);
-      if (chassis) setChassisNumber(chassis);
-      if (name) setCarName(name);
-
-      const applied = [reg && '登録番号', chassis && '車台番号', name && '車名'].filter(Boolean).join('・');
-      setCsvSuccess(`${applied}を反映しました`);
+      applyCsvData(data);
     } catch {
       setCsvError('ファイルの読み込みに失敗しました。');
+    }
+  };
+
+  const startMobileScan = async () => {
+    setCsvError(null);
+    setCsvSuccess(null);
+    setMobileQrUrl(null);
+    setMobilePolling(false);
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+    try {
+      const res = await fetch(`${apiBase}/public/car-scan/session`, { method: 'POST' });
+      const data = await res.json();
+      const sid = data.sessionId as string;
+
+      const frontendBase = process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin;
+      const scanUrl = `${frontendBase}/public/car-scan?sid=${sid}`;
+
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(scanUrl, { width: 220, margin: 2 });
+      setMobileQrUrl(dataUrl);
+      setMobilePolling(true);
+
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`${apiBase}/public/car-scan/${sid}`);
+          const d = await r.json();
+          if (d.ready && d.rawData) {
+            if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+            setMobilePolling(false);
+            setMobileQrUrl(null);
+            try {
+              const parsed: CsvCarData = JSON.parse(d.rawData);
+              if (parsed.registrationNumber || parsed.chassisNumber || parsed.carName) {
+                applyCsvData(parsed);
+              } else {
+                setCsvError('スマホからのデータを解析できませんでした。');
+              }
+            } catch {
+              setCsvError('スマホからのデータを解析できませんでした。');
+            }
+          }
+        } catch { /* ignore */ }
+      }, 2000);
+    } catch {
+      setCsvError('スマホ連携の開始に失敗しました。');
     }
   };
 
@@ -1110,20 +1189,21 @@ const filteredCustomersForSelect = normalizedCustomerQuery
               onDragOver={(e) => { e.preventDefault(); setCsvDragging(true); }}
               onDragLeave={() => setCsvDragging(false)}
               onDrop={(e) => {
-                e.preventDefault();
-                setCsvDragging(false);
+                e.preventDefault(); setCsvDragging(false);
                 const file = e.dataTransfer.files[0];
                 if (file) handleCsvFile(file);
               }}
             >
               <p className="text-xs font-semibold text-gray-600 mb-1">📄 車検証閲覧アプリのCSVから自動入力</p>
               <p className="text-xs text-gray-400 mb-3">
-                国土交通省「車検証閲覧アプリ」でダウンロードしたCSVをアップロードすると登録番号・車台番号・車名が自動入力されます。
+                国土交通省「車検証閲覧アプリ」のCSVをアップロードすると登録番号・車台番号・車名・車検日が入力されます。
               </p>
-              <div className="flex items-center gap-2">
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* PCファイル選択 */}
                 <label className="cursor-pointer">
-                  <span className="inline-block rounded-lg bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 active:bg-green-800">
-                    📂 CSVファイルを選択
+                  <span className="inline-block rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700">
+                    📂 CSVを選択
                   </span>
                   <input
                     ref={csvInputRef}
@@ -1133,12 +1213,39 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); e.target.value = ''; }}
                   />
                 </label>
-                <span className="text-xs text-gray-400">またはここにドロップ</span>
+                <span className="text-xs text-gray-400">またはドロップ</span>
+
+                {/* スマホ連携 */}
+                <button
+                  type="button"
+                  onClick={startMobileScan}
+                  disabled={mobilePolling}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  📱 スマホ連携
+                </button>
+                {mobilePolling && (
+                  <button
+                    type="button"
+                    onClick={() => { if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; } setMobilePolling(false); setMobileQrUrl(null); }}
+                    className="text-xs text-red-500 underline"
+                  >
+                    キャンセル
+                  </button>
+                )}
               </div>
-              {csvError && <p className="mt-2 text-xs text-red-600">⚠️ {csvError}</p>}
-              {csvSuccess && (
-                <p className="mt-2 text-xs font-semibold text-green-700">✅ {csvSuccess}</p>
+
+              {/* スマホ連携 QRコード */}
+              {mobileQrUrl && (
+                <div className="mt-3 flex flex-col items-center gap-1">
+                  <img src={mobileQrUrl} alt="スマホ連携QR" className="w-36 h-36 rounded-lg border border-gray-200" />
+                  <p className="text-xs text-gray-600 text-center">スマホでこのQRを読み取り → CSVをアップロード</p>
+                  {mobilePolling && <p className="text-xs text-blue-500 animate-pulse">スマホからのデータを待機中…</p>}
+                </div>
               )}
+
+              {csvError && <p className="mt-2 text-xs text-red-600">⚠️ {csvError}</p>}
+              {csvSuccess && <p className="mt-2 text-xs font-semibold text-green-700">✅ {csvSuccess}</p>}
             </div>
 
             {formError && (
