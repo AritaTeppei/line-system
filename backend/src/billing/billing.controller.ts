@@ -81,6 +81,15 @@ export class BillingController {
     return this.billingService.upgradeNow(user.tenantId, body.plan);
   }
 
+  /** Stripeから最新状態を手動同期（Webhookが届かなかった場合の緊急用） */
+  @Post('sync')
+  @UseGuards(JwtAuthGuard)
+  async syncFromStripe(@Req() req: Request) {
+    const user = (req as any).authUser as AuthPayload | undefined;
+    if (!user || !user.tenantId) throw new BadRequestException('テナント情報が取得できません。');
+    return this.billingService.syncFromStripe(user.tenantId);
+  }
+
     @Post('downgrade-next')
     @UseGuards(JwtAuthGuard)
     async downgradeNext(

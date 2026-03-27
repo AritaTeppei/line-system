@@ -163,6 +163,31 @@ export default function BillingPage() {
     finally { setChanging(null); }
   };
 
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const handleSyncFromStripe = async () => {
+    const token = getAuthToken();
+    if (!token) { setError('ログイン情報が見つかりません。'); return; }
+    setSyncing(true);
+    setError(null);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`${apiBase}/billing/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(sanitizeErrorMessage(data?.message ?? 'Stripe同期に失敗しました。'));
+        return;
+      }
+      setSyncResult(`✅ 同期完了（プラン: ${data.plan}、ステータス: ${data.status}）`);
+      if (me?.tenantId) await fetchBillingStatus(me.tenantId);
+    } catch { setError('Stripe同期中にエラーが発生しました。'); }
+    finally { setSyncing(false); }
+  };
+
   const handleOpenPortal = async () => {
     const token = getAuthToken();
     if (!token) { setError('ログイン情報が見つかりません。'); return; }
@@ -251,6 +276,24 @@ export default function BillingPage() {
         )}
         {changeResult && (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">{changeResult}</div>
+        )}
+        {syncResult && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 font-semibold">{syncResult}</div>
+        )}
+
+        {/* Stripe同期バナー（トライアル中かつサブスク登録済みの場合に表示） */}
+        {isTrial && billingStatus?.stripeCustomerId && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-blue-800">決済は完了していますが画面に反映されていない場合は同期してください。</p>
+            <button
+              type="button"
+              onClick={handleSyncFromStripe}
+              disabled={syncing}
+              className="flex-shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 disabled:opacity-60"
+            >
+              {syncing ? '同期中...' : '🔄 Stripeと同期'}
+            </button>
+          </div>
         )}
 
         {/* トライアル中バナー */}

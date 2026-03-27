@@ -741,4 +741,105 @@ async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
   };
 }
 
+/**
+ * Stripe から最新のサブスク状態を取得してDBに反映する（手動同期用）
+ * Webhookが届かなかった場合の緊急対応として使用
+ */
+async syncFromStripe(tenantId: number) {
+  const tenant = await this.prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { stripeCustomerId: true, stripeSubscriptionId: true },
+  });
+
+  if (!tenant) throw new BadRequestException('テナントが見つかりません');
+
+  // stripeCustomerId もしくは stripeSubscriptionId で検索
+  if (!tenant.stripeCustomerId && !tenant.stripeSubscriptionId) {
+    // Stripeから最近のCheckoutセッションを検索
+    const sessions = await this.stripe.checkout.sessions.list({
+      limit: 10,
+    }).catch(() => null);
+
+    if (!sessions) throw new BadRequestException('Stripe情報が見つかりません');
+
+    // このテナントのセッションを探す
+    const session = sessions.data.find(
+      (s) => s.client_reference_id === String(tenantId) && s.status === 'complete',
+    );
+
+    if (!session) {
+      throw new BadRequestException(
+        '完了済みの決済セッションが見つかりません。Stripeダッシュボードで確認してください。',
+      );
+    }
+
+    const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
+    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;
+    const plan = session.metadata?.plan ?? null;
+
+    if (!subscriptionId || !customerId || !plan) {
+      throw new BadRequestException('セッション情報が不完全です');
+    }
+
+    // サブスク詳細を取得
+    let stripeSubscription: Stripe.Subscription;
+    try {
+      stripeSubscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+    } catch (err) {
+      this.sanitizeStripeError(err);
+    }
+
+    const periodEnd = (stripeSubscription! as any).current_period_end
+      ? new Date((stripeSubscription! as any).current_period_end * 1000)
+      : null;
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        subscriptionStatus: stripeSubscription!.status,
+        plan: plan as any,
+        isActive: stripeSubscription!.status === 'active',
+        currentPeriodEnd: periodEnd,
+        trialEnd: null,
+      },
+    });
+
+    return { ok: true, plan, status: stripeSubscription!.status };
+  }
+
+  // すでにstripeCustomerIdがある場合はサブスク情報を直接更新
+  const subscriptionId = tenant.stripeSubscriptionId;
+  if (!subscriptionId) {
+    throw new BadRequestException('サブスクリプションIDが見つかりません。プランを再登録してください。');
+  }
+
+  let stripeSubscription: Stripe.Subscription;
+  try {
+    stripeSubscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+  } catch (err) {
+    this.sanitizeStripeError(err);
+  }
+
+  const priceId = stripeSubscription!.items.data[0]?.price?.id ?? null;
+  const plan = priceId ? (this.priceToPlan[priceId] ?? null) : null;
+  const periodEnd = (stripeSubscription! as any).current_period_end
+    ? new Date((stripeSubscription! as any).current_period_end * 1000)
+    : null;
+
+  await this.prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      subscriptionStatus: stripeSubscription!.status,
+      isActive: stripeSubscription!.status === 'active',
+      ...(plan ? { plan: plan as any } : {}),
+      currentPeriodEnd: periodEnd,
+      trialEnd: null,
+    },
+  });
+
+  return { ok: true, plan, status: stripeSubscription!.status };
+}
+
 }
