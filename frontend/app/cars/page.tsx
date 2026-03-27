@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import TenantLayout from "../components/TenantLayout";
 
 type Me = {
@@ -98,6 +98,21 @@ export default function CarsPage() {
   const [isLogDetailModalOpen, setIsLogDetailModalOpen] =
     useState(false);
   const [isLogListModalOpen, setIsLogListModalOpen] = useState(false);
+
+  // QRスキャン関連
+  const [qrScanMode, setQrScanMode] = useState<'none' | 'camera' | 'mobile'>('none');
+  const [qrRawData, setQrRawData] = useState<string | null>(null);
+  const [qrParsed, setQrParsed] = useState<{ registrationNumber?: string; chassisNumber?: string; shakenDate?: string } | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scanSessionId, setScanSessionId] = useState<string | null>(null);
+  const [scanQrImageUrl, setScanQrImageUrl] = useState<string | null>(null);
+  const [scanPolling, setScanPolling] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
    // 検索・ソート・ページング
  const [searchQuery, setSearchQuery] = useState("");
  const [sortKey, setSortKey] = useState<SortKey>("id");
@@ -381,13 +396,155 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     setIsCarModalOpen(true);
   };
 
+  const stopCamera = useCallback(() => {
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+    setQrScanMode('none');
+    setCameraError(null);
+    setScanPolling(false);
+  }, []);
+
   const closeCarModal = () => {
+    stopCamera();
+    setQrRawData(null);
+    setQrParsed(null);
+    setScanSessionId(null);
+    setScanQrImageUrl(null);
     setIsCarModalOpen(false);
     setEditingCarId(null);
     resetFormFields();
     setFormError(null);
     setFormSuccess(null);
   };
+
+  // 車検証QRデータパーサー（パイプ区切り対応）
+  const parseShakenQR = useCallback((raw: string) => {
+    const result: { registrationNumber?: string; chassisNumber?: string; shakenDate?: string } = {};
+    const parts = raw.split(/[|,\t]/);
+
+    // 登録番号パターン探索
+    const regPattern = /[\u4e00-\u9fff]{1,4}\d{1,4}[\u3041-\u3096]\d{1,4}/;
+    for (const p of parts) {
+      const m = p.trim().match(regPattern);
+      if (m) { result.registrationNumber = m[0]; break; }
+    }
+
+    // 車台番号：英大文字+数字 6文字以上
+    const chassisPattern = /^[A-Z0-9\-]{6,20}$/;
+    for (const p of parts) {
+      const t = p.trim();
+      if (chassisPattern.test(t) && t !== result.registrationNumber) {
+        result.chassisNumber = t; break;
+      }
+    }
+
+    // 車検満了日：YYYYMM or 令和YY年MM月
+    for (const p of parts) {
+      const m1 = p.trim().match(/^(20\d{2})(0[1-9]|1[0-2])$/);
+      if (m1) {
+        const lastDay = new Date(+m1[1], +m1[2], 0).getDate();
+        result.shakenDate = `${m1[1]}-${m1[2]}-${String(lastDay).padStart(2, '0')}`;
+        break;
+      }
+      const m2 = p.trim().match(/令和(\d{1,2})年(\d{1,2})月/);
+      if (m2) {
+        const year = 2018 + +m2[1];
+        const month = +m2[2];
+        const lastDay = new Date(year, month, 0).getDate();
+        result.shakenDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        break;
+      }
+    }
+
+    return result;
+  }, []);
+
+  const applyQrData = useCallback((parsed: { registrationNumber?: string; chassisNumber?: string; shakenDate?: string }) => {
+    if (parsed.registrationNumber) setRegistrationNumber(parsed.registrationNumber);
+    if (parsed.chassisNumber) setChassisNumber(parsed.chassisNumber);
+    if (parsed.shakenDate) setShakenDate(parsed.shakenDate);
+    setQrParsed(parsed);
+  }, [setRegistrationNumber, setChassisNumber, setShakenDate]);
+
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    setQrScanMode('camera');
+    setQrRawData(null);
+    setQrParsed(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+
+      const jsQR = (await import('jsqr')).default;
+      scanTimerRef.current = setInterval(() => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code?.data) {
+          if (scanTimerRef.current) clearInterval(scanTimerRef.current);
+          if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+          setQrScanMode('none');
+          setQrRawData(code.data);
+          const parsed = parseShakenQR(code.data);
+          applyQrData(parsed);
+        }
+      }, 300);
+    } catch {
+      setCameraError('カメラへのアクセスに失敗しました。ブラウザの設定でカメラを許可してください。');
+      setQrScanMode('none');
+    }
+  }, [parseShakenQR, applyQrData]);
+
+  const startMobileScan = useCallback(async () => {
+    setQrScanMode('mobile');
+    setScanPolling(false);
+    setScanQrImageUrl(null);
+    setScanSessionId(null);
+    try {
+      const res = await fetch(`${apiBase}/public/car-scan/session`, { method: 'POST' });
+      const data = await res.json();
+      const sid = data.sessionId as string;
+      setScanSessionId(sid);
+
+      const frontendBase = process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin;
+      const scanUrl = `${frontendBase}/public/car-scan?sid=${sid}`;
+
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(scanUrl, { width: 200 });
+      setScanQrImageUrl(dataUrl);
+      setScanPolling(true);
+
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`${apiBase}/public/car-scan/${sid}`);
+          const d = await r.json();
+          if (d.ready && d.rawData) {
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+            setScanPolling(false);
+            setQrScanMode('none');
+            setQrRawData(d.rawData);
+            const parsed = parseShakenQR(d.rawData);
+            applyQrData(parsed);
+          }
+        } catch { /* ignore */ }
+      }, 2000);
+    } catch {
+      setCameraError('スキャンセッションの作成に失敗しました。');
+      setQrScanMode('none');
+    }
+  }, [parseShakenQR, applyQrData]);
 
   const handleDeleteClick = async (id: number) => {
     if (!token) {
@@ -864,9 +1021,6 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                     <th className="border-b px-3 py-2 text-left text-gray-600 font-semibold">
                       任意日付
                     </th>
-                    <th className="border-b px-3 py-2 text-left w-28 text-gray-600 font-semibold">
-                      操作
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -876,7 +1030,8 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                     return (
                       <tr
                         key={car.id}
-                        className="hover:bg-gray-50 text-gray-900"
+                        className="hover:bg-green-50 text-gray-900 cursor-pointer"
+                        onClick={() => handleEditClick(car)}
                       >
                         <td className="border-b px-3 py-2 text-center align-middle">
                           <input
@@ -932,24 +1087,6 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                           ) : (
                             <span className="text-gray-400">未設定</span>
                           )}
-                        </td>
-                        <td className="border px-2 py-1 align-middle">
-                          <div className="flex flex-col gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleEditClick(car)}
-                              className="px-3 py-1 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 bg-white font-medium"
-                            >
-                              編集
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteClick(car.id)}
-                              className="px-3 py-1 border border-red-300 rounded-lg text-xs text-red-600 hover:bg-red-50 bg-white font-medium"
-                            >
-                              削除
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     );
@@ -1011,6 +1148,79 @@ const filteredCustomersForSelect = normalizedCustomerQuery
             </div>
 
             <div className="p-5 overflow-y-auto max-h-[80vh]">
+
+            {/* 車検証QRスキャン */}
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-600 mb-2">📄 車検証QRから自動入力</p>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  disabled={qrScanMode !== 'none'}
+                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  📷 PCカメラ
+                </button>
+                <button
+                  type="button"
+                  onClick={startMobileScan}
+                  disabled={qrScanMode !== 'none'}
+                  className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  📱 スマホ連携
+                </button>
+                {qrScanMode !== 'none' && (
+                  <button
+                    type="button"
+                    onClick={stopCamera}
+                    className="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    停止
+                  </button>
+                )}
+              </div>
+
+              {/* カメラプレビュー */}
+              {qrScanMode === 'camera' && (
+                <div className="rounded-lg overflow-hidden bg-black aspect-video relative mb-2">
+                  <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-32 h-32 border-2 border-green-400 rounded-xl opacity-80" />
+                  </div>
+                  <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white animate-pulse">QRコードを枠内に合わせてください…</p>
+                </div>
+              )}
+              <canvas ref={canvasRef} className="hidden" />
+
+              {/* スマホ連携QR表示 */}
+              {qrScanMode === 'mobile' && (
+                <div className="text-center py-2">
+                  {scanQrImageUrl ? (
+                    <>
+                      <img src={scanQrImageUrl} alt="スキャン用QR" className="mx-auto w-36 h-36 rounded-lg border border-gray-200" />
+                      <p className="mt-1 text-xs text-gray-600">スマホでこのQRを読み取り→車検証QRをスキャン</p>
+                      {scanPolling && <p className="mt-1 text-xs text-green-600 animate-pulse">スマホからのデータを待機中…</p>}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500 animate-pulse">QRコード生成中…</p>
+                  )}
+                </div>
+              )}
+
+              {/* エラー */}
+              {cameraError && (
+                <p className="text-xs text-red-600 mt-1">{cameraError}</p>
+              )}
+
+              {/* 読み取り結果 */}
+              {qrRawData && (
+                <div className="mt-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                  <p className="text-xs font-semibold text-green-700 mb-1">✅ QR読み取り完了 — フォームに反映しました</p>
+                  <p className="text-xs text-gray-500 break-all font-mono line-clamp-2">{qrRawData}</p>
+                </div>
+              )}
+            </div>
+
             {formError && (
               <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
                 {formError}
@@ -1132,22 +1342,36 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                 </div>
               )}
 
-              <div className="pt-1 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeCarModal}
-                  disabled={submitting}
-                  className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                >
-                  閉じる
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700 disabled:bg-green-300"
-                >
-                  {submitting ? "処理中..." : editingCarId == null ? "車両を登録" : "車両情報を更新"}
-                </button>
+              <div className="pt-1 flex justify-between gap-2">
+                <div>
+                  {editingCarId != null && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(editingCarId)}
+                      disabled={submitting}
+                      className="px-4 py-2.5 rounded-xl border border-red-300 text-sm text-red-600 bg-white hover:bg-red-50 disabled:opacity-50"
+                    >
+                      削除
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeCarModal}
+                    disabled={submitting}
+                    className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    閉じる
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700 disabled:bg-green-300"
+                  >
+                    {submitting ? "処理中..." : editingCarId == null ? "車両を登録" : "車両情報を更新"}
+                  </button>
+                </div>
               </div>
             </form>
             </div>

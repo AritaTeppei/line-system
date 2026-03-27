@@ -15,6 +15,7 @@ import { BillingModule } from './billing/billing.module'; // ★ ここ追加
 import { OnboardingModule } from './onboarding/onboarding.module'; // ★追加
 import { TrialMonitorService } from './tenants/trial-monitor.service'; // ★ 追加
 import { MailModule } from './mail/mail.module';
+import { CarScanModule } from './car-scan/car-scan.module';
 
 @Module({
   imports: [
@@ -31,8 +32,9 @@ import { MailModule } from './mail/mail.module';
     BillingModule,
     OnboardingModule,
     AdminModule,
-    PublicBookingsModule, 
-    MailModule
+    PublicBookingsModule,
+    MailModule,
+    CarScanModule,
   ],
   providers: [TrialMonitorService], // ★ 追加
 })
