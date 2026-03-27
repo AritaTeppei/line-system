@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, useCallback } from "react";
 import TenantLayout from "../components/TenantLayout";
 
 type Customer = {
@@ -159,6 +159,19 @@ export default function CustomersPage() {
   const [carFormError, setCarFormError] = useState<string | null>(null);
 const [carFormSuccess, setCarFormSuccess] = useState<string | null>(null);
 const [carFormSaving, setCarFormSaving] = useState(false);
+
+  // 新規車両追加モード
+  const [isAddingNewCar, setIsAddingNewCar] = useState(false);
+  const [newCarSaving, setNewCarSaving] = useState(false);
+
+  // 顧客モーダル内CSVアップロード（車両登録用）
+  const [carCsvDragging, setCarCsvDragging] = useState(false);
+  const [carCsvError, setCarCsvError] = useState<string | null>(null);
+  const [carCsvSuccess, setCarCsvSuccess] = useState<string | null>(null);
+  const carCsvInputRef = useRef<HTMLInputElement>(null);
+  const [carMobileQrUrl, setCarMobileQrUrl] = useState<string | null>(null);
+  const [carMobilePolling, setCarMobilePolling] = useState(false);
+  const carPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 
 
@@ -673,6 +686,12 @@ const [carFormSaving, setCarFormSaving] = useState(false);
   setInspectionDate("");
   setCarFormError(null);
   setCarFormSuccess(null);
+  setIsAddingNewCar(false);
+  setCarCsvError(null);
+  setCarCsvSuccess(null);
+  setCarMobileQrUrl(null);
+  setCarMobilePolling(false);
+  if (carPollTimerRef.current) { clearInterval(carPollTimerRef.current); carPollTimerRef.current = null; }
 };
 
   const closeVehicleModal = () => {
@@ -796,6 +815,198 @@ const [carFormSaving, setCarFormSaving] = useState(false);
 };
 
 
+
+  // ── CSV パーサー（車検証閲覧アプリ形式） ────────────────────────────────
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let cur = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuote = !inQuote;
+      } else if (ch === ',' && !inQuote) {
+        result.push(cur); cur = '';
+      } else { cur += ch; }
+    }
+    result.push(cur);
+    return result;
+  };
+
+  const normalizeCarStr = (s: string) =>
+    s.replace(/[０-９Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+     .replace(/[　]+/g, ' ').trim();
+
+  type CsvCarData = { registrationNumber?: string; chassisNumber?: string; carName?: string; shakenDate?: string };
+
+  const parseCsvText = (text: string): CsvCarData => {
+    const result: CsvCarData = {};
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return result;
+    const headers = parseCsvLine(lines[0]);
+    const values = parseCsvLine(lines[1]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h.trim()] = (values[i] ?? '').trim(); });
+
+    const regRaw = row['TwodimensionCodeInfoEntryNoCarNo'] || row['EntryNoCarNo'] || '';
+    if (regRaw) result.registrationNumber = normalizeCarStr(regRaw);
+    const chassisRaw = row['TwodimensionCodeInfoCarNo'] || row['CarNo'] || '';
+    if (chassisRaw) result.chassisNumber = normalizeCarStr(chassisRaw);
+    if (row['CarName']) result.carName = row['CarName'].trim();
+    const expiryCode = row['TwodimensionCodeInfoValidPeriodExpirdate'] || '';
+    if (/^\d{6}$/.test(expiryCode) && expiryCode !== '999999') {
+      const yy = parseInt(expiryCode.slice(0, 2), 10);
+      const mm = expiryCode.slice(2, 4);
+      const dd = expiryCode.slice(4, 6);
+      result.shakenDate = `${yy < 80 ? 2000 + yy : 1900 + yy}-${mm}-${dd}`;
+    } else {
+      const era = (row['ValidPeriodExpirdateE'] || '').trim();
+      const eraY = parseInt((row['ValidPeriodExpirdateY'] || '0').trim(), 10);
+      const m = (row['ValidPeriodExpirdateM'] || '').trim().padStart(2, '0');
+      const d = (row['ValidPeriodExpirdateD'] || '').trim().padStart(2, '0');
+      if (era && eraY > 0 && m !== '00' && d !== '00') {
+        const offsets: Record<string, number> = { '令和': 2018, '平成': 1988, '昭和': 1925 };
+        const off = offsets[era];
+        if (off) result.shakenDate = `${off + eraY}-${m}-${d}`;
+      }
+    }
+    if (!result.registrationNumber) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('登録番号') || k.includes('ナンバー') || k.includes('車両番号')) {
+          result.registrationNumber = normalizeCarStr(v); break;
+        }
+      }
+    }
+    if (!result.chassisNumber) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('車台番号')) { result.chassisNumber = normalizeCarStr(v); break; }
+      }
+    }
+    if (!result.carName) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k.includes('車名') && !k.includes('番号')) { result.carName = v.trim(); break; }
+      }
+    }
+    return result;
+  };
+
+  const applyCarCsvData = (d: CsvCarData) => {
+    if (d.registrationNumber) setRegistrationNumber(d.registrationNumber);
+    if (d.chassisNumber) setChassisNumber(d.chassisNumber);
+    if (d.carName) setCarName(d.carName);
+    if (d.shakenDate) setShakenDate(d.shakenDate);
+    const applied = [d.registrationNumber && '登録番号', d.chassisNumber && '車台番号', d.carName && '車名', d.shakenDate && '車検日'].filter(Boolean).join('・');
+    setCarCsvSuccess(`${applied}を反映しました`);
+    setCarCsvError(null);
+  };
+
+  const handleCarCsvFile = async (file: File) => {
+    setCarCsvError(null);
+    setCarCsvSuccess(null);
+    try {
+      const buffer = await file.arrayBuffer();
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^\uFEFF/, '');
+      } catch {
+        text = new TextDecoder('shift_jis').decode(buffer);
+      }
+      const data = parseCsvText(text);
+      if (!data.registrationNumber && !data.chassisNumber && !data.carName) {
+        setCarCsvError('登録番号・車台番号・車名が見つかりませんでした。車検証閲覧アプリのCSVか確認してください。');
+        return;
+      }
+      applyCarCsvData(data);
+    } catch {
+      setCarCsvError('ファイルの読み込みに失敗しました。');
+    }
+  };
+
+  const startCarMobileScan = async () => {
+    setCarCsvError(null);
+    setCarCsvSuccess(null);
+    setCarMobileQrUrl(null);
+    setCarMobilePolling(false);
+    if (carPollTimerRef.current) { clearInterval(carPollTimerRef.current); carPollTimerRef.current = null; }
+    try {
+      const res = await fetch(`${apiBase}/public/car-scan/session`, { method: 'POST' });
+      const data = await res.json();
+      const sid = data.sessionId as string;
+      const frontendBase = typeof window !== 'undefined' ? window.location.origin : '';
+      const scanUrl = `${frontendBase}/public/car-scan?sid=${sid}`;
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(scanUrl, { width: 200, margin: 2 });
+      setCarMobileQrUrl(dataUrl);
+      setCarMobilePolling(true);
+      carPollTimerRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(`${apiBase}/public/car-scan/${sid}`);
+          const d = await r.json();
+          if (d.ready && d.rawData) {
+            if (carPollTimerRef.current) { clearInterval(carPollTimerRef.current); carPollTimerRef.current = null; }
+            setCarMobilePolling(false);
+            setCarMobileQrUrl(null);
+            try {
+              const parsed: CsvCarData = JSON.parse(d.rawData);
+              if (parsed.registrationNumber || parsed.chassisNumber || parsed.carName) {
+                applyCarCsvData(parsed);
+              } else {
+                setCarCsvError('スマホからのデータを解析できませんでした。');
+              }
+            } catch {
+              setCarCsvError('スマホからのデータを解析できませんでした。');
+            }
+          }
+        } catch { /* ignore */ }
+      }, 2000);
+    } catch {
+      setCarCsvError('スマホ連携の開始に失敗しました。');
+    }
+  };
+
+  const handleAddNewCar = async () => {
+    if (!token || !vehicleTargetCustomer) return;
+    if (!carName && !registrationNumber && !chassisNumber) {
+      setCarFormError('車名・登録番号・車台番号のいずれかは必須です。');
+      return;
+    }
+    setCarFormError(null);
+    setCarFormSuccess(null);
+    setNewCarSaving(true);
+    try {
+      const res = await fetch(`${apiBase}/cars`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          customerId: vehicleTargetCustomer.id,
+          carName: carName || null,
+          registrationNumber: registrationNumber || null,
+          chassisNumber: chassisNumber || null,
+          shakenDate: shakenDate || null,
+          inspectionDate: inspectionDate || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const msg = data?.message ? (Array.isArray(data.message) ? data.message.join(', ') : String(data.message)) : '車両の登録に失敗しました';
+        throw new Error(msg);
+      }
+      const created: Car = await res.json();
+      setCars((prev) => [...prev, created]);
+      // フォームリセット
+      setCarName(''); setRegistrationNumber(''); setChassisNumber(''); setShakenDate(''); setInspectionDate('');
+      setCarCsvError(null); setCarCsvSuccess(null); setCarMobileQrUrl(null); setCarMobilePolling(false);
+      setIsAddingNewCar(false);
+      setCarFormSuccess('車両を登録しました');
+      // 顧客の車両フラグ更新
+      setCustomers((prev) => prev.map((c) => c.id === vehicleTargetCustomer.id ? { ...c, hasVehicle: true } : c));
+    } catch (err: any) {
+      setCarFormError(err.message ?? '車両の登録に失敗しました');
+    } finally {
+      setNewCarSaving(false);
+    }
+  };
 
  // 並び替え後の顧客リスト
 const sortedCustomers = [...customers].sort((a, b) => {
@@ -1527,30 +1738,60 @@ const pagedCustomers = filteredCustomers.slice(
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={closeCustomerModal}
-              className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50"
-            >
-              閉じる
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700"
-            >
-              {editingCustomerId == null ? '登録する' : '更新する'}
-            </button>
+          <div className="flex justify-between gap-2 pt-2">
+            <div>
+              {editingCustomerId != null && me?.role !== 'CLIENT' && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteClick(editingCustomerId)}
+                  className="px-4 py-2.5 rounded-xl border border-red-300 text-sm text-red-700 bg-white hover:bg-red-50"
+                >
+                  🗑️ 削除
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={closeCustomerModal}
+                className="px-4 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50"
+              >
+                閉じる
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700"
+              >
+                {editingCustomerId == null ? '登録する' : '更新する'}
+              </button>
+            </div>
           </div>
         </form>
 
-        {/* 右：車両一覧＋編集 */}
+        {/* 右：車両一覧＋編集＋新規追加 */}
         <div className="space-y-3">
-          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-            <h4 className="text-sm font-bold text-gray-800 mb-0.5">🚗 紐づき車両</h4>
-            <p className="text-xs text-gray-500">
-              車両をクリックすると下のフォームで編集できます。
-            </p>
+          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-gray-800 mb-0.5">🚗 紐づき車両</h4>
+              <p className="text-xs text-gray-500">
+                車両をクリックすると下のフォームで編集できます。
+              </p>
+            </div>
+            {editingCustomerId != null && !isAddingNewCar && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCar(null);
+                  setCarName(''); setRegistrationNumber(''); setChassisNumber(''); setShakenDate(''); setInspectionDate('');
+                  setCarFormError(null); setCarFormSuccess(null);
+                  setCarCsvError(null); setCarCsvSuccess(null); setCarMobileQrUrl(null);
+                  setIsAddingNewCar(true);
+                }}
+                className="flex-shrink-0 inline-flex items-center gap-1 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-2"
+              >
+                ＋ 車両追加
+              </button>
+            )}
           </div>
 
           {carFormError && (
@@ -1595,8 +1836,91 @@ const pagedCustomers = filteredCustomers.slice(
             )}
           </div>
 
-          {/* 選択中の車両編集フォーム */}
-          {selectedCar ? (
+          {/* 車検証CSVアップロード（新規追加 or 選択中編集時に表示） */}
+          {(isAddingNewCar || selectedCar) && (
+            <div
+              className={`rounded-xl border-2 border-dashed p-3 transition-colors ${carCsvDragging ? 'border-green-400 bg-green-50' : 'border-gray-300 bg-gray-50'}`}
+              onDragOver={(e) => { e.preventDefault(); setCarCsvDragging(true); }}
+              onDragLeave={() => setCarCsvDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault(); setCarCsvDragging(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleCarCsvFile(f);
+              }}
+            >
+              <p className="text-xs font-bold text-gray-700 mb-2">📄 車検証CSVから自動入力</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="cursor-pointer inline-flex items-center gap-1 rounded-lg border border-green-600 text-green-700 bg-white hover:bg-green-50 text-xs font-bold px-3 py-1.5">
+                  📂 CSV選択
+                  <input ref={carCsvInputRef} type="file" accept=".csv,text/csv" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCarCsvFile(f); e.currentTarget.value = ''; }} />
+                </label>
+                <button type="button" onClick={startCarMobileScan}
+                  className="inline-flex items-center gap-1 rounded-lg border border-blue-400 text-blue-700 bg-white hover:bg-blue-50 text-xs font-bold px-3 py-1.5">
+                  📱 スマホ連携
+                </button>
+                {carMobilePolling && (
+                  <button type="button" onClick={() => {
+                    if (carPollTimerRef.current) { clearInterval(carPollTimerRef.current); carPollTimerRef.current = null; }
+                    setCarMobilePolling(false); setCarMobileQrUrl(null);
+                  }} className="inline-flex items-center gap-1 rounded-lg border border-gray-400 text-gray-600 bg-white text-xs px-2 py-1.5">
+                    キャンセル
+                  </button>
+                )}
+              </div>
+              {carMobileQrUrl && (
+                <div className="mt-2 flex flex-col items-center gap-1">
+                  <img src={carMobileQrUrl} alt="QRコード" className="w-36 h-36" />
+                  <p className="text-xs text-gray-500">スマホでQRを読み取り、CSVをアップロードしてください</p>
+                </div>
+              )}
+              {carCsvError && <p className="mt-2 text-xs text-red-600">{carCsvError}</p>}
+              {carCsvSuccess && <p className="mt-2 text-xs text-green-700 font-semibold">✅ {carCsvSuccess}</p>}
+            </div>
+          )}
+
+          {/* 新規車両追加フォーム */}
+          {isAddingNewCar ? (
+            <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-green-700">＋ 新規車両を登録</p>
+                <button type="button" onClick={() => {
+                  setIsAddingNewCar(false);
+                  setCarName(''); setRegistrationNumber(''); setChassisNumber(''); setShakenDate(''); setInspectionDate('');
+                  setCarCsvError(null); setCarCsvSuccess(null); setCarMobileQrUrl(null); setCarMobilePolling(false);
+                  if (carPollTimerRef.current) { clearInterval(carPollTimerRef.current); carPollTimerRef.current = null; }
+                }} className="text-xs text-gray-500 hover:text-gray-700">キャンセル</button>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">車名</label>
+                <input className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400" value={carName} onChange={(e) => setCarName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">登録番号</label>
+                <input className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400" placeholder="福岡300あ12-34 など" value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">車台番号</label>
+                <input className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400" value={chassisNumber} onChange={(e) => setChassisNumber(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">車検満了日</label>
+                  <input type="date" className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400" value={shakenDate} onChange={(e) => setShakenDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">点検予定日</label>
+                  <input type="date" className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400" value={inspectionDate} onChange={(e) => setInspectionDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex justify-end pt-1">
+                <button type="button" onClick={handleAddNewCar} disabled={newCarSaving}
+                  className="px-4 py-2.5 rounded-xl bg-green-600 text-sm text-white font-bold hover:bg-green-700 disabled:opacity-60">
+                  {newCarSaving ? '登録中...' : '車両を登録する'}
+                </button>
+              </div>
+            </form>
+          ) : selectedCar ? (
             <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
               <p className="text-xs font-semibold text-gray-600">✏️ 選択中の車両を編集</p>
               <div>

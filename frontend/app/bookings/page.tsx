@@ -1073,23 +1073,33 @@ if (modalNeedLoanerCar === null) {
         </header>
 
         {/* 未確認予約一覧 */}
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
+        {(() => {
+          const lineBookingCount = pendingBookings.filter(b => b.source === 'LINE_PUBLIC_FORM').length;
+          return (
+        <section className={`rounded-2xl shadow-sm overflow-hidden border-2 ${lineBookingCount > 0 ? 'border-red-400 bg-red-50 animate-pulse-slow' : 'border-amber-200 bg-amber-50'}`}>
           <button
             type="button"
             onClick={() => setShowPendingList((v) => !v)}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-amber-100 transition-colors"
+            className={`w-full flex items-center justify-between px-5 py-3 transition-colors ${lineBookingCount > 0 ? 'hover:bg-red-100' : 'hover:bg-amber-100'}`}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-base font-extrabold text-amber-900">⚠️ 未確認の予約</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-base font-extrabold ${lineBookingCount > 0 ? 'text-red-900' : 'text-amber-900'}`}>
+                {lineBookingCount > 0 ? '🔔 未確認の予約' : '⚠️ 未確認の予約'}
+              </span>
               {pendingBookings.length > 0 ? (
-                <span className="inline-flex items-center rounded-full bg-amber-500 text-white text-xs font-bold px-2.5 py-0.5">
+                <span className={`inline-flex items-center rounded-full text-white text-xs font-bold px-2.5 py-0.5 ${lineBookingCount > 0 ? 'bg-red-500' : 'bg-amber-500'}`}>
                   {pendingBookings.length}件
                 </span>
               ) : (
                 <span className="text-xs text-amber-700">なし</span>
               )}
+              {lineBookingCount > 0 && (
+                <span className="inline-flex items-center rounded-full bg-red-100 border border-red-400 text-red-700 text-xs font-bold px-2.5 py-0.5 animate-bounce">
+                  📲 LINE予約 {lineBookingCount}件 — 要対応
+                </span>
+              )}
             </div>
-            <span className="text-amber-700 text-sm">{showPendingList ? '▲ 閉じる' : '▼ 開く'}</span>
+            <span className={`text-sm ${lineBookingCount > 0 ? 'text-red-700' : 'text-amber-700'}`}>{showPendingList ? '▲ 閉じる' : '▼ 開く'}</span>
           </button>
 
           {showPendingList && (
@@ -1113,10 +1123,11 @@ if (modalNeedLoanerCar === null) {
                       : b.source === 'ADMIN' ? '🔧 管理画面'
                       : b.source || '不明';
 
+                    const isLineBooking = b.source === 'LINE_PUBLIC_FORM';
                     return (
                       <div
                         key={b.id}
-                        className="rounded-xl bg-white border border-amber-200 p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+                        className={`rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3 border-2 ${isLineBooking ? 'bg-red-50 border-red-400 shadow-md' : 'bg-white border-amber-200'}`}
                       >
                         {/* 日時・種別 */}
                         <div className="flex items-center gap-2 flex-shrink-0">
@@ -1127,12 +1138,17 @@ if (modalNeedLoanerCar === null) {
                         </div>
                         {/* 顧客・車両 */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-gray-900 truncate">{customerName}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-gray-900 truncate">{customerName}</p>
+                            {isLineBooking && (
+                              <span className="inline-flex items-center rounded-full bg-red-500 text-white text-[10px] font-bold px-2 py-0.5">📲 LINE新着</span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-600 truncate">{carLabel}</p>
                           {tel && (
                             <a href={`tel:${tel}`} className="text-xs text-emerald-700 hover:underline">{tel}</a>
                           )}
-                          <p className="text-xs text-gray-400 mt-0.5">{sourceLabel}</p>
+                          <p className={`text-xs mt-0.5 font-semibold ${isLineBooking ? 'text-red-600' : 'text-gray-400'}`}>{sourceLabel}</p>
                           {b.needsLoanerCar != null && (
                             <p className="text-xs text-gray-500">代車: {b.needsLoanerCar ? '必要' : '不要'}</p>
                           )}
@@ -1176,6 +1192,8 @@ if (modalNeedLoanerCar === null) {
             </div>
           )}
         </section>
+          );
+        })()}
 
         {/* カレンダー */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">

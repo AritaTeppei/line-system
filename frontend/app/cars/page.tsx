@@ -109,6 +109,11 @@ export default function CarsPage() {
   const [mobilePolling, setMobilePolling] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // 一括送信カウントダウン
+  const [countdown, setCountdown] = useState(0);
+  const [isCountingDown, setIsCountingDown] = useState(false);
+  const countdownTimerRef = useRef<number | null>(null);
+
    // 検索・ソート・ページング
  const [searchQuery, setSearchQuery] = useState("");
  const [sortKey, setSortKey] = useState<SortKey>("id");
@@ -646,7 +651,7 @@ const filteredCustomersForSelect = normalizedCustomerQuery
     });
   };
 
-  const handleBroadcast = async () => {
+  const actuallySendBroadcast = async () => {
     setBroadcastError(null);
     setBroadcastSuccess(null);
 
@@ -724,7 +729,41 @@ const filteredCustomersForSelect = normalizedCustomerQuery
       setBroadcastError(err.message ?? "メッセージの送信に失敗しました");
     } finally {
       setBroadcasting(false);
+      setIsCountingDown(false);
+      setCountdown(0);
+      if (countdownTimerRef.current != null) {
+        window.clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+      }
     }
+  };
+
+  const handleBroadcastModalSend = () => {
+    setBroadcastError(null);
+    if (!broadcastMessage.trim()) {
+      setBroadcastError("メッセージ内容を入力してください。");
+      return;
+    }
+    if (selectedCarIds.length === 0) {
+      setBroadcastError("送信対象の車両を1件以上選択してください。");
+      return;
+    }
+    if (isCountingDown) return;
+
+    setIsCountingDown(true);
+    let remaining = 10;
+    setCountdown(remaining);
+
+    const timerId = window.setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        window.clearInterval(timerId);
+        countdownTimerRef.current = null;
+        actuallySendBroadcast();
+      }
+    }, 1000);
+    countdownTimerRef.current = timerId;
   };
 
   const openBroadcastModal = () => {
@@ -742,6 +781,12 @@ const filteredCustomersForSelect = normalizedCustomerQuery
   const closeBroadcastModal = () => {
     setIsBroadcastModalOpen(false);
     setBroadcastError(null);
+    setCountdown(0);
+    setIsCountingDown(false);
+    if (countdownTimerRef.current != null) {
+      window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
   };
 
   const openLogDetailModal = (log: BroadcastLog) => {
@@ -1069,6 +1114,7 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                           <input
                             type="checkbox"
                             checked={selected}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={() => toggleCarSelection(car.id)}
                           />
                         </td>
@@ -1437,7 +1483,19 @@ const filteredCustomersForSelect = normalizedCustomerQuery
               placeholder="ここにLINEで送りたいメッセージを入力"
             />
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-3 text-[11px] text-gray-600">
+              {isCountingDown ? (
+                <span className="text-orange-600 font-semibold">
+                  {countdown}秒後に送信します...
+                </span>
+              ) : (
+                <span>
+                  「この内容で送信」を押すと10秒カウントダウン後に送信します。キャンセルは「閉じる」を押してください。
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 flex justify-end gap-2">
               <button
                 type="button"
                 onClick={closeBroadcastModal}
@@ -1448,11 +1506,11 @@ const filteredCustomersForSelect = normalizedCustomerQuery
               </button>
               <button
                 type="button"
-                onClick={handleBroadcast}
-                disabled={broadcasting}
+                onClick={handleBroadcastModalSend}
+                disabled={broadcasting || isCountingDown}
                 className="px-3 py-1.5 rounded-md bg-emerald-600 text-xs sm:text-sm text-white font-semibold hover:bg-emerald-700 disabled:bg-emerald-300"
               >
-                {broadcasting ? "送信中..." : "この内容で送信"}
+                {isCountingDown ? "カウントダウン中..." : "この内容で送信（10秒後）"}
               </button>
             </div>
           </div>
