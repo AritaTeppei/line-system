@@ -1,5 +1,5 @@
 // backend/src/billing/billing.service.ts
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import Stripe from 'stripe';
 
@@ -66,6 +66,34 @@ private readonly PLAN_RANK: Record<Plan, number> = {
     );
   }
   /**
+   * Stripe エラーをサニタイズして安全なメッセージのみ返す。
+   * API キー（sk_test_... / sk_live_...）を含む文字列を除去する。
+   */
+  private sanitizeStripeError(err: unknown): never {
+    let message = '決済処理中にエラーが発生しました。しばらくしてから再度お試しください。';
+    if (err instanceof Stripe.errors.StripeError) {
+      // キータイプ別に日本語メッセージに変換
+      if (err.type === 'StripeAuthenticationError') {
+        message = 'Stripe APIキーが無効または期限切れです（管理者に連絡してください）。';
+      } else if (err.type === 'StripeConnectionError') {
+        message = 'Stripeへの接続に失敗しました。ネットワーク状態を確認してください。';
+      } else if (err.type === 'StripeRateLimitError') {
+        message = 'リクエストが集中しています。しばらくしてから再度お試しください。';
+      } else if (err.message) {
+        // API キーが含まれる場合はデフォルトメッセージを使用、含まれない場合のみ表示
+        const hasSensitiveData = /sk_(test|live)_/.test(err.message);
+        if (!hasSensitiveData) {
+          message = err.message;
+        }
+      }
+      this.logger.error(`Stripe error [${err.type}]: ${err.message}`);
+    } else if (err instanceof Error) {
+      this.logger.error(`Unexpected error: ${err.message}`);
+    }
+    throw new InternalServerErrorException(message);
+  }
+
+  /**
    * Stripe の Checkout セッションを作成して URL を返す
    */
   async createCheckoutSession(
@@ -116,24 +144,30 @@ private readonly PLAN_RANK: Record<Plan, number> = {
     const cancelPath = fromLogin ? '/' : '/billing/cancel';
 
     // 実際に Stripe Checkout セッションを作成（ここで1回だけ呼ぶ）
-    const session = await this.stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+    // eslint-disable-next-line prefer-const
+    let session: Stripe.Checkout.Session = null as any;
+    try {
+      session = await this.stripe.checkout.sessions.create({
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        success_url: `${frontendBaseUrl}${successPath}?billing=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${frontendBaseUrl}${cancelPath}?billing=cancel`,
+        client_reference_id: clientReferenceId,
+        metadata: {
+          tenantId: clientReferenceId,
+          plan,
+          fromLogin: fromLogin ? '1' : '0',
         },
-      ],
-      success_url: `${frontendBaseUrl}${successPath}?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendBaseUrl}${cancelPath}?billing=cancel`,
-      client_reference_id: clientReferenceId,
-      metadata: {
-        tenantId: clientReferenceId,
-        plan, // BASIC / STANDARD / PRO がそのまま入る
-        fromLogin: fromLogin ? '1' : '0',
-      },
-    });
+      });
+    } catch (err) {
+      this.sanitizeStripeError(err);
+    }
 
     if (!session.url) {
       this.logger.error(
@@ -218,19 +252,24 @@ private readonly PLAN_RANK: Record<Plan, number> = {
     const frontendBaseUrl =
       process.env.FRONTEND_BASE_URL ?? 'http://localhost:3000';
 
-    const session = await this.stripe.billingPortal.sessions.create({
-      customer: tenant.stripeCustomerId,
-      return_url: `${frontendBaseUrl}/billing`,
-    });
+    let portalSession: Stripe.BillingPortal.Session = null as any;
+    try {
+      portalSession = await this.stripe.billingPortal.sessions.create({
+        customer: tenant.stripeCustomerId,
+        return_url: `${frontendBaseUrl}/billing`,
+      });
+    } catch (err) {
+      this.sanitizeStripeError(err);
+    }
 
-    if (!session.url) {
+    if (!portalSession.url) {
       this.logger.error(
-        `Stripe ポータルセッションに url が含まれていません。sessionId=${session.id}`,
+        `Stripe ポータルセッションに url が含まれていません。sessionId=${portalSession.id}`,
       );
       throw new Error('サブスク管理画面のURLの取得に失敗しました。');
     }
 
-    return { url: session.url };
+    return { url: portalSession.url };
   }
 
   /**
@@ -488,24 +527,33 @@ async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
   const nextPriceId = priceIdMap[plan];
   if (!nextPriceId) throw new BadRequestException('priceId 未設定');
 
-  const sub = await this.stripe.subscriptions.retrieve(
-    tenant.stripeSubscriptionId,
-  );
+  let sub: Stripe.Subscription;
+  try {
+    sub = await this.stripe.subscriptions.retrieve(
+      tenant.stripeSubscriptionId,
+    );
+  } catch (err) {
+    this.sanitizeStripeError(err);
+  }
 
-  const item = sub.items.data[0];
+  const item = sub!.items.data[0];
   if (!item) throw new BadRequestException('subscription item 不正');
 
   // ① 既存のダウングレードスケジュールがあればリリース（解除）してから即時変更
   const existingScheduleId =
-    typeof (sub as any).schedule === 'string'
-      ? ((sub as any).schedule as string)
-      : ((sub as any).schedule?.id as string | undefined);
+    typeof (sub! as any).schedule === 'string'
+      ? ((sub! as any).schedule as string)
+      : ((sub! as any).schedule?.id as string | undefined);
 
   if (existingScheduleId) {
     this.logger.log(
       `upgradeNow: releasing existing schedule=${existingScheduleId}`,
     );
-    await this.stripe.subscriptionSchedules.release(existingScheduleId);
+    try {
+      await this.stripe.subscriptionSchedules.release(existingScheduleId);
+    } catch (err) {
+      this.sanitizeStripeError(err);
+    }
     // アプリ側の予約情報もクリア
     await this.prisma.tenant.update({
       where: { id: tenantId },
@@ -514,10 +562,15 @@ async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
   }
 
   // ② 即時アップグレード（差額生成）
-  const updated = await this.stripe.subscriptions.update(sub.id, {
-    items: [{ id: item.id, price: nextPriceId }],
-    proration_behavior: 'create_prorations',
-  });
+  let updated: Stripe.Subscription;
+  try {
+    updated = await this.stripe.subscriptions.update(sub!.id, {
+      items: [{ id: item.id, price: nextPriceId }],
+      proration_behavior: 'create_prorations',
+    });
+  } catch (err) {
+    this.sanitizeStripeError(err);
+  }
 
   // ③ 差額を即時請求（0円の場合はスキップ）
   let invoiceId: string | null = null;
@@ -526,7 +579,7 @@ async upgradeNow(tenantId: number, plan: 'BASIC' | 'STANDARD' | 'PRO') {
   try {
     const invoice = await this.stripe.invoices.create({
       customer: tenant.stripeCustomerId,
-      subscription: updated.id,
+      subscription: updated!.id,
       auto_advance: false,
     });
 
@@ -577,11 +630,16 @@ async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
   const nextPriceId = this.planToPriceId(nextPlan);
 
   // StripeのSubscriptionを取得
-  const sub = await this.stripe.subscriptions.retrieve(
-    tenant.stripeSubscriptionId,
-  );
+  let sub: Stripe.Subscription;
+  try {
+    sub = await this.stripe.subscriptions.retrieve(
+      tenant.stripeSubscriptionId,
+    );
+  } catch (err) {
+    this.sanitizeStripeError(err);
+  }
 
-  const currentPriceId = sub.items?.data?.[0]?.price?.id ?? null;
+  const currentPriceId = sub!.items?.data?.[0]?.price?.id ?? null;
   const currentPlan = currentPriceId ? this.priceToPlan[currentPriceId] : undefined;
 
   if (!currentPlan) {
@@ -601,7 +659,7 @@ async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
   }
 
   // current_period_end を取得（API バージョンによって場所が異なる）
-  const subAny = sub as any;
+  const subAny = sub! as any;
   const item0 = subAny.items?.data?.[0];
   const currentPeriodEndUnix: number | null =
     subAny.current_period_end ?? item0?.current_period_end ?? null;
@@ -621,11 +679,15 @@ async scheduleDowngrade(tenantId: number, nextPlan: Plan) {
   // → Stripe 側は次回更新から新プランで請求される
   // → 今期は既に支払い済みなので差額は発生しない
   // → DB 上は nextPlan/nextPlanStartAt で管理し、plan は今期末まで維持する
-  const item = sub.items.data[0];
-  await this.stripe.subscriptions.update(sub.id, {
-    items: [{ id: item.id, price: nextPriceId }],
-    proration_behavior: 'none',
-  });
+  const item = sub!.items.data[0];
+  try {
+    await this.stripe.subscriptions.update(sub!.id, {
+      items: [{ id: item.id, price: nextPriceId }],
+      proration_behavior: 'none',
+    });
+  } catch (err) {
+    this.sanitizeStripeError(err);
+  }
 
   const effectiveAt = new Date(currentPeriodEndUnix * 1000);
 

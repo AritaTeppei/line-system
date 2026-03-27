@@ -37,6 +37,16 @@ const VALID_PLANS: Plan[] = ['BASIC', 'STANDARD', 'PRO'];
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+/** APIエラーメッセージからStripeのAPIキー等の機密情報を除去する */
+function sanitizeErrorMessage(msg: unknown): string {
+  if (typeof msg !== 'string') return '予期しないエラーが発生しました。';
+  // sk_test_ / sk_live_ を含む場合はマスクする
+  if (/sk_(test|live)_/.test(msg)) {
+    return '決済サービスの設定にエラーがあります（管理者に連絡してください）。';
+  }
+  return msg;
+}
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   const fromSession = window.sessionStorage.getItem('auth_token');
@@ -110,7 +120,7 @@ export default function BillingPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.message ?? '決済用セッションの作成に失敗しました。');
+        setError(sanitizeErrorMessage(data?.message ?? '決済用セッションの作成に失敗しました。'));
         return;
       }
       const data = (await res.json()) as { url?: string };
@@ -141,7 +151,7 @@ export default function BillingPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.message ?? 'プラン変更に失敗しました。');
+        setError(sanitizeErrorMessage(data?.message ?? 'プラン変更に失敗しました。'));
         return;
       }
       const msg = isUpgrade
@@ -165,7 +175,7 @@ export default function BillingPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.message ?? 'サブスク管理画面の起動に失敗しました。');
+        setError(sanitizeErrorMessage(data?.message ?? 'サブスク管理画面の起動に失敗しました。'));
         return;
       }
       const data = (await res.json()) as { url?: string };
