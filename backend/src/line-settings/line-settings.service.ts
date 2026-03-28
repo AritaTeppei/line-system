@@ -15,7 +15,7 @@ export class LineSettingsService {
   private readonly logger = new Logger(LineSettingsService.name); // ★追加
 
   private readonly WEBHOOK_URL =
-    'https://line-system.onrender.com/line/webhook'; // ★追加
+    'https://api.seibisystem.com/line/webhook';
 
   constructor(
     private readonly prisma: PrismaService,

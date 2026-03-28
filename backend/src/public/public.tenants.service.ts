@@ -47,7 +47,7 @@ export class PublicTenantsService {
         // ▼ 共通の LINE Webhook URL（env 優先、なければ固定値）
     const defaultWebhookUrl =
       process.env.LINE_WEBHOOK_URL ||
-      'https://line-system.onrender.com/line/webhook';
+      'https://api.seibisystem.com/line/webhook';
 
     // テナント＋ユーザーをトランザクションで作成
     const [tenant, user] = await this.prisma

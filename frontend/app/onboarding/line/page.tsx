@@ -301,7 +301,7 @@ export default function LineOnboardingPage() {
                       LINE DevelopersのMessaging API設定 → WebhookURL欄に以下を入力して「検証」「有効にする」をONにします：
                     </p>
                     <div className="mt-1 bg-gray-100 rounded-lg px-3 py-1.5 text-xs font-mono text-gray-700 break-all select-all">
-                      https://line-system.onrender.com/line/webhook
+                      https://api.seibisystem.com/line/webhook
                     </div>
                   </div>
                 </div>
