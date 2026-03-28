@@ -5,12 +5,14 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ★ CORS 設定：ローカルと Vercel 本番の両方を許可
+  // ★ CORS 設定：ローカル・Vercel・独自ドメインの全てを許可
   app.enableCors({
     origin: [
-      'http://localhost:3000', // ローカル開発用フロント
-      'http://localhost:3001', // ローカル開発用フロント（PitLink）
-      'https://line-system.vercel.app', // Vercel 本番フロント
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://line-system.vercel.app',
+      'https://seibisystem.com',
+      'https://www.seibisystem.com',
     ],
     credentials: true,
   });
