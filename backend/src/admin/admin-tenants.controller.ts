@@ -12,10 +12,12 @@ import {
   NotFoundException,
   UseGuards,
   ForbiddenException,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, UserRole } from '@prisma/client';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../jwt.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
@@ -429,12 +431,12 @@ export class AdminTenantsController {
 
   @Patch('')
   @Delete(':userId')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('DEVELOPER')
   async deleteTenantUser(
+    @Req() req: Request,
     @Param('tenantId') tenantId: number,
     @Param('userId') userId: number,
   ) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('ユーザーが見つかりません');

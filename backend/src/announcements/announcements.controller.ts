@@ -10,11 +10,12 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
+  Req,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+import { JwtAuthGuard } from '../jwt.guard';
 
 type CreateAnnouncementDto = {
   title: string;
@@ -50,9 +51,8 @@ export class AnnouncementsController {
    * 開発者専用: 全お知らせ取得（予定含む）
    */
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles('DEVELOPER')
-  async getAll() {
+  async getAll(@Req() req: Request) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     return this.prisma.announcement.findMany({
       orderBy: { publishAt: 'desc' },
     });
@@ -62,9 +62,8 @@ export class AnnouncementsController {
    * 開発者専用: お知らせ作成
    */
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles('DEVELOPER')
-  async create(@Body() dto: CreateAnnouncementDto) {
+  async create(@Req() req: Request, @Body() dto: CreateAnnouncementDto) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     if (!dto.title?.trim()) throw new BadRequestException('タイトルは必須です');
     if (!dto.body?.trim()) throw new BadRequestException('本文は必須です');
     if (!dto.publishAt) throw new BadRequestException('配信日時は必須です');
@@ -83,12 +82,12 @@ export class AnnouncementsController {
    * 開発者専用: お知らせ更新
    */
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles('DEVELOPER')
   async update(
+    @Req() req: Request,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateAnnouncementDto,
   ) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const existing = await this.prisma.announcement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('お知らせが見つかりません');
 
@@ -107,9 +106,8 @@ export class AnnouncementsController {
    * 開発者専用: お知らせ削除
    */
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles('DEVELOPER')
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  async remove(@Req() req: Request, @Param('id', ParseIntPipe) id: number) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const existing = await this.prisma.announcement.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('お知らせが見つかりません');
     await this.prisma.announcement.delete({ where: { id } });
