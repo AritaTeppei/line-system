@@ -13,7 +13,7 @@ import {
   ForbiddenException,
   Req,
 } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../jwt.guard';
 
