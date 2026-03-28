@@ -408,7 +408,55 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <footer className="text-xs text-gray-400 mt-8 text-center">
+          {/* プラン比較 */}
+          <div className="mt-8 w-full">
+            <p className="text-xs text-center text-gray-500 mb-3 font-semibold tracking-wide uppercase">料金プラン</p>
+            <div className="grid grid-cols-3 gap-2">
+              {/* BASIC */}
+              <div className="rounded-xl border border-gray-200 bg-white p-3 flex flex-col gap-1 shadow-sm">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-base">🔵</span>
+                  <span className="text-xs font-black text-gray-800">BASIC</span>
+                </div>
+                <div className="text-sm font-black text-gray-900">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <ul className="space-y-0.5 mt-1">
+                  <li className="text-[10px] text-gray-600">✓ LINE送信 200通/月</li>
+                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
+                  <li className="text-[10px] text-gray-400">✗ 外部API連携</li>
+                </ul>
+              </div>
+              {/* STANDARD */}
+              <div className="rounded-xl border-2 border-green-400 bg-gradient-to-b from-green-50 to-white p-3 flex flex-col gap-1 shadow-md relative">
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-green-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full whitespace-nowrap">人気</div>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-base">⭐</span>
+                  <span className="text-xs font-black text-gray-800">STANDARD</span>
+                </div>
+                <div className="text-sm font-black text-green-700">¥10,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <ul className="space-y-0.5 mt-1">
+                  <li className="text-[10px] text-gray-600">✓ LINE送信 1,000通/月</li>
+                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
+                  <li className="text-[10px] text-gray-600">✓ 外部API連携</li>
+                </ul>
+              </div>
+              {/* PRO */}
+              <div className="rounded-xl border border-purple-200 bg-gradient-to-b from-purple-50 to-white p-3 flex flex-col gap-1 shadow-sm">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <span className="text-base">💎</span>
+                  <span className="text-xs font-black text-gray-800">PRO</span>
+                </div>
+                <div className="text-sm font-black text-purple-700">¥15,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <ul className="space-y-0.5 mt-1">
+                  <li className="text-[10px] text-gray-600">✓ LINE送信 無制限</li>
+                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
+                  <li className="text-[10px] text-gray-600">✓ 外部API連携</li>
+                </ul>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400 text-center mt-2">すべてのプランに7日間の無料トライアルが付きます</p>
+          </div>
+
+          <footer className="text-xs text-gray-400 mt-6 text-center">
             © 556
           </footer>
         </div>

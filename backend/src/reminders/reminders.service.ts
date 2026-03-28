@@ -6,6 +6,10 @@ import { LineService } from '../line/line.service';
 import { ReminderMessageType, ReminderCategory, Prisma } from '@prisma/client';
 import { UpsertReminderTemplateDto } from './dto/upsert-reminder-template.dto';
 
+const MONTHLY_LINE_LIMIT: Record<string, number | null> = {
+  TRIAL: 50, BASIC: 200, STANDARD: 1000, PRO: null,
+};
+
 type ReminderKind =
   | 'BIRTHDAY'
   | 'SHAKEN_2M'
@@ -963,6 +967,27 @@ export class RemindersService {
    * - monthStr: "YYYY-MM"
    * - itemIds: previewForMonth が返した items の id 配列
    */
+  private async checkMonthlyLineLimit(tenantId: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+    const plan = tenant?.plan ?? 'TRIAL';
+    const limit = MONTHLY_LINE_LIMIT[plan] ?? null;
+    if (limit === null) return;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const count = await this.prisma.messageLog.count({
+      where: { tenantId, createdAt: { gte: startOfMonth } },
+    });
+    if (count >= limit) {
+      throw new BadRequestException(
+        `今月のLINE送信数が上限（${limit}通）に達しました。プランをアップグレードすると送信数が増えます。（現在: ${count}通送信済み）`,
+      );
+    }
+  }
+
   async sendBulkForMonth(
     user: AuthPayload,
     monthStr: string,
@@ -970,6 +995,7 @@ export class RemindersService {
     tenantIdFromQuery?: number,
   ) {
     const tenantId = this.ensureTenant(user, tenantIdFromQuery);
+    await this.checkMonthlyLineLimit(tenantId);
 
     if (!Array.isArray(itemIds) || itemIds.length === 0) {
       this.logger.log(
@@ -1116,6 +1142,7 @@ export class RemindersService {
     tenantIdFromQuery?: number,
   ) {
     const tenantId = this.ensureTenant(user, tenantIdFromQuery);
+    await this.checkMonthlyLineLimit(tenantId);
 
     this.logger.log(
       `sendForDate: user.role=${user.role}, tenantId=${tenantId}, baseDate=${baseDateStr}`,

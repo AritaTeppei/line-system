@@ -1,9 +1,17 @@
 // src/messages/messages.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LineService } from '../line/line.service';
 import type { AuthPayload } from '../auth/auth.service';
 import { MessageType, BroadcastTarget } from '@prisma/client';
+
+/** プランごとの月間LINE送信上限（null = 無制限） */
+const MONTHLY_LINE_LIMIT: Record<string, number | null> = {
+  TRIAL:    50,
+  BASIC:    200,
+  STANDARD: 1000,
+  PRO:      null,
+};
 
 @Injectable()
 export class MessagesService {
@@ -11,6 +19,34 @@ export class MessagesService {
     private readonly prisma: PrismaService,
     private readonly lineService: LineService,
   ) {}
+
+  /**
+   * 今月の送信済み件数を確認し、上限を超えていれば例外を投げる
+   */
+  async checkMonthlyLineLimit(tenantId: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    });
+    const plan = tenant?.plan ?? 'TRIAL';
+    const limit = MONTHLY_LINE_LIMIT[plan] ?? null;
+    if (limit === null) return; // PRO は無制限
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const count = await this.prisma.messageLog.count({
+      where: { tenantId, createdAt: { gte: startOfMonth } },
+    });
+
+    if (count >= limit) {
+      throw new BadRequestException(
+        `今月のLINE送信数が上限（${limit}通）に達しました。` +
+        `プランをアップグレードすると送信数が増えます。（現在: ${count}通送信済み）`,
+      );
+    }
+  }
 
   /**
    * 一括送信の「まとめログ」を作る共通ヘルパー
@@ -68,6 +104,7 @@ export class MessagesService {
     message: string,
   ) {
     const tenantId = this.ensureTenant(user);
+    await this.checkMonthlyLineLimit(tenantId);
 
     const customers = await this.prisma.customer.findMany({
       where: {
@@ -123,6 +160,7 @@ export class MessagesService {
    */
   async sendToCars(user: AuthPayload, carIds: number[], message: string) {
     const tenantId = this.ensureTenant(user);
+    await this.checkMonthlyLineLimit(tenantId);
 
     const cars = await this.prisma.car.findMany({
       where: {
