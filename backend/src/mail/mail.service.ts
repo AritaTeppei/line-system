@@ -1,23 +1,16 @@
 // backend/src/mail/mail.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter;
+  private readonly resend: Resend;
+  private readonly from: string;
 
   constructor() {
-    // ★ 環境変数は自分のSMTPに合わせて
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+    this.from = process.env.SMTP_FROM ?? 'noreply@seibisystem.com';
   }
 
   async sendTrialEndNotice(params: {
@@ -26,9 +19,7 @@ export class MailService {
     trialEndsAt: Date;
   }) {
     const { to, tenantName, trialEndsAt } = params;
-
     const dateStr = trialEndsAt.toISOString().slice(0, 10).replace(/-/g, '/');
-
     const subject = `【PitLink】お試し期間が本日で終了します（${tenantName} 様）`;
     const text = [
       `${tenantName} 様`,
@@ -49,12 +40,7 @@ export class MailService {
     ].join('\n');
 
     try {
-      await this.transporter.sendMail({
-        from: process.env.SMTP_FROM ?? 'no-reply@pitlink.example',
-        to,
-        subject,
-        text,
-      });
+      await this.resend.emails.send({ from: this.from, to, subject, text });
       this.logger.log(`TrialEndNotice sent to ${to}`);
     } catch (e: any) {
       this.logger.error(`Failed to send trial end mail: ${e?.message ?? e}`);
@@ -79,13 +65,9 @@ export class MailService {
       '――――――――――――――――',
       'PitLink 運営',
     ].join('\n');
+
     try {
-      await this.transporter.sendMail({
-        from: process.env.SMTP_FROM ?? 'no-reply@pitlink.example',
-        to,
-        subject,
-        text,
-      });
+      await this.resend.emails.send({ from: this.from, to, subject, text });
       this.logger.log(`PasswordResetEmail sent to ${to}`);
     } catch (e: any) {
       this.logger.error(`Failed to send password reset mail: ${e?.message ?? e}`);
