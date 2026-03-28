@@ -47,6 +47,7 @@ type BroadcastLog = {
   targetCount: number;
   createdAt: string; // ISO
   customerIds?: number[];
+  sentByName?: string | null;
 };
 
 const apiBase =
@@ -1537,6 +1538,9 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                         送信日時
                       </th>
                       <th className="border px-2 py-1 text-left">
+                        送信者
+                      </th>
+                      <th className="border px-2 py-1 text-left">
                         送信件数
                       </th>
                       <th className="border px-2 py-1 text-left">
@@ -1548,10 +1552,13 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                     {broadcastLogs.map((log) => (
                       <tr
                         key={log.id}
-                        className="hover:bg-gray-50"
+                        className="hover:bg-green-50"
                       >
                         <td className="border px-2 py-1 whitespace-nowrap">
                           {formatDateTime(log.createdAt)}
+                        </td>
+                        <td className="border px-2 py-1 whitespace-nowrap text-gray-700">
+                          {log.sentByName ?? <span className="text-gray-400">—</span>}
                         </td>
                         <td className="border px-2 py-1 whitespace-nowrap">
                           <button

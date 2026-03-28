@@ -60,8 +60,9 @@ export class MessagesService {
     targetCount: number;
     customerIds: number[];
     target: BroadcastTarget;
+    sentByUserId?: number;
   }) {
-    const { tenantId, message, sentCount, targetCount, customerIds, target } =
+    const { tenantId, message, sentCount, targetCount, customerIds, target, sentByUserId } =
       params;
 
     return this.prisma.broadcastLog.create({
@@ -71,6 +72,7 @@ export class MessagesService {
         sentCount,
         targetCount,
         target,
+        sentByUserId: sentByUserId ?? null,
         customers:
           customerIds.length > 0
             ? {
@@ -147,6 +149,7 @@ export class MessagesService {
         targetCount,
         customerIds: customers.map((c) => c.id),
         target: BroadcastTarget.CUSTOMER,
+        sentByUserId: user.id,
       });
     }
 
@@ -216,6 +219,7 @@ export class MessagesService {
         targetCount,
         customerIds: customerIdsForBroadcast,
         target: BroadcastTarget.CAR,
+        sentByUserId: user.id,
       });
     }
 
@@ -281,6 +285,7 @@ export class MessagesService {
       take: 200,
       include: {
         customers: true,
+        sentByUser: { select: { id: true, name: true, email: true } },
       },
     });
 
@@ -292,6 +297,9 @@ export class MessagesService {
       targetCount: log.targetCount,
       createdAt: log.createdAt.toISOString(),
       customerIds: log.customers.map((c) => c.customerId),
+      sentByName: log.sentByUser
+        ? (log.sentByUser.name ?? log.sentByUser.email)
+        : null,
     }));
   }
 }

@@ -201,6 +201,34 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
   );
 }
 
+// ★ BASIC プラン専用バナー（プラン制限の案内）
+function BasicPlanBanner({ me }: { me: MeResponse | null }) {
+  if (!me) return null;
+  if (!me.tenantPlan || me.tenantPlan.toUpperCase() !== 'BASIC') return null;
+
+  return (
+    <div className="mt-3 w-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 px-3 py-3">
+      <p className="text-xs font-bold text-blue-800 flex items-center gap-1 mb-2">
+        🔵 BASICプラン
+      </p>
+      <ul className="space-y-1 mb-2">
+        <li className="text-[10px] text-blue-700 flex items-center gap-1">
+          <span className="text-emerald-500 font-bold">✓</span> LINE送信 月200通まで
+        </li>
+        <li className="text-[10px] text-red-500 flex items-center gap-1">
+          <span className="font-bold">✗</span> 外部API連携 不可
+        </li>
+      </ul>
+      <Link
+        href="/billing"
+        className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 px-2 py-1.5 text-[10px] font-bold text-white transition-colors shadow-sm"
+      >
+        STANDARDへアップグレード →
+      </Link>
+    </div>
+  );
+}
+
 // ★ TRIAL テナント専用バナー（サイドバー用）
 function TrialBanner({ me }: { me: MeResponse | null }) {
   if (!me) return null;
@@ -527,6 +555,8 @@ export default function TenantLayout({ children }: Props) {
 
             {/* ★ TRIAL プラン用バナー */}
             <TrialBanner me={me} />
+            {/* ★ BASIC プラン用バナー */}
+            <BasicPlanBanner me={me} />
           </div>
 
           {/* ナビゲーション */}

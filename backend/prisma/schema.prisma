@@ -58,6 +58,7 @@ model User {
   tenant                Tenant?       @relation(fields: [tenantId], references: [id])
   sessions              UserSession[]
   passwordResetTokens   PasswordResetToken[]
+  broadcastLogs         BroadcastLog[]
 }
 
 model UserSession {
@@ -208,15 +209,17 @@ model ReminderMessageTemplate {
 }
 
 model BroadcastLog {
-  id          Int                    @id @default(autoincrement())
-  tenantId    Int
-  message     String
-  sentCount   Int
-  targetCount Int
-  createdAt   DateTime               @default(now())
-  target      BroadcastTarget        @default(CUSTOMER)
-  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
-  customers   BroadcastLogCustomer[]
+  id            Int                    @id @default(autoincrement())
+  tenantId      Int
+  message       String
+  sentCount     Int
+  targetCount   Int
+  createdAt     DateTime               @default(now())
+  target        BroadcastTarget        @default(CUSTOMER)
+  sentByUserId  Int?
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id])
+  sentByUser    User?                  @relation(fields: [sentByUserId], references: [id])
+  customers     BroadcastLogCustomer[]
 
   @@index([tenantId, createdAt])
 }
