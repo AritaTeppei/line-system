@@ -459,34 +459,34 @@ export default function DashboardPage() {
         {/* サマリカード */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* 本日の予約 */}
-          <div className="rounded-2xl border-l-4 border-l-blue-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
-            <div className="text-xs font-bold text-blue-500 flex items-center gap-1">
+          <div className="rounded-2xl bg-green-700 px-5 py-4 shadow flex flex-col gap-2 text-white">
+            <div className="text-xs font-bold text-green-200 flex items-center gap-1">
               📆 本日の予約
             </div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-4xl font-black text-gray-900">
+              <span className="text-4xl font-black">
                 {todayBookings.length}
               </span>
-              <span className="text-sm text-gray-400">件</span>
+              <span className="text-sm text-green-300">件</span>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-green-300">
               {todayKey}
             </div>
-            <div className="mt-1 space-y-1">
+            <div className="mt-1 space-y-1 border-t border-green-600 pt-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">未確認</span>
-                <span className="font-bold text-amber-600">{todayPendingCount}件</span>
+                <span className="text-green-300">未確認</span>
+                <span className="font-bold text-amber-300">{todayPendingCount}件</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">確定</span>
-                <span className="font-bold text-emerald-600">{todayConfirmedCount}件</span>
+                <span className="text-green-300">確定</span>
+                <span className="font-bold text-white">{todayConfirmedCount}件</span>
               </div>
             </div>
           </div>
 
           {/* 今月の予約 */}
-          <div className="rounded-2xl border-l-4 border-l-green-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
-            <div className="text-xs font-bold text-green-600 flex items-center gap-1">
+          <div className="rounded-2xl bg-white border border-gray-200 px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-green-700 flex items-center gap-1">
               📈 今月の予約
             </div>
             <div className="flex items-baseline gap-2 mt-1">
@@ -498,21 +498,21 @@ export default function DashboardPage() {
             <div className="text-sm text-gray-500">
               {monthLabel}
             </div>
-            <div className="mt-1 space-y-1">
+            <div className="mt-1 space-y-1 border-t border-gray-100 pt-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">未確認</span>
                 <span className="font-bold text-amber-600">{monthPending}件</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">確定</span>
-                <span className="font-bold text-emerald-600">{monthConfirmed}件</span>
+                <span className="font-bold text-green-700">{monthConfirmed}件</span>
               </div>
             </div>
           </div>
 
           {/* 全体状況 */}
-          <div className="rounded-2xl border-l-4 border-l-purple-400 border border-gray-200 bg-white px-5 py-4 shadow-sm flex flex-col gap-2">
-            <div className="text-xs font-bold text-purple-500 flex items-center gap-1">
+          <div className="rounded-2xl bg-white border border-gray-200 px-5 py-4 shadow-sm flex flex-col gap-2">
+            <div className="text-xs font-bold text-green-700 flex items-center gap-1">
               👥 全体状況
             </div>
             <div className="flex items-baseline gap-2 mt-1">
@@ -524,7 +524,7 @@ export default function DashboardPage() {
             <div className="text-sm text-gray-500">
               登録済み顧客数
             </div>
-            <div className="mt-1 space-y-1">
+            <div className="mt-1 space-y-1 border-t border-gray-100 pt-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">未確認予約</span>
                 <span className="font-bold text-amber-600">{totalPending}件</span>
@@ -538,7 +538,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 簡易グラフ：直近7日間の予約件数 */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 border-t-4 border-t-green-600">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
               📉 直近7日間の予約件数
@@ -607,7 +607,7 @@ export default function DashboardPage() {
         </section>
 
         {/* 直近の予約一覧 */}
-        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+        <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 border-t-4 border-t-green-600">
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
               📋 直近の予約
@@ -638,25 +638,13 @@ export default function DashboardPage() {
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-700">
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      予約日
-                    </th>
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      時間帯
-                    </th>
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      顧客
-                    </th>
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      車両
-                    </th>
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      ステータス
-                    </th>
-                    <th className="px-3 py-2 border border-gray-200 text-left font-bold text-xs">
-                      内容
-                    </th>
+                  <tr className="bg-green-700 text-white">
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">予約日</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">時間帯</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">顧客</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">車両</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">ステータス</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-xs">内容</th>
                   </tr>
                 </thead>
                 <tbody>

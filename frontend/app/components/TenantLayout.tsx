@@ -132,7 +132,7 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
   const step2Done = status.hasSubscription;
 
   return (
-    <section className="mb-4 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-4 shadow-sm">
+    <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 shadow-sm">
       <p className="font-bold text-amber-900 text-sm mb-3 flex items-center gap-2">
         🚀 初期設定を完了させましょう
       </p>
@@ -247,44 +247,44 @@ function UsageGuideModal({ open, onClose }: { open: boolean; onClose: () => void
     >
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* ヘッダー */}
-        <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-green-600 to-green-500 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 bg-green-700 flex-shrink-0">
           <div>
             <h2 className="text-base font-black text-white flex items-center gap-2">
               📖 PitLink 使い方ガイド
             </h2>
-            <p className="text-xs text-green-100 mt-0.5">基本的な使い方を確認できます</p>
+            <p className="text-xs text-green-200 mt-0.5">基本的な使い方を確認できます</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-white/80 hover:text-white text-xl leading-none font-bold transition-colors"
+            className="text-white/70 hover:text-white text-xl leading-none font-bold transition-colors"
           >
             ✕
           </button>
         </div>
 
         {/* ステップ一覧 */}
-        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+        <div className="overflow-y-auto flex-1 p-4 space-y-2 bg-gray-50">
           {GUIDE_STEPS.map((step, i) => (
-            <div key={i} className={`rounded-xl border overflow-hidden transition-all ${openStep === i ? 'border-green-300 shadow-sm' : 'border-gray-200'}`}>
+            <div key={i} className={`rounded-xl border overflow-hidden transition-all ${openStep === i ? 'border-green-400 shadow-sm' : 'border-gray-200'}`}>
               <button
                 type="button"
                 onClick={() => setOpenStep(openStep === i ? null : i)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${openStep === i ? 'bg-green-50' : 'bg-white hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${openStep === i ? 'bg-green-700 text-white' : 'bg-white hover:bg-gray-50 text-gray-800'}`}
               >
-                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-sm">
+                <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm ${openStep === i ? 'bg-green-600' : 'bg-green-100'}`}>
                   {step.icon}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-gray-800">
-                    <span className="text-green-600 mr-1">STEP {i + 1}</span>
+                  <p className="text-xs font-bold">
+                    <span className={`mr-1 ${openStep === i ? 'text-green-200' : 'text-green-600'}`}>STEP {i + 1}</span>
                     {step.title}
                   </p>
                 </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">{openStep === i ? '▲' : '▼'}</span>
+                <span className="text-xs flex-shrink-0 opacity-60">{openStep === i ? '▲' : '▼'}</span>
               </button>
               {openStep === i && (
-                <div className="px-4 pb-4 pt-2 bg-green-50 border-t border-green-100">
+                <div className="px-4 pb-4 pt-3 bg-white border-t border-green-100">
                   <p className="text-xs text-gray-600 leading-relaxed">{step.desc}</p>
                 </div>
               )}
@@ -293,11 +293,11 @@ function UsageGuideModal({ open, onClose }: { open: boolean; onClose: () => void
         </div>
 
         {/* フッター */}
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-gray-200 bg-white flex-shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-colors"
+            className="w-full py-2 rounded-xl bg-green-700 hover:bg-green-800 text-white text-sm font-bold transition-colors"
           >
             閉じる
           </button>
@@ -313,24 +313,24 @@ function BasicPlanBanner({ me }: { me: MeResponse | null }) {
   if (!me.tenantPlan || me.tenantPlan.toUpperCase() !== 'BASIC') return null;
 
   return (
-    <div className="mt-3 w-full rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 px-3 py-3">
-      <p className="text-xs font-bold text-blue-800 flex items-center gap-1 mb-2">
+    <div className="mt-3 w-full rounded-xl border border-green-600/40 bg-green-900/40 px-3 py-3">
+      <p className="text-xs font-bold text-green-200 flex items-center gap-1 mb-2">
         🔵 BASICプラン
       </p>
       <ul className="space-y-1 mb-2">
-        <li className="text-[10px] text-blue-700 flex items-center gap-1">
-          <span className="text-emerald-500 font-bold">✓</span> リマインド自動送信
+        <li className="text-[10px] text-green-300 flex items-center gap-1">
+          <span className="text-green-400 font-bold">✓</span> リマインド自動送信
         </li>
-        <li className="text-[10px] text-red-500 flex items-center gap-1">
+        <li className="text-[10px] text-red-300 flex items-center gap-1">
           <span className="font-bold">✗</span> 一括メッセージ送信 不可
         </li>
-        <li className="text-[10px] text-red-500 flex items-center gap-1">
+        <li className="text-[10px] text-red-300 flex items-center gap-1">
           <span className="font-bold">✗</span> 外部API連携 不可
         </li>
       </ul>
       <Link
         href="/billing"
-        className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 px-2 py-1.5 text-[10px] font-bold text-white transition-colors shadow-sm"
+        className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-green-500 hover:bg-green-400 px-2 py-1.5 text-[10px] font-bold text-white transition-colors shadow-sm"
       >
         STANDARDへアップグレード →
       </Link>
@@ -358,41 +358,20 @@ function TrialBanner({ me }: { me: MeResponse | null }) {
     const now = new Date();
     const diffMs = end.getTime() - now.getTime();
     remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    // 経過日数を算出してプログレスバーに使用
     const elapsed = TRIAL_TOTAL_DAYS - Math.max(0, remainingDays);
     progressPercent = Math.min(100, Math.max(0, (elapsed / TRIAL_TOTAL_DAYS) * 100));
   }
 
-  // 残り日数に応じた緊急カラー
   const isUrgent = remainingDays !== null && remainingDays <= 3;
   const isWarning = remainingDays !== null && remainingDays <= 7 && !isUrgent;
 
-  const bannerBg = isUrgent
-    ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-300'
-    : isWarning
-    ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-300'
-    : 'bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-300';
-
-  const countBg = isUrgent
-    ? 'bg-red-500'
-    : isWarning
-    ? 'bg-orange-500'
-    : 'bg-amber-500';
-
-  const textColor = isUrgent
-    ? 'text-red-800'
-    : isWarning
-    ? 'text-orange-800'
-    : 'text-amber-800';
-
-  const barColor = isUrgent
-    ? 'bg-red-400'
-    : isWarning
-    ? 'bg-orange-400'
-    : 'bg-amber-400';
+  const countBg = isUrgent ? 'bg-red-500' : isWarning ? 'bg-orange-500' : 'bg-amber-500';
+  const barColor = isUrgent ? 'bg-red-400' : isWarning ? 'bg-orange-400' : 'bg-amber-400';
+  const textColor = isUrgent ? 'text-red-300' : isWarning ? 'text-orange-300' : 'text-amber-300';
+  const borderColor = isUrgent ? 'border-red-500/40' : isWarning ? 'border-orange-500/40' : 'border-amber-500/40';
 
   return (
-    <div className={`mt-3 w-full rounded-xl border ${bannerBg} px-3 py-3`}>
+    <div className={`mt-3 w-full rounded-xl border ${borderColor} bg-green-900/40 px-3 py-3`}>
       <p className={`text-xs font-bold ${textColor} flex items-center gap-1`}>
         ⏳ トライアル中
       </p>
@@ -407,7 +386,7 @@ function TrialBanner({ me }: { me: MeResponse | null }) {
       )}
 
       {/* 進捗バー */}
-      <div className="mt-2 w-full bg-white/70 rounded-full h-1.5 overflow-hidden">
+      <div className="mt-2 w-full bg-green-950/50 rounded-full h-1.5 overflow-hidden">
         <div
           className={`h-full rounded-full ${barColor} transition-all duration-500`}
           style={{ width: `${progressPercent}%` }}
@@ -423,7 +402,7 @@ function TrialBanner({ me }: { me: MeResponse | null }) {
 
       <Link
         href="/billing"
-        className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg ${isUrgent ? 'bg-red-500 hover:bg-red-600' : isWarning ? 'bg-orange-500 hover:bg-orange-600' : 'bg-amber-500 hover:bg-amber-600'} px-2 py-2 text-xs font-bold text-white transition-colors shadow-sm`}
+        className={`mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg ${isUrgent ? 'bg-red-500 hover:bg-red-400' : isWarning ? 'bg-orange-500 hover:bg-orange-400' : 'bg-amber-500 hover:bg-amber-400'} px-2 py-2 text-xs font-bold text-white transition-colors shadow-sm`}
       >
         今すぐプラン登録する →
       </Link>
@@ -600,31 +579,31 @@ export default function TenantLayout({ children }: Props) {
 
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-green-50/50 to-white">
+    <div className="min-h-screen flex flex-col bg-gray-100">
 
       {/* ── トップバー ── */}
-      <header className="h-14 bg-white border-b border-gray-200 shadow-sm flex items-center px-5 gap-4 flex-shrink-0 z-20">
+      <header className="h-14 bg-green-800 shadow-md flex items-center px-5 gap-4 flex-shrink-0 z-20">
         {/* 店舗名 */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-green-600 text-lg">🏪</span>
-          <span className="font-bold text-gray-800 text-sm truncate max-w-[220px]">
+          <span className="text-green-300 text-lg">🏪</span>
+          <span className="font-bold text-white text-sm truncate max-w-[220px]">
             {tenantName ?? 'PitLink'}
           </span>
         </div>
 
         {/* セパレーター */}
-        <div className="h-5 w-px bg-gray-200 flex-shrink-0" />
+        <div className="h-5 w-px bg-green-600 flex-shrink-0" />
 
         {/* ログインユーザー */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-sm font-semibold text-gray-700 truncate">
+          <span className="text-sm font-semibold text-green-100 truncate">
             {userName ?? me?.email ?? ''}
           </span>
           {me?.role && (
             <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
               me.role === 'MANAGER'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-blue-100 text-blue-700'
+                ? 'bg-green-600 text-white'
+                : 'bg-green-700 text-green-200'
             }`}>
               {me.role === 'MANAGER' ? '管理者' : 'スタッフ'}
             </span>
@@ -635,7 +614,7 @@ export default function TenantLayout({ children }: Props) {
         <button
           type="button"
           onClick={() => setGuideOpen(true)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-600 bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600 transition-colors"
         >
           <span>📖</span> 使い方
         </button>
@@ -644,7 +623,7 @@ export default function TenantLayout({ children }: Props) {
         <button
           type="button"
           onClick={() => handleLogout(false)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-600/50 bg-green-700/50 px-3 py-1.5 text-xs font-medium text-green-200 hover:bg-green-700 hover:text-white transition-colors"
         >
           <span>🚪</span> ログアウト
         </button>
@@ -654,21 +633,21 @@ export default function TenantLayout({ children }: Props) {
       <div className="flex flex-1 min-h-0">
 
         {/* 左サイドバー */}
-        <aside className="w-56 bg-gradient-to-b from-white to-green-50/30 border-r border-gray-200 flex-shrink-0 flex flex-col shadow-sm">
+        <aside className="w-56 bg-green-900 flex-shrink-0 flex flex-col shadow-lg">
 
           {/* ロゴ */}
-          <div className="px-4 py-5 border-b border-gray-100 flex flex-col items-center">
-            <div className="w-[140px]">
+          <div className="px-4 py-5 border-b border-green-800 bg-green-950/50 flex flex-col items-center">
+            <div className="w-[120px] bg-white/10 rounded-xl p-2">
               <Image
                 src="/pitlink-logo.png"
                 alt="PitLink ロゴ"
-                width={140}
-                height={140}
+                width={120}
+                height={120}
                 className="w-full h-auto"
                 priority
               />
             </div>
-            <div className="mt-1 text-[11px] text-gray-400 text-center leading-snug">
+            <div className="mt-2 text-[11px] text-green-400 text-center leading-snug">
               自動車業界向け LINE連携
             </div>
 
@@ -681,7 +660,7 @@ export default function TenantLayout({ children }: Props) {
           {/* ナビゲーション */}
           <nav className="px-3 py-4 text-sm flex-1 flex flex-col">
             {/* メインメニュー */}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {mainLinks.map((link) => {
                 const active =
                   pathname === link.href ||
@@ -699,13 +678,13 @@ export default function TenantLayout({ children }: Props) {
                     key={link.href}
                     href={link.href}
                     className={[
-                      'flex items-center justify-between px-3 py-2 rounded-xl transition-all duration-150 font-medium',
+                      'flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                       active
-                        ? 'bg-[#00C300] text-white shadow-sm'
-                        : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
+                        ? 'bg-green-500 text-white shadow-sm'
+                        : 'text-green-100 hover:bg-green-800 hover:text-white',
                     ].join(' ')}
                   >
-                    <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2.5">
                       <span>{link.icon}</span>
                       <span>{link.label}</span>
                     </span>
@@ -722,12 +701,12 @@ export default function TenantLayout({ children }: Props) {
 
             {/* 各種設定（管理者のみ） */}
             {me?.role === 'MANAGER' && (
-              <div className="mt-5 pt-4 border-t border-gray-100">
-                <div className="mb-2 text-[11px] font-bold text-gray-400 tracking-widest px-1">
+              <div className="mt-5 pt-4 border-t border-green-800">
+                <div className="mb-2 text-[11px] font-bold text-green-500 tracking-widest px-1">
                   ⚙️ 各種設定
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {managerSettingLinks.map((link) => {
                     const active =
                       pathname === link.href ||
@@ -738,10 +717,10 @@ export default function TenantLayout({ children }: Props) {
                         key={link.href}
                         href={link.href}
                         className={[
-                          'flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-150 font-medium text-sm',
+                          'flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                           active
-                            ? 'bg-[#00C300] text-white shadow-sm'
-                            : 'text-gray-700 hover:bg-green-50 hover:text-[#00C300]',
+                            ? 'bg-green-500 text-white shadow-sm'
+                            : 'text-green-100 hover:bg-green-800 hover:text-white',
                         ].join(' ')}
                       >
                         <span>{link.icon}</span>
@@ -755,13 +734,13 @@ export default function TenantLayout({ children }: Props) {
           </nav>
 
           {/* フッター */}
-          <div className="px-3 py-3 border-t border-gray-100 text-[10px] text-gray-400 text-center">
+          <div className="px-3 py-3 border-t border-green-800 text-[10px] text-green-500 text-center">
             &copy; PitLink
           </div>
         </aside>
 
         {/* コンテンツエリア */}
-        <div className="flex-1 overflow-auto px-5 py-6">
+        <div className="flex-1 overflow-auto px-6 py-6 bg-gray-50">
           <OnboardingPanel me={me} />
           {children}
         </div>
