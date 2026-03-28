@@ -201,77 +201,108 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
   );
 }
 
-// ★ 使い方ガイド（サイドバー）
+// ★ 使い方ガイド（モーダル）
 const GUIDE_STEPS = [
   {
     icon: '🟢',
-    title: 'LINE連携を設定',
-    desc: '「LINE連携」からChannel Secret・Access Tokenを入力し、Webhook URLをLINE Developersに登録します。',
+    title: 'LINE連携を設定する',
+    desc: '「各種設定 → LINE連携」からChannel Secret・Access Tokenを入力し、表示されるWebhook URLをLINE Developersの設定画面に登録します。設定完了後、アクティブに切り替えてください。',
   },
   {
     icon: '👥',
-    title: '顧客を登録',
-    desc: '「顧客一覧 ＋ 新規登録」または「CSV取込」で顧客情報を追加。QRコードをお客様にスキャンしてもらうとLINE連携が自動で完了します。',
+    title: '顧客を登録する',
+    desc: '「顧客一覧 → ＋ 新規登録」または「CSV取込」で顧客情報を追加できます。顧客詳細に表示されるQRコードをお客様にスキャンしてもらうと、LINE友だち追加と顧客連携が自動で完了します。',
   },
   {
     icon: '🚗',
-    title: '車両を登録',
-    desc: '顧客詳細画面の「車両追加」から車両を登録。車検証CSVをスキャン・アップロードすると自動入力できます。',
+    title: '車両を登録する',
+    desc: '「顧客一覧」で顧客を開き「車両追加」から登録します。車検証CSVをスキャン・アップロードすると車検日・車両情報が自動入力されます。複数台の車両を1人の顧客に紐付け可能です。',
   },
   {
     icon: '🔔',
-    title: 'リマインドを確認',
-    desc: '「リマインド管理」で今月〜翌月の送信予定を確認・手動送信できます。車検・誕生日・点検日に自動でLINE通知が届きます。',
+    title: 'リマインドを確認・送信する',
+    desc: '「リマインド管理」で車検・誕生日・点検日のリマインド送信予定を月別に確認できます。「今日分を送信」ボタンで即時送信、月別一覧から任意の日付分をまとめて送ることもできます。',
   },
   {
     icon: '📩',
-    title: '一括メッセージ送信',
-    desc: '「顧客一覧」または「車両一覧」で対象を選択 → 「メッセージ送信」ボタンから一括LINE送信できます（STANDARD以上）。',
+    title: '一括メッセージを送信する',
+    desc: '「顧客一覧」または「車両一覧」でチェックボックスで対象を選択し、「メッセージ送信」ボタンから一括LINE送信できます。送信履歴は「送信履歴を見る」から3か月分確認可能です。※STANDARDプラン以上',
   },
   {
     icon: '📅',
-    title: '予約を管理',
-    desc: '「予約一覧」で予約の確認・承認ができます。LINEから予約を受け付けると自動でリストに追加されます。',
+    title: '予約を管理する',
+    desc: '「予約一覧」で予約の確認・承認・キャンセルができます。LINEの予約フォームから受け付けた予約は自動でリストに追加され、未承認件数がメニューバッジで通知されます。',
   },
 ];
 
-function UsageGuide() {
-  const [open, setOpen] = useState(false);
-  const [openStep, setOpenStep] = useState<number | null>(null);
+function UsageGuideModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [openStep, setOpenStep] = useState<number | null>(0);
+
+  if (!open) return null;
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-1 mb-1 text-[11px] font-bold text-gray-400 tracking-widest hover:text-gray-600 transition-colors"
-      >
-        <span>📖 使い方ガイド</span>
-        <span className="text-gray-300">{open ? '▲' : '▼'}</span>
-      </button>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-green-600 to-green-500 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-black text-white flex items-center gap-2">
+              📖 PitLink 使い方ガイド
+            </h2>
+            <p className="text-xs text-green-100 mt-0.5">基本的な使い方を確認できます</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-white/80 hover:text-white text-xl leading-none font-bold transition-colors"
+          >
+            ✕
+          </button>
+        </div>
 
-      {open && (
-        <div className="space-y-1">
+        {/* ステップ一覧 */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-2">
           {GUIDE_STEPS.map((step, i) => (
-            <div key={i} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+            <div key={i} className={`rounded-xl border overflow-hidden transition-all ${openStep === i ? 'border-green-300 shadow-sm' : 'border-gray-200'}`}>
               <button
                 type="button"
                 onClick={() => setOpenStep(openStep === i ? null : i)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-green-50 transition-colors"
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${openStep === i ? 'bg-green-50' : 'bg-white hover:bg-gray-50'}`}
               >
-                <span className="text-sm flex-shrink-0">{step.icon}</span>
-                <span className="text-[11px] font-semibold text-gray-700 flex-1">{step.title}</span>
-                <span className="text-[10px] text-gray-300 flex-shrink-0">{openStep === i ? '▲' : '▼'}</span>
+                <span className="flex-shrink-0 w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-sm">
+                  {step.icon}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-800">
+                    <span className="text-green-600 mr-1">STEP {i + 1}</span>
+                    {step.title}
+                  </p>
+                </div>
+                <span className="text-xs text-gray-400 flex-shrink-0">{openStep === i ? '▲' : '▼'}</span>
               </button>
               {openStep === i && (
-                <div className="px-3 pb-2.5 pt-0">
-                  <p className="text-[10px] text-gray-500 leading-relaxed">{step.desc}</p>
+                <div className="px-4 pb-4 pt-2 bg-green-50 border-t border-green-100">
+                  <p className="text-xs text-gray-600 leading-relaxed">{step.desc}</p>
                 </div>
               )}
             </div>
           ))}
         </div>
-      )}
+
+        {/* フッター */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-colors"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -410,6 +441,7 @@ export default function TenantLayout({ children }: Props) {
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const lastActivityRef = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -599,6 +631,15 @@ export default function TenantLayout({ children }: Props) {
           )}
         </div>
 
+        {/* 使い方ガイドボタン */}
+        <button
+          type="button"
+          onClick={() => setGuideOpen(true)}
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+        >
+          <span>📖</span> 使い方
+        </button>
+
         {/* ログアウトボタン */}
         <button
           type="button"
@@ -679,9 +720,6 @@ export default function TenantLayout({ children }: Props) {
               })}
             </div>
 
-            {/* 使い方ガイド */}
-            <UsageGuide />
-
             {/* 各種設定（管理者のみ） */}
             {me?.role === 'MANAGER' && (
               <div className="mt-5 pt-4 border-t border-gray-100">
@@ -729,6 +767,9 @@ export default function TenantLayout({ children }: Props) {
         </div>
 
       </div>
+
+      {/* 使い方ガイド モーダル */}
+      <UsageGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   );
 }
