@@ -363,15 +363,15 @@ export default function BillingPage() {
             <h2 className="text-lg font-black text-gray-900 mb-4">🎯 プランを選んで始める</h2>
             <div className="grid gap-5 md:grid-cols-3">
               <PlanCard name="BASIC" price="5,000" tagline="まずはここから"
-                features={['顧客・車両・予約管理', 'LINEリマインド送信', 'LINE送信 月200通まで', '基本メッセージ機能', 'スタッフ1名ログイン', '外部API連携 ✗']}
+                features={['顧客・車両・予約管理', 'LINEリマインド自動送信', 'LINE一括メッセージ送信 ✗', 'LINE送信 月200通まで', 'スタッフ1名ログイン', '外部API連携 ✗']}
                 disabled={creating !== null} loading={creating === 'BASIC'}
                 onClick={() => handleStartSubscription('BASIC')} />
               <PlanCard name="STANDARD" price="10,000" tagline="一番人気のプラン" recommended
-                features={['BASICの全機能', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', '高度なメッセージ配信', 'カスタムリマインド', '外部API連携 ✓']}
+                features={['BASICの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', 'カスタムリマインド', '外部API連携 ✓']}
                 disabled={creating !== null} loading={creating === 'STANDARD'}
                 onClick={() => handleStartSubscription('STANDARD')} />
               <PlanCard name="PRO" price="15,000" tagline="大型店舗・多店舗向け"
-                features={['STANDARDの全機能', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '優先サポート', '外部API連携 ✓']}
+                features={['STANDARDの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '外部API連携 ✓']}
                 disabled={creating !== null} loading={creating === 'PRO'}
                 onClick={() => handleStartSubscription('PRO')} />
             </div>
@@ -393,9 +393,9 @@ export default function BillingPage() {
                 const isCurrent = plan === currentPlan;
                 const isUpgrade = PLAN_RANK[plan] > PLAN_RANK[currentPlan];
                 const planFeatures: Record<Plan, string[]> = {
-                  BASIC: ['顧客・車両・予約管理', 'LINEリマインド送信', 'LINE送信 月200通まで', '基本メッセージ機能', 'スタッフ1名ログイン', '外部API連携 ✗'],
-                  STANDARD: ['BASICの全機能', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', '高度なメッセージ配信', 'カスタムリマインド', '外部API連携 ✓'],
-                  PRO: ['STANDARDの全機能', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '優先サポート', '外部API連携 ✓'],
+                  BASIC: ['顧客・車両・予約管理', 'LINEリマインド自動送信', 'LINE一括メッセージ送信 ✗', 'LINE送信 月200通まで', 'スタッフ1名ログイン', '外部API連携 ✗'],
+                  STANDARD: ['BASICの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', 'カスタムリマインド', '外部API連携 ✓'],
+                  PRO: ['STANDARDの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '外部API連携 ✓'],
                 };
                 const prices: Record<Plan, string> = { BASIC: '5,000', STANDARD: '10,000', PRO: '15,000' };
                 const s = {

@@ -201,6 +201,81 @@ function OnboardingPanel({ me }: { me: MeResponse | null }) {
   );
 }
 
+// ★ 使い方ガイド（サイドバー）
+const GUIDE_STEPS = [
+  {
+    icon: '🟢',
+    title: 'LINE連携を設定',
+    desc: '「LINE連携」からChannel Secret・Access Tokenを入力し、Webhook URLをLINE Developersに登録します。',
+  },
+  {
+    icon: '👥',
+    title: '顧客を登録',
+    desc: '「顧客一覧 ＋ 新規登録」または「CSV取込」で顧客情報を追加。QRコードをお客様にスキャンしてもらうとLINE連携が自動で完了します。',
+  },
+  {
+    icon: '🚗',
+    title: '車両を登録',
+    desc: '顧客詳細画面の「車両追加」から車両を登録。車検証CSVをスキャン・アップロードすると自動入力できます。',
+  },
+  {
+    icon: '🔔',
+    title: 'リマインドを確認',
+    desc: '「リマインド管理」で今月〜翌月の送信予定を確認・手動送信できます。車検・誕生日・点検日に自動でLINE通知が届きます。',
+  },
+  {
+    icon: '📩',
+    title: '一括メッセージ送信',
+    desc: '「顧客一覧」または「車両一覧」で対象を選択 → 「メッセージ送信」ボタンから一括LINE送信できます（STANDARD以上）。',
+  },
+  {
+    icon: '📅',
+    title: '予約を管理',
+    desc: '「予約一覧」で予約の確認・承認ができます。LINEから予約を受け付けると自動でリストに追加されます。',
+  },
+];
+
+function UsageGuide() {
+  const [open, setOpen] = useState(false);
+  const [openStep, setOpenStep] = useState<number | null>(null);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-gray-100">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-1 mb-1 text-[11px] font-bold text-gray-400 tracking-widest hover:text-gray-600 transition-colors"
+      >
+        <span>📖 使い方ガイド</span>
+        <span className="text-gray-300">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-1">
+          {GUIDE_STEPS.map((step, i) => (
+            <div key={i} className="rounded-lg border border-gray-100 bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setOpenStep(openStep === i ? null : i)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-green-50 transition-colors"
+              >
+                <span className="text-sm flex-shrink-0">{step.icon}</span>
+                <span className="text-[11px] font-semibold text-gray-700 flex-1">{step.title}</span>
+                <span className="text-[10px] text-gray-300 flex-shrink-0">{openStep === i ? '▲' : '▼'}</span>
+              </button>
+              {openStep === i && (
+                <div className="px-3 pb-2.5 pt-0">
+                  <p className="text-[10px] text-gray-500 leading-relaxed">{step.desc}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ★ BASIC プラン専用バナー（プラン制限の案内）
 function BasicPlanBanner({ me }: { me: MeResponse | null }) {
   if (!me) return null;
@@ -213,7 +288,10 @@ function BasicPlanBanner({ me }: { me: MeResponse | null }) {
       </p>
       <ul className="space-y-1 mb-2">
         <li className="text-[10px] text-blue-700 flex items-center gap-1">
-          <span className="text-emerald-500 font-bold">✓</span> LINE送信 月200通まで
+          <span className="text-emerald-500 font-bold">✓</span> リマインド自動送信
+        </li>
+        <li className="text-[10px] text-red-500 flex items-center gap-1">
+          <span className="font-bold">✗</span> 一括メッセージ送信 不可
         </li>
         <li className="text-[10px] text-red-500 flex items-center gap-1">
           <span className="font-bold">✗</span> 外部API連携 不可
@@ -600,6 +678,9 @@ export default function TenantLayout({ children }: Props) {
                 );
               })}
             </div>
+
+            {/* 使い方ガイド */}
+            <UsageGuide />
 
             {/* 各種設定（管理者のみ） */}
             {me?.role === 'MANAGER' && (

@@ -420,8 +420,8 @@ export default function LoginPage() {
                 </div>
                 <div className="text-sm font-black text-gray-900">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
-                  <li className="text-[10px] text-gray-600">✓ LINE送信 200通/月</li>
-                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
+                  <li className="text-[10px] text-gray-600">✓ リマインド自動送信</li>
+                  <li className="text-[10px] text-gray-400">✗ 一括メッセージ送信</li>
                   <li className="text-[10px] text-gray-400">✗ 外部API連携</li>
                 </ul>
               </div>

@@ -9,6 +9,7 @@ type Me = {
   name: string | null;
   tenantId: number | null;
   role: "DEVELOPER" | "MANAGER" | "CLIENT";
+  tenantPlan?: string | null;
 };
 
 type Customer = {
@@ -1048,14 +1049,28 @@ const filteredCustomersForSelect = normalizedCustomerQuery
                   📊 送信履歴を見る
                 </button>
 
-                <button
-                  type="button"
-                  onClick={openBroadcastModal}
-                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm disabled:opacity-60"
-                  disabled={broadcasting}
-                >
-                  🚗 選択した車両の顧客にメッセージ送信
-                </button>
+                {me?.tenantPlan?.toUpperCase() === 'BASIC' ? (
+                  <div className="flex flex-col items-end gap-0.5">
+                    <button
+                      type="button"
+                      disabled
+                      className="inline-flex items-center gap-1 rounded-lg bg-gray-300 text-gray-500 text-xs font-semibold px-3 py-1.5 cursor-not-allowed"
+                      title="BASICプランではLINEメッセージ送信は利用できません"
+                    >
+                      🔒 メッセージ送信（STANDARD以上）
+                    </button>
+                    <span className="text-[10px] text-gray-400">BASICプランは送信不可 — <a href="/billing" className="underline text-blue-500">プラン変更</a></span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={openBroadcastModal}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm disabled:opacity-60"
+                    disabled={broadcasting}
+                  >
+                    🚗 選択した車両の顧客にメッセージ送信
+                  </button>
+                )}
               </div>
             </div>
           </div>
