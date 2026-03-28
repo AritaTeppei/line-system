@@ -31,6 +31,9 @@ type NormalizedCustomerRow = {
   phoneNumber: string | null;
   lineUid: string | null;
   birthday: Date | null;
+  // 車両フィールド（行内に含まれる場合）
+  inspectionDate: Date | null;
+  customReminderDate: Date | null;
 };
 
 // ★追加：携帯番号を数字だけに正規化するヘルパー
@@ -293,6 +296,8 @@ records.forEach((raw: Record<string, string>, index) => {
       const phoneRaw = (raw['携帯番号'] || raw['携帯電話番号'] || '').trim();
       const lineUidRaw = (raw['LINE UID'] || '').trim();
       const birthdayRaw = (raw['誕生日'] || '').trim();
+      const inspectionDateRaw = (raw['点検日'] || '').trim();
+      const customReminderDateRaw = (raw['任意日付'] || '').trim();
 
       // ★ 郵便番号の整形（数字だけ抽出 → 7桁なら 123-4567 に整形）
       let postalCode: string | null = null;
@@ -361,6 +366,10 @@ records.forEach((raw: Record<string, string>, index) => {
         return;
       }
 
+      // 点検日・任意日付のパース（parseJapaneseDate で元号・西暦両対応）
+      const inspectionDate = parseJapaneseDate(inspectionDateRaw);
+      const customReminderDate = parseJapaneseDate(customReminderDateRaw);
+
       // バリデーションOKの行を溜める
       validRows.push({
         rowNumber,
@@ -373,6 +382,8 @@ records.forEach((raw: Record<string, string>, index) => {
         phoneNumber,
         lineUid,
         birthday,
+        inspectionDate,
+        customReminderDate,
       });
     });
 
@@ -515,7 +526,8 @@ records.forEach((raw: Record<string, string>, index) => {
           const chassisNumber = (raw['車台番号'] || '').trim();
           const shakenRaw = (raw['車検日'] || '').trim();
 
-          if (registrationNumber || carName || chassisNumber || shakenRaw) {
+          if (registrationNumber || carName || chassisNumber || shakenRaw
+            || row.inspectionDate || row.customReminderDate) {
             const shakenDate = parseJapaneseDate(shakenRaw);
 
             await this.prisma.car.create({
@@ -526,6 +538,8 @@ records.forEach((raw: Record<string, string>, index) => {
                 carName: carName || '',
                 chassisNumber: chassisNumber || '',
                 shakenDate,
+                inspectionDate: row.inspectionDate,
+                customReminderDate: row.customReminderDate,
               },
             });
           }

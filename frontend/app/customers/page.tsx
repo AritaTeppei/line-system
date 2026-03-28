@@ -2250,15 +2250,65 @@ const pagedCustomers = filteredCustomers.slice(
             {/* ===== CSV取り込みモーダル ===== */}
       {isCsvImportModalOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-2">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-2">
-              顧客CSV取り込み
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-lg border border-gray-200 p-4 sm:p-5 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">
+              📥 顧客CSV取り込み
             </h2>
-                        <p className="text-[11px] text-gray-600 mb-3">
-              顧客情報が格納されたCSVファイルを選択して取り込みを実行します。
-              <br />
-              ※ 1行目は必ずヘッダー（姓, 名, 郵便番号, 住所（番地まで）, 住所（建物名など）, 携帯番号, LINE UID, 誕生日）にしてください。
-            </p>
+
+            {/* CSVの作り方ガイド */}
+            <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 p-3 text-[11px] text-blue-900 space-y-3">
+              <p className="font-bold text-blue-800">📋 CSVファイルの作り方</p>
+
+              <div>
+                <p className="font-semibold mb-1">① Excelやスプレッドシートで作成し、CSV形式で保存します。</p>
+                <p className="text-blue-700">1行目は必ずヘッダー行にしてください。2行目以降がデータです。</p>
+              </div>
+
+              <div>
+                <p className="font-semibold mb-1">② 使用できるヘッダー名（列名）</p>
+                <div className="bg-white rounded border border-blue-200 overflow-hidden">
+                  <table className="w-full text-[10px]">
+                    <thead className="bg-blue-100">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-bold">ヘッダー名</th>
+                        <th className="px-2 py-1 text-left font-bold">必須</th>
+                        <th className="px-2 py-1 text-left font-bold">説明</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-blue-100">
+                      <tr className="bg-yellow-50"><td className="px-2 py-1 font-mono font-bold">姓</td><td className="px-2 py-1 text-red-600 font-bold">必須</td><td className="px-2 py-1">苗字（例: 山田）</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">名</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">名前（例: 太郎）</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">氏名</td><td className="px-2 py-1 text-red-600 font-bold">必須※</td><td className="px-2 py-1">姓・名が無い場合に使用（例: 山田 太郎）</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">携帯番号</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">数字のみ（例: 09012345678）</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">郵便番号</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">7桁（例: 8100001）</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">住所（番地まで）</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: 福岡市博多区○○1-2-3</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">住所（建物名など）</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">マンション名・号室など</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">誕生日</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: 1985-04-01 / 1985/4/1</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">LINE UID</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">LINE連携済みの場合のみ</td></tr>
+                      <tr className="bg-blue-50 font-semibold"><td className="px-2 py-1 font-mono" colSpan={3}>── 車両情報（同じ行に記載） ──</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">登録番号</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: 福岡500あ1234</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">車両名</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: プリウス</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">車台番号</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: ZVW5012345</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">車検日</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: 2026-03-31 / 令和8年3月31日</td></tr>
+                      <tr><td className="px-2 py-1 font-mono">点検日</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">例: 2025-12-01 / 令和7年12月1日</td></tr>
+                      <tr className="bg-gray-50"><td className="px-2 py-1 font-mono">任意日付</td><td className="px-2 py-1 text-gray-400">任意</td><td className="px-2 py-1">独自のリマインド日付（例: 2026-01-15）</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-1 text-blue-600">※「姓」が無い場合は「氏名」列を使用してください（スペースで姓・名に分割されます）</p>
+              </div>
+
+              <div>
+                <p className="font-semibold mb-1">③ 注意事項</p>
+                <ul className="space-y-0.5 text-blue-700 list-disc list-inside">
+                  <li>文字コードは <span className="font-bold">UTF-8</span> で保存してください</li>
+                  <li>1顧客に複数車両がある場合は、同じ顧客情報を繰り返して複数行に記載してください</li>
+                  <li>同じ携帯番号の行は同一顧客として扱われます</li>
+                  <li>エラーのあった行はスキップして、正常な行のみ取り込まれます</li>
+                  <li>日付は西暦・元号どちらでも入力できます</li>
+                </ul>
+              </div>
+            </div>
 
 
             {csvImportError && (
