@@ -256,7 +256,7 @@ export default function SignupPage() {
                     className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
                     value={representativeName}
                     onChange={(e) => setRepresentativeName(e.target.value)}
-                    placeholder="例：松本 竜也"
+                    placeholder="例：山田 太郎"
                   />
                 </div>
 
