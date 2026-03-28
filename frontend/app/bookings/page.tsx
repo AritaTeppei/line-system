@@ -290,6 +290,7 @@ const filteredCustomers = useMemo(() => {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(
     null,
   );
+  const [dayView, setDayView] = useState(false);
 
   const searchParams = useSearchParams();   // ★ここで取得
 
@@ -423,8 +424,9 @@ const filteredCustomers = useMemo(() => {
 
     // カレンダーの表示月をその月に
     setCurrentMonth(new Date(d.getFullYear(), d.getMonth(), 1));
-    // その日付を選択
+    // その日付を選択し日別ビューへ
     setSelectedDateKey(key);
+    setDayView(true);
   }, [searchParams]);
 
 
@@ -1279,8 +1281,10 @@ if (modalNeedLoanerCar === null) {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedDateKey(toDateKey(b.bookingDate));
+                              const dk = toDateKey(b.bookingDate);
+                              setSelectedDateKey(dk);
                               setCurrentMonth(new Date(new Date(b.bookingDate).getFullYear(), new Date(b.bookingDate).getMonth(), 1));
+                              setDayView(true);
                               document.querySelector('section.bg-white')?.scrollIntoView({ behavior: 'smooth' });
                             }}
                             className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold px-3 py-1.5"
@@ -1300,7 +1304,7 @@ if (modalNeedLoanerCar === null) {
         })()}
 
         {/* カレンダー */}
-        <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+        {!dayView && <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2">
               <button
@@ -1411,9 +1415,12 @@ if (isSelected) {
     <button
       key={cell.key}
       type="button"
-      onClick={() =>
-        cell.dateKey && setSelectedDateKey(cell.dateKey)
-      }
+      onClick={() => {
+        if (cell.dateKey) {
+          setSelectedDateKey(cell.dateKey);
+          setDayView(true);
+        }
+      }}
       className={baseClass}
     >
       <div className="flex items-center justify-between text-[11px] text-gray-900">
@@ -1470,12 +1477,12 @@ if (isSelected) {
           </div>
 
           <div className="mt-3 sm:mt-4 text-[11px] text-gray-600 sm:hidden">
-            日付をタップすると、その日の予約一覧が画面下部に表示されます。
+            日付をタップすると、その日の予約一覧が表示されます。
           </div>
-        </section>
+        </section>}
 
-        {/* カレンダーの下の新規予約ボタン */}
-        <div className="flex justify-end mt-3 sm:mt-4">
+        {/* カレンダーの下の新規予約ボタン（カレンダー表示時のみ） */}
+        {!dayView && <div className="flex justify-end mt-3 sm:mt-4">
           <button
             type="button"
             onClick={() => {
@@ -1487,15 +1494,47 @@ if (isSelected) {
             <span className="text-[14px]">＋</span>
             <span>{createButtonLabel}</span>
           </button>
-        </div>
+        </div>}
 
-        {/* 選択した日の予約一覧 */}
+        {/* 選択した日の予約一覧 / 日別ビュー */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
-            {selectedDateKey
-              ? `${selectedDateKey} の予約一覧`
-              : '日付を選択すると、その日の予約が表示されます'}
-          </h2>
+          {/* ヘッダー */}
+          {dayView && selectedDateKey ? (
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setDayView(false)}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 border border-gray-300 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors"
+                >
+                  ← カレンダーに戻る
+                </button>
+                <h2 className="text-base font-bold text-gray-900">
+                  {(() => {
+                    const d = new Date(selectedDateKey);
+                    const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+                    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wd}）`;
+                  })()}
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    {selectedBookings.length}件
+                  </span>
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => openCreateModalForDate(selectedDateKey)}
+                className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 shadow-sm"
+              >
+                ＋ この日に追加
+              </button>
+            </div>
+          ) : (
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">
+              {selectedDateKey
+                ? `${selectedDateKey} の予約一覧`
+                : '日付を選択すると、その日の予約が表示されます'}
+            </h2>
+          )}
 
           {selectedDateKey && selectedBookings.length === 0 && (
             <p className="text-xs text-gray-600">
@@ -1664,9 +1703,9 @@ if (isSelected) {
             </div>
           )}
 
-          {!selectedDateKey && (
+          {!selectedDateKey && !dayView && (
             <p className="text-xs text-gray-600">
-              上のカレンダーから日付をクリックすると、その日の予約一覧と重複状況が確認できます。
+              上のカレンダーから日付をクリックすると、その日の予約一覧が表示されます。
             </p>
           )}
         </section>

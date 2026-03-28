@@ -156,6 +156,9 @@ export default function DashboardPage() {
   const [announcementIdx, setAnnouncementIdx] = useState(0);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
 
+  // グラフクリックによる絞り込み
+  const [graphFilterDate, setGraphFilterDate] = useState<string | null>(null);
+
   const router = useRouter();  // ★追加
 
   // 初期ロード：auth/me + bookings + customers
@@ -362,19 +365,23 @@ export default function DashboardPage() {
     ...last7Days.map((d) => d.count),
   );
 
-  // 直近予約（新しい順で5件）
-  const recentBookings = useMemo(
-    () =>
-      bookings
+  // 直近予約（グラフ絞り込み中はその日の全件、それ以外は新しい順5件）
+  const recentBookings = useMemo(() => {
+    if (graphFilterDate) {
+      return bookings
         .slice()
-        .sort(
-          (a, b) =>
-            new Date(b.bookingDate).getTime() -
-            new Date(a.bookingDate).getTime(),
-        )
-        .slice(0, 5),
-    [bookings],
-  );
+        .filter((b) => toDateKey(b.bookingDate) === graphFilterDate)
+        .sort((a, b) => (a.timeSlot || '').localeCompare(b.timeSlot || ''));
+    }
+    return bookings
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.bookingDate).getTime() -
+          new Date(a.bookingDate).getTime(),
+      )
+      .slice(0, 5);
+  }, [bookings, graphFilterDate]);
 
   if (loading) {
     return (
@@ -545,10 +552,6 @@ export default function DashboardPage() {
             {/* ★ h-48 に対して、子要素も h-full を渡すのがポイント */}
             <div className="h-48 flex items-end gap-2 sm:gap-3 border-b border-gray-200 pb-3">
               {last7Days.map((d) => {
-                // 件数から高さを決める（分かりやすさ優先）
-                // 0件 → 5%
-                // 1件 → 40%
-                // 2件以上 → 70%
                 let heightPercent: number;
                 if (d.count === 0) {
                   heightPercent = 5;
@@ -559,10 +562,13 @@ export default function DashboardPage() {
                 }
 
                 const isToday = d.key === todayKey;
+                const isSelected = graphFilterDate === d.key;
 
                 const barBaseClass =
                   'w-full rounded-t-md transition-all duration-300 border';
-                const barColorClass = isToday
+                const barColorClass = isSelected
+                  ? 'bg-green-700 border-green-800'
+                  : isToday
                   ? 'bg-emerald-600 border-emerald-700'
                   : d.count > 0
                   ? 'bg-emerald-300 border-emerald-400'
@@ -571,22 +577,22 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={d.key}
-                    className="flex-1 h-full flex flex-col items-center justify-end gap-1"
+                    onClick={() => setGraphFilterDate((prev) => (prev === d.key ? null : d.key))}
+                    className={`flex-1 h-full flex flex-col items-center justify-end gap-1 cursor-pointer rounded-sm transition-colors ${isSelected ? 'bg-green-50' : 'hover:bg-gray-50'}`}
                   >
-                    {/* ★ ここも h-full を付ける */}
                     <div className="w-full h-full flex items-end">
                       <div
                         className={`${barBaseClass} ${barColorClass}`}
                         style={{ height: `${heightPercent}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-gray-600 text-center">
+                    <div className={`text-[10px] text-center font-medium ${isSelected ? 'text-green-700' : 'text-gray-600'}`}>
                       {d.label}
                     </div>
-                    <div className="text-[10px] text-gray-400 text-center">
+                    <div className={`text-[10px] text-center ${isSelected ? 'text-green-500' : 'text-gray-400'}`}>
                       {d.weekday}
                     </div>
-                    <div className="text-[10px] text-gray-700 text-center">
+                    <div className={`text-[10px] text-center font-bold ${isSelected ? 'text-green-700' : 'text-gray-700'}`}>
                       {d.count}件
                     </div>
                   </div>
@@ -595,16 +601,34 @@ export default function DashboardPage() {
             </div>
 
             <div className="mt-2 text-[10px] text-gray-500">
-              
+              バーをクリックするとその日の予約に絞り込めます
             </div>
           </div>
         </section>
 
         {/* 直近の予約一覧 */}
         <section className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-          <h2 className="text-base font-black text-gray-900 mb-4 flex items-center gap-2">
-            📋 直近の予約（最新5件）
-          </h2>
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+              📋 直近の予約
+            </h2>
+            {graphFilterDate ? (
+              <>
+                <span className="text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+                  {graphFilterDate.replace(/-/g, '/')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGraphFilterDate(null)}
+                  className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                >
+                  ✕ 絞り込み解除
+                </button>
+              </>
+            ) : (
+              <span className="text-sm font-normal text-gray-400">（最新5件）</span>
+            )}
+          </div>
 
           {recentBookings.length === 0 ? (
             <p className="text-xs text-gray-600">
