@@ -245,6 +245,18 @@ model BroadcastLogCustomer {
   customer       Customer     @relation(fields: [customerId], references: [id])
 }
 
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  body      String
+  publishAt DateTime
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publishAt, isActive])
+}
+
 enum Plan {
   BASIC
   STANDARD

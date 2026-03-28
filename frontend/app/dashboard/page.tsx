@@ -60,6 +60,13 @@ type Customer = {
   firstName: string;
 };
 
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  publishAt: string;
+};
+
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -143,6 +150,11 @@ export default function DashboardPage() {
   const [onboardingStatus, setOnboardingStatus] =
     useState<OnboardingStatus>(null);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+
+  // お知らせモーダル
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementIdx, setAnnouncementIdx] = useState(0);
+  const [announcementOpen, setAnnouncementOpen] = useState(false);
 
   const router = useRouter();  // ★追加
 
@@ -235,6 +247,40 @@ export default function DashboardPage() {
 
     fetchOnboarding();
   }, [me]);
+
+  // お知らせ取得（ログイン後に未読があればモーダル表示）
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) return;
+
+    fetch(`${apiBase}/announcements/active`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.ok ? res.json() : [])
+      .then((data: Announcement[]) => {
+        if (!data.length) return;
+        const seen: number[] = JSON.parse(
+          localStorage.getItem('seenAnnouncementIds') ?? '[]'
+        );
+        const unseen = data.filter((a) => !seen.includes(a.id));
+        if (unseen.length > 0) {
+          setAnnouncements(unseen);
+          setAnnouncementIdx(0);
+          setAnnouncementOpen(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCloseAnnouncement = () => {
+    // 表示済みIDを保存
+    const seen: number[] = JSON.parse(
+      localStorage.getItem('seenAnnouncementIds') ?? '[]'
+    );
+    const newSeen = Array.from(new Set([...seen, ...announcements.map((a) => a.id)]));
+    localStorage.setItem('seenAnnouncementIds', JSON.stringify(newSeen));
+    setAnnouncementOpen(false);
+  };
 
   const today = new Date();
   const todayKey = toDateKey(today);
@@ -670,6 +716,70 @@ export default function DashboardPage() {
           </p>
         </section>
       </div>
+
+      {/* お知らせモーダル */}
+      {announcementOpen && announcements.length > 0 && (() => {
+        const a = announcements[announcementIdx];
+        const isMultiple = announcements.length > 1;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+              {/* ヘッダー */}
+              <div className="bg-gradient-to-r from-green-600 to-green-500 px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📢</span>
+                  <div>
+                    <p className="text-xs font-bold text-green-100">PitLink からのお知らせ</p>
+                    {isMultiple && (
+                      <p className="text-[10px] text-green-200">{announcementIdx + 1} / {announcements.length}</p>
+                    )}
+                  </div>
+                </div>
+                <button type="button" onClick={handleCloseAnnouncement} className="text-white/70 hover:text-white text-lg font-bold transition-colors">✕</button>
+              </div>
+
+              {/* コンテンツ */}
+              <div className="px-5 py-5 flex-1 space-y-3">
+                <h2 className="text-base font-black text-gray-900">{a.title}</h2>
+                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{a.body}</p>
+                <p className="text-[10px] text-gray-400">
+                  {new Date(a.publishAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
+
+              {/* フッター */}
+              <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+                {isMultiple && announcementIdx < announcements.length - 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCloseAnnouncement}
+                      className="flex-1 py-2.5 rounded-xl border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      すべて閉じる
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnnouncementIdx((i) => i + 1)}
+                      className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-colors"
+                    >
+                      次のお知らせ →
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCloseAnnouncement}
+                    className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-bold transition-colors"
+                  >
+                    確認しました
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </TenantLayout>
   );
 }

@@ -16,6 +16,7 @@ import { OnboardingModule } from './onboarding/onboarding.module'; // ★追加
 import { TrialMonitorService } from './tenants/trial-monitor.service'; // ★ 追加
 import { MailModule } from './mail/mail.module';
 import { CarScanModule } from './car-scan/car-scan.module';
+import { AnnouncementsModule } from './announcements/announcements.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CarScanModule } from './car-scan/car-scan.module';
     PublicBookingsModule,
     MailModule,
     CarScanModule,
+    AnnouncementsModule,
   ],
   providers: [TrialMonitorService], // ★ 追加
 })
