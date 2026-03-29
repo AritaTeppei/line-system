@@ -255,10 +255,10 @@ export default function LoginPage() {
           <div className="flex flex-col items-center mb-8">
             <div className="w-[160px] mx-auto mb-3">
               <Image
-                src="/pitlink-logo.png"
+                src="/logo-light.png"
                 alt="PitLink ロゴ"
-                width={160}
-                height={160}
+                width={200}
+                height={67}
                 className="w-full h-auto"
                 priority
               />
@@ -457,7 +457,7 @@ export default function LoginPage() {
           </div>
 
           <footer className="text-xs text-gray-400 mt-6 text-center">
-            © 556
+            © seibisystem
           </footer>
         </div>
       </main>

@@ -637,13 +637,13 @@ export default function TenantLayout({ children }: Props) {
 
           {/* ロゴ */}
           <div className="px-4 py-5 border-b border-green-800 bg-green-950/50 flex flex-col items-center">
-            <div className="w-[120px] bg-white/10 rounded-xl p-2">
+            <div className="w-[150px]">
               <Image
-                src="/pitlink-logo.png"
+                src="/logo-dark.png"
                 alt="PitLink ロゴ"
-                width={120}
-                height={120}
-                className="w-full h-auto"
+                width={150}
+                height={50}
+                className="w-full h-auto rounded-lg"
                 priority
               />
             </div>
@@ -735,7 +735,7 @@ export default function TenantLayout({ children }: Props) {
 
           {/* フッター */}
           <div className="px-3 py-3 border-t border-green-800 text-[10px] text-green-500 text-center">
-            &copy; PitLink
+            &copy; seibisystem
           </div>
         </aside>
 

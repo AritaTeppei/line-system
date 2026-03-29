@@ -154,7 +154,7 @@ export default function SignupPage() {
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center mb-8">
             <div className="w-[160px] mx-auto mb-3">
-              <Image src="/pitlink-logo.png" alt="PitLink ロゴ" width={160} height={160} className="w-full h-auto" priority />
+              <Image src="/logo-light.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
             </div>
             <p className="text-sm text-gray-500">自動車業界向け LINE 連携プラットフォーム</p>
           </div>
@@ -177,7 +177,7 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <footer className="text-xs text-gray-400 mt-8 text-center">© 556</footer>
+          <footer className="text-xs text-gray-400 mt-8 text-center">© seibisystem</footer>
         </div>
       </main>
     );
@@ -191,7 +191,7 @@ export default function SignupPage() {
         {/* ロゴ */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-[160px] mx-auto mb-3">
-            <Image src="/pitlink-logo.png" alt="PitLink ロゴ" width={160} height={160} className="w-full h-auto" priority />
+            <Image src="/logo-light.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
           </div>
           <p className="text-sm text-gray-500">自動車業界向け LINE 連携プラットフォーム</p>
         </div>
@@ -464,7 +464,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <footer className="text-xs text-gray-400 mt-8 text-center">© 556</footer>
+        <footer className="text-xs text-gray-400 mt-8 text-center">© seibisystem</footer>
       </div>
     </main>
   );

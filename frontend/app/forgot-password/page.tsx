@@ -111,7 +111,7 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
-        <footer className="text-xs text-gray-400 mt-8 text-center">© 556</footer>
+        <footer className="text-xs text-gray-400 mt-8 text-center">© seibisystem</footer>
       </div>
     </main>
   );
