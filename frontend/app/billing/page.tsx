@@ -363,19 +363,25 @@ export default function BillingPage() {
             <h2 className="text-lg font-black text-gray-900 mb-4">🎯 プランを選んで始める</h2>
             <div className="grid gap-5 md:grid-cols-3">
               <PlanCard name="BASIC" price="3,980" tagline="まずはここから"
-                features={['顧客・車両・予約管理', 'LINEリマインド自動送信', 'LINE一括メッセージ送信 ✗', 'LINE送信 月200通まで', 'スタッフ1名ログイン', '外部API連携 ✗']}
+                features={['顧客・車両・予約管理', 'LINEリマインド自動送信', '一括メッセージ送信 ✗', '管理者: 同時ログイン1台', 'クライアント: 同時ログイン1台', '外部API連携 ✗']}
                 disabled={creating !== null} loading={creating === 'BASIC'}
                 onClick={() => handleStartSubscription('BASIC')} />
               <PlanCard name="STANDARD" price="5,000" tagline="一番人気のプラン" recommended
-                features={['BASICの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', 'カスタムリマインド', '外部API連携 ✓']}
+                features={['BASICの全機能', '一括メッセージ送信 ✓', '管理者: 同時ログイン2台', 'クライアント: 同時ログイン1台', 'カスタムリマインド', '外部API連携 ✓']}
                 disabled={creating !== null} loading={creating === 'STANDARD'}
                 onClick={() => handleStartSubscription('STANDARD')} />
               <PlanCard name="PRO" price="10,000" tagline="大型店舗・多店舗向け"
-                features={['STANDARDの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '外部API連携 ✓']}
+                features={['STANDARDの全機能', '一括メッセージ送信 ✓', '管理者: 同時ログイン3台', 'クライアント: 同時ログイン2台', '複数拠点対応', '外部API連携 ✓']}
                 disabled={creating !== null} loading={creating === 'PRO'}
                 onClick={() => handleStartSubscription('PRO')} />
             </div>
-            <p className="mt-4 text-xs text-gray-400 text-center">
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-bold text-amber-800 mb-1">⚠️ LINE公式アカウントのメッセージ送信数について</p>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                プランに関わらず、LINE公式アカウントの<strong>無料送信枠は月200通</strong>です。200通を超えてご利用される場合は、<strong>LINE公式アカウントの有料プラン（ライトプラン等）への別途ご契約</strong>が必要です。本システムの料金とは別にLINE側の費用がかかりますのでご注意ください。
+              </p>
+            </div>
+            <p className="mt-3 text-xs text-gray-400 text-center">
               ※ 現時点ではテスト決済環境です。実運用前に金額・プラン内容・利用規約などを必ず確認してください。
             </p>
           </div>
@@ -393,9 +399,9 @@ export default function BillingPage() {
                 const isCurrent = plan === currentPlan;
                 const isUpgrade = PLAN_RANK[plan] > PLAN_RANK[currentPlan];
                 const planFeatures: Record<Plan, string[]> = {
-                  BASIC: ['顧客・車両・予約管理', 'LINEリマインド自動送信', 'LINE一括メッセージ送信 ✗', 'LINE送信 月200通まで', 'スタッフ1名ログイン', '外部API連携 ✗'],
-                  STANDARD: ['BASICの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 月1,000通まで', 'スタッフ2名ログイン', 'カスタムリマインド', '外部API連携 ✓'],
-                  PRO: ['STANDARDの全機能', 'LINE一括メッセージ送信 ✓', 'LINE送信 無制限', 'スタッフ3名ログイン', '複数拠点対応', '外部API連携 ✓'],
+                  BASIC: ['顧客・車両・予約管理', 'LINEリマインド自動送信', '一括メッセージ送信 ✗', '管理者: 同時ログイン1台', 'クライアント: 同時ログイン1台', '外部API連携 ✗'],
+                  STANDARD: ['BASICの全機能', '一括メッセージ送信 ✓', '管理者: 同時ログイン2台', 'クライアント: 同時ログイン1台', 'カスタムリマインド', '外部API連携 ✓'],
+                  PRO: ['STANDARDの全機能', '一括メッセージ送信 ✓', '管理者: 同時ログイン3台', 'クライアント: 同時ログイン2台', '複数拠点対応', '外部API連携 ✓'],
                 };
                 const prices: Record<Plan, string> = { BASIC: '3,980', STANDARD: '5,000', PRO: '10,000' };
                 const s = {
@@ -451,6 +457,12 @@ export default function BillingPage() {
                   </div>
                 );
               })}
+            </div>
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-bold text-amber-800 mb-1">⚠️ LINE公式アカウントのメッセージ送信数について</p>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                プランに関わらず、LINE公式アカウントの<strong>無料送信枠は月200通</strong>です。200通を超えてご利用される場合は、<strong>LINE公式アカウントの有料プラン（ライトプラン等）への別途ご契約</strong>が必要です。本システムの料金とは別にLINE側の費用がかかりますのでご注意ください。
+              </p>
             </div>
           </div>
         )}

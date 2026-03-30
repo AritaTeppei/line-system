@@ -421,8 +421,8 @@ export default function LoginPage() {
                 <div className="text-sm font-black text-gray-900">¥3,980<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ リマインド自動送信</li>
-                  <li className="text-[10px] text-gray-400">✗ 一括メッセージ送信</li>
-                  <li className="text-[10px] text-gray-400">✗ 外部API連携</li>
+                  <li className="text-[10px] text-gray-500">管理者・客: 同時1台</li>
+                  <li className="text-[10px] text-gray-400">✗ 一括送信・API連携</li>
                 </ul>
               </div>
               {/* STANDARD */}
@@ -434,9 +434,9 @@ export default function LoginPage() {
                 </div>
                 <div className="text-sm font-black text-green-700">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
-                  <li className="text-[10px] text-gray-600">✓ LINE送信 1,000通/月</li>
-                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
-                  <li className="text-[10px] text-gray-600">✓ 外部API連携</li>
+                  <li className="text-[10px] text-gray-600">✓ 一括送信・API連携</li>
+                  <li className="text-[10px] text-gray-500">管理者: 同時2台</li>
+                  <li className="text-[10px] text-gray-500">客: 同時1台</li>
                 </ul>
               </div>
               {/* PRO */}
@@ -447,13 +447,18 @@ export default function LoginPage() {
                 </div>
                 <div className="text-sm font-black text-purple-700">¥10,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
-                  <li className="text-[10px] text-gray-600">✓ LINE送信 無制限</li>
-                  <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
-                  <li className="text-[10px] text-gray-600">✓ 外部API連携</li>
+                  <li className="text-[10px] text-gray-600">✓ 全機能・外部API</li>
+                  <li className="text-[10px] text-gray-500">管理者: 同時3台</li>
+                  <li className="text-[10px] text-gray-500">客: 同時2台</li>
                 </ul>
               </div>
             </div>
             <p className="text-[10px] text-gray-400 text-center mt-2">すべてのプランに7日間の無料トライアルが付きます</p>
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[10px] text-amber-700 leading-relaxed">
+                ⚠️ <strong>LINE公式アカウントの無料送信枠は月200通</strong>（プラン問わず）。200通超はLINE公式の有料プランへの別途ご契約が必要です。
+              </p>
+            </div>
           </div>
 
           <footer className="text-xs text-gray-400 mt-6 text-center">© seibisystem</footer>

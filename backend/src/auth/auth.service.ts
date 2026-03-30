@@ -50,9 +50,8 @@ function calcTenantStatus(
   return 'ACTIVE';
 }
 
-// セッションの有効時間（分）
-// ※開発・本番どちらも 1 分で統一
-const USER_SESSION_EXPIRES_MINUTES = 1;
+// セッションの有効時間 = JWT の有効期限（7日）に合わせる
+const USER_SESSION_EXPIRES_MINUTES = 7 * 24 * 60;
 
 
 @Injectable()
@@ -97,20 +96,20 @@ async logoutAllSessionsForUser(userId: number): Promise<void> {
       return 9999;
     }
 
-    // CLIENT はプランに関係なく常に 1
-    if (role === UserRole.CLIENT) {
-      return 1;
-    }
-
-    // MANAGER はテナントの plan で分岐（文字列 BASIC / STANDARD / PRO を想定）
     const plan = (tenantPlan ?? 'BASIC').toUpperCase();
 
+    // CLIENT: BASIC/STANDARD/TRIAL=1, PRO=2
+    if (role === UserRole.CLIENT) {
+      return plan === 'PRO' ? 2 : 1;
+    }
+
+    // MANAGER: BASIC/TRIAL=1, STANDARD=2, PRO=3
     switch (plan) {
       case 'STANDARD':
         return 2;
       case 'PRO':
         return 3;
-      case 'TRIAL': 
+      case 'TRIAL':
       case 'BASIC':
       default:
         return 1;
