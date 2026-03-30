@@ -582,7 +582,7 @@ export default function TenantLayout({ children }: Props) {
     <div className="min-h-screen flex flex-col bg-gray-100">
 
       {/* ── トップバー ── */}
-      <header className="h-14 bg-green-800 shadow-md flex items-center px-5 gap-4 flex-shrink-0 z-20">
+      <header className="h-14 shadow-md flex items-center px-5 gap-4 flex-shrink-0 z-20" style={{backgroundColor: '#194e2e'}}>
         {/* 店舗名 */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-green-300 text-lg">🏪</span>
@@ -592,7 +592,7 @@ export default function TenantLayout({ children }: Props) {
         </div>
 
         {/* セパレーター */}
-        <div className="h-5 w-px bg-green-600 flex-shrink-0" />
+        <div className="h-5 w-px bg-[#0f3520] flex-shrink-0" />
 
         {/* ログインユーザー */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -602,9 +602,9 @@ export default function TenantLayout({ children }: Props) {
           {me?.role && (
             <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
               me.role === 'MANAGER'
-                ? 'bg-green-600 text-white'
-                : 'bg-green-700 text-green-200'
-            }`}>
+                ? 'bg-green-500 text-white'
+                : 'text-green-200'
+            }`} style={me.role !== 'MANAGER' ? {backgroundColor: '#0f3520'} : {}}>
               {me.role === 'MANAGER' ? '管理者' : 'スタッフ'}
             </span>
           )}
@@ -614,7 +614,7 @@ export default function TenantLayout({ children }: Props) {
         <button
           type="button"
           onClick={() => setGuideOpen(true)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-600 bg-green-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600 transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#0f3520] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#0f3520] transition-colors" style={{backgroundColor: '#113d24'}}
         >
           <span>📖</span> 使い方
         </button>
@@ -623,7 +623,7 @@ export default function TenantLayout({ children }: Props) {
         <button
           type="button"
           onClick={() => handleLogout(false)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-green-600/50 bg-green-700/50 px-3 py-1.5 text-xs font-medium text-green-200 hover:bg-green-700 hover:text-white transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#0f3520] px-3 py-1.5 text-xs font-medium text-green-300 hover:text-white transition-colors" style={{backgroundColor: '#113d24'}}
         >
           <span>🚪</span> ログアウト
         </button>
@@ -633,21 +633,19 @@ export default function TenantLayout({ children }: Props) {
       <div className="flex flex-1 min-h-0">
 
         {/* 左サイドバー */}
-        <aside className="w-56 bg-green-900 flex-shrink-0 flex flex-col shadow-lg">
+        <aside className="w-56 flex-shrink-0 flex flex-col shadow-lg" style={{backgroundColor: '#194e2e'}}>
 
           {/* ロゴ */}
-          <div className="px-4 py-5 border-b border-green-800 bg-green-950/50 flex flex-col items-center">
-            <div className="w-[150px]">
-              <Image
-                src="/logo-dark.png"
-                alt="PitLink ロゴ"
-                width={150}
-                height={50}
-                className="w-full h-auto rounded-lg"
-                priority
-              />
-            </div>
-            <div className="mt-2 text-[11px] text-green-400 text-center leading-snug">
+          <div className="flex flex-col items-center" style={{borderBottom: '1px solid #0f3520', backgroundColor: '#194e2e'}}>
+            <Image
+              src="/logo-dark.png"
+              alt="PitLink ロゴ"
+              width={224}
+              height={75}
+              className="w-full h-auto"
+              priority
+            />
+            <div className="pb-3 text-[11px] text-green-400 text-center leading-snug -mt-1">
               自動車業界向け LINE連携
             </div>
 
@@ -681,7 +679,7 @@ export default function TenantLayout({ children }: Props) {
                       'flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                       active
                         ? 'bg-green-500 text-white shadow-sm'
-                        : 'text-green-100 hover:bg-green-800 hover:text-white',
+                        : 'text-green-100 hover:bg-[#0f3520] hover:text-white',
                     ].join(' ')}
                   >
                     <span className="flex items-center gap-2.5">
@@ -701,8 +699,8 @@ export default function TenantLayout({ children }: Props) {
 
             {/* 各種設定（管理者のみ） */}
             {me?.role === 'MANAGER' && (
-              <div className="mt-5 pt-4 border-t border-green-800">
-                <div className="mb-2 text-[11px] font-bold text-green-500 tracking-widest px-1">
+              <div className="mt-5 pt-4 border-t border-[#0f3520]">
+                <div className="mb-2 text-[11px] font-bold text-green-400 tracking-widest px-1">
                   ⚙️ 各種設定
                 </div>
 
@@ -720,7 +718,7 @@ export default function TenantLayout({ children }: Props) {
                           'flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                           active
                             ? 'bg-green-500 text-white shadow-sm'
-                            : 'text-green-100 hover:bg-green-800 hover:text-white',
+                            : 'text-green-100 hover:bg-[#0f3520] hover:text-white',
                         ].join(' ')}
                       >
                         <span>{link.icon}</span>
@@ -734,7 +732,7 @@ export default function TenantLayout({ children }: Props) {
           </nav>
 
           {/* フッター */}
-          <div className="px-3 py-3 border-t border-green-800 text-[10px] text-green-500 text-center">
+          <div className="px-3 py-3 text-[10px] text-green-500 text-center" style={{borderTop: '1px solid #0f3520'}}>
             &copy; seibisystem
           </div>
         </aside>

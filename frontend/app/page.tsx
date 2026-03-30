@@ -248,22 +248,22 @@ export default function LoginPage() {
         </main>
       }
     >
-      <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-gray-50 flex flex-col items-center justify-center px-4 py-10">
+      <main className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{backgroundColor: '#fafafa'}}>
         <div className="w-full max-w-md">
 
           {/* ロゴ */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-[160px] mx-auto mb-3">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-full mx-auto">
               <Image
                 src="/logo-light.png"
                 alt="PitLink ロゴ"
-                width={200}
-                height={67}
+                width={448}
+                height={149}
                 className="w-full h-auto"
                 priority
               />
             </div>
-            <p className="text-sm text-gray-500 tracking-wide">
+            <p className="text-sm text-gray-500 tracking-wide -mt-2">
               自動車業界向け LINE 連携プラットフォーム
             </p>
           </div>
