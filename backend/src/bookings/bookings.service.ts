@@ -215,8 +215,11 @@ export class BookingsService {
   ) {
     const prisma = this.prisma as any;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+    const booking = await prisma.booking.findFirst({
+      where: {
+        id: bookingId,
+        ...(user.role !== 'DEVELOPER' ? { tenantId: user.tenantId } : {}),
+      },
       include: {
         customer: true,
         car: true,
@@ -225,10 +228,6 @@ export class BookingsService {
 
     if (!booking) {
       throw new Error('予約が見つかりません。');
-    }
-
-    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
-      throw new Error('他テナントの予約は操作できません。');
     }
 
     const updated = await prisma.booking.update({
@@ -262,8 +261,11 @@ export class BookingsService {
   ) {
     const prisma = this.prisma as any;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+    const booking = await prisma.booking.findFirst({
+      where: {
+        id: bookingId,
+        ...(user.role !== 'DEVELOPER' ? { tenantId: user.tenantId } : {}),
+      },
       include: {
         customer: true,
         car: true,
@@ -272,10 +274,6 @@ export class BookingsService {
 
     if (!booking) {
       throw new BadRequestException('予約が見つかりません。');
-    }
-
-    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
-      throw new BadRequestException('他テナントの予約は変更できません。');
     }
 
     // 受付経路チェック（ADMIN / TENANT_MANUAL だけ許可）
@@ -406,8 +404,11 @@ export class BookingsService {
   ) {
     const prisma = this.prisma as any;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
+    const booking = await prisma.booking.findFirst({
+      where: {
+        id: bookingId,
+        ...(user.role !== 'DEVELOPER' ? { tenantId: user.tenantId } : {}),
+      },
       include: {
         customer: true,
         car: true,
@@ -416,12 +417,6 @@ export class BookingsService {
 
     if (!booking) {
       throw new BadRequestException('予約が見つかりません。');
-    }
-
-    if (user.role !== 'DEVELOPER' && booking.tenantId !== user.tenantId) {
-      throw new BadRequestException(
-        '他テナントの予約には確定メッセージを送信できません。',
-      );
     }
 
     // ★ 追加：TRIAL テナントならここでブロックしてダミーメッセージを返す

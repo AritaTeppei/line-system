@@ -248,14 +248,14 @@ export default function LoginPage() {
         </main>
       }
     >
-      <main className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{backgroundColor: '#fafafa'}}>
+      <main className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{backgroundColor: '#129c4c'}}>
         <div className="w-full max-w-md">
 
           {/* ロゴ */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-full mx-auto">
               <Image
-                src="/logo-light.png"
+                src="/logo-dark.png"
                 alt="PitLink ロゴ"
                 width={448}
                 height={149}
@@ -263,8 +263,8 @@ export default function LoginPage() {
                 priority
               />
             </div>
-            <p className="text-sm text-gray-500 tracking-wide -mt-2">
-              自動車業界向け LINE 連携プラットフォーム
+            <p className="text-sm text-white/80 tracking-wide -mt-2">
+              LINE連携予約管理プラットフォーム
             </p>
           </div>
 
@@ -418,7 +418,7 @@ export default function LoginPage() {
                   <span className="text-base">🔵</span>
                   <span className="text-xs font-black text-gray-800">BASIC</span>
                 </div>
-                <div className="text-sm font-black text-gray-900">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-gray-900">¥3,980<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ リマインド自動送信</li>
                   <li className="text-[10px] text-gray-400">✗ 一括メッセージ送信</li>
@@ -432,7 +432,7 @@ export default function LoginPage() {
                   <span className="text-base">⭐</span>
                   <span className="text-xs font-black text-gray-800">STANDARD</span>
                 </div>
-                <div className="text-sm font-black text-green-700">¥10,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-green-700">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ LINE送信 1,000通/月</li>
                   <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>
@@ -445,7 +445,7 @@ export default function LoginPage() {
                   <span className="text-base">💎</span>
                   <span className="text-xs font-black text-gray-800">PRO</span>
                 </div>
-                <div className="text-sm font-black text-purple-700">¥15,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-purple-700">¥10,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ LINE送信 無制限</li>
                   <li className="text-[10px] text-gray-600">✓ 基本機能すべて</li>

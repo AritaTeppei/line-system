@@ -60,12 +60,14 @@ type UpdateTenantDto = {
 };
 
 @Controller('admin/tenants')
+@UseGuards(JwtAuthGuard)
 export class AdminTenantsController {
   constructor(private readonly prisma: PrismaService) {}
 
   // 既存：一覧（overview）
   @Get('overview')
-  async getOverview() {
+  async getOverview(@Req() req: Request) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenants = await this.prisma.tenant.findMany({
       orderBy: { id: 'asc' },
       include: {
@@ -106,7 +108,8 @@ export class AdminTenantsController {
 
   // ★ 編集用：単一テナント取得
   @Get(':id')
-  async getTenant(@Param('id') id: string) {
+  async getTenant(@Req() req: Request, @Param('id') id: string) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(id);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('ID が不正です');
@@ -155,7 +158,8 @@ export class AdminTenantsController {
 
   // 既存：新規作成
   @Post()
-  async createTenant(@Body() body: CreateTenantDto) {
+  async createTenant(@Req() req: Request, @Body() body: CreateTenantDto) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     if (!body.name?.trim()) {
       throw new BadRequestException('テナント名は必須です');
     }
@@ -223,7 +227,8 @@ export class AdminTenantsController {
 
   // ★追加：既存テナントの編集
   @Patch(':id')
-  async updateTenant(@Param('id') id: string, @Body() body: UpdateTenantDto) {
+  async updateTenant(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateTenantDto) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(id);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('ID が不正です');
@@ -346,7 +351,8 @@ export class AdminTenantsController {
 
     // ★既存テナントの削除（関連データもまとめて削除）
   @Delete(':id')
-  async deleteTenant(@Param('id') id: string) {
+  async deleteTenant(@Req() req: Request, @Param('id') id: string) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(id);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('ID が不正です');
@@ -456,7 +462,8 @@ export class AdminTenantsController {
   }
 
   @Post(':tenantId/reset-data')
-  async resetTenantData(@Param('tenantId', ParseIntPipe) tenantId: number) {
+  async resetTenantData(@Req() req: Request, @Param('tenantId', ParseIntPipe) tenantId: number) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });

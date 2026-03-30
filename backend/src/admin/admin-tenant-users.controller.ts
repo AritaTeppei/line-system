@@ -9,12 +9,15 @@ import {
   Delete,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { UserRole } from '@prisma/client';
-
-// ★ Request / UnauthorizedException はもう使わないので import しない
+import { JwtAuthGuard } from '../jwt.guard';
 
 type TenantUserListItem = {
   id: number;
@@ -37,17 +40,17 @@ type ResetPasswordDto = {
 };
 
 @Controller('admin/tenants')
+@UseGuards(JwtAuthGuard)
 export class AdminTenantUsersController {
   constructor(private readonly prisma: PrismaService) {}
-
-  // ★ ensureDeveloper は削除
 
   /**
    * テナント配下の MANAGER / CLIENT ユーザー一覧
    * GET /admin/tenants/:tenantId/users
    */
   @Get(':tenantId/users')
-  async listTenantUsers(@Param('tenantId') tenantIdParam: string) {
+  async listTenantUsers(@Req() req: Request, @Param('tenantId') tenantIdParam: string) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(tenantIdParam);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('tenantId が不正です');
@@ -87,9 +90,11 @@ export class AdminTenantUsersController {
    */
   @Post(':tenantId/users')
   async createTenantUser(
+    @Req() req: Request,
     @Param('tenantId') tenantIdParam: string,
     @Body() body: CreateTenantUserDto,
   ) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(tenantIdParam);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('tenantId が不正です');
@@ -152,10 +157,12 @@ export class AdminTenantUsersController {
    */
   @Patch(':tenantId/users/:userId/reset-password')
   async resetTenantUserPassword(
+    @Req() req: Request,
     @Param('tenantId') tenantIdParam: string,
     @Param('userId') userIdParam: string,
     @Body() body: ResetPasswordDto,
   ) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(tenantIdParam);
     const userId = Number(userIdParam);
     if (Number.isNaN(tenantId) || Number.isNaN(userId)) {
@@ -194,9 +201,11 @@ export class AdminTenantUsersController {
   // ★ テナント配下ユーザーの削除
   @Delete(':tenantId/users/:userId')
   async deleteUser(
+    @Req() req: Request,
     @Param('tenantId') tenantIdParam: string,
     @Param('userId') userIdParam: string,
   ) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(tenantIdParam);
     const userId = Number(userIdParam);
 
@@ -223,7 +232,8 @@ export class AdminTenantUsersController {
 
   // ★ 追加：テナント単位で customers / cars / bookings / reminders logs をリセット
   @Delete(':id/reset')
-  async resetTenantData(@Param('id') id: string) {
+  async resetTenantData(@Req() req: Request, @Param('id') id: string) {
+    if ((req as any).authUser?.role !== 'DEVELOPER') throw new ForbiddenException();
     const tenantId = Number(id);
     if (Number.isNaN(tenantId)) {
       throw new BadRequestException('ID が不正です');

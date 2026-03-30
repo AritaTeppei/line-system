@@ -7,8 +7,10 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express'; // ★ TS1272 対策で type import
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService, AuthPayload } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -28,6 +30,8 @@ export class AuthController {
    * 戻り値: { token, email, tenantId, role }
    */
   @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
   async login(@Body() body: { email: string; password: string }) {
     const { email, password } = body;
 
@@ -190,6 +194,8 @@ export class AuthController {
 
 
   @Post('request-password-reset')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 3600000, limit: 3 } })
   async requestPasswordReset(@Body() body: { email: string }) {
     if (!body.email) throw new BadRequestException('メールアドレスは必須です。');
     await this.auth.requestPasswordReset(body.email);

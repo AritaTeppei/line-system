@@ -421,6 +421,7 @@ export default function TenantLayout({ children }: Props) {
   const [userName, setUserName] = useState<string | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const lastActivityRef = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -578,65 +579,96 @@ export default function TenantLayout({ children }: Props) {
   }, [handleLogout, lastActivityRef]);
 
 
+  const sidebarBg = '#129c4c';
+  const sidebarDark = '#0e7a3c';
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
 
       {/* ── トップバー ── */}
-      <header className="h-14 shadow-md flex items-center px-5 gap-4 flex-shrink-0 z-20" style={{backgroundColor: '#194e2e'}}>
+      <header className="h-14 shadow-md flex items-center px-4 gap-3 flex-shrink-0 z-20" style={{backgroundColor: sidebarBg}}>
+        {/* ハンバーガー（スマホのみ） */}
+        <button
+          type="button"
+          className="md:hidden flex-shrink-0 text-white p-1 rounded-lg hover:bg-white/20 transition-colors"
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="メニューを開く"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
         {/* 店舗名 */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-green-300 text-lg">🏪</span>
-          <span className="font-bold text-white text-sm truncate max-w-[220px]">
+          <span className="text-white/80 text-lg">🏪</span>
+          <span className="font-bold text-white text-sm truncate max-w-[140px] md:max-w-[220px]">
             {tenantName ?? 'PitLink'}
           </span>
         </div>
 
         {/* セパレーター */}
-        <div className="h-5 w-px bg-[#0f3520] flex-shrink-0" />
+        <div className="h-5 w-px bg-white/30 flex-shrink-0 hidden sm:block" />
 
         {/* ログインユーザー */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-sm font-semibold text-green-100 truncate">
+        <div className="hidden sm:flex items-center gap-2 min-w-0 flex-1">
+          <span className="text-sm font-semibold text-white/90 truncate">
             {userName ?? me?.email ?? ''}
           </span>
           {me?.role && (
             <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-              me.role === 'MANAGER'
-                ? 'bg-green-500 text-white'
-                : 'text-green-200'
-            }`} style={me.role !== 'MANAGER' ? {backgroundColor: '#0f3520'} : {}}>
+              me.role === 'MANAGER' ? 'bg-white/25 text-white' : 'bg-white/15 text-white/80'
+            }`}>
               {me.role === 'MANAGER' ? '管理者' : 'スタッフ'}
             </span>
           )}
         </div>
 
+        <div className="flex-1 md:flex-none" />
+
         {/* 使い方ガイドボタン */}
         <button
           type="button"
           onClick={() => setGuideOpen(true)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#0f3520] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#0f3520] transition-colors" style={{backgroundColor: '#113d24'}}
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-medium text-white transition-colors"
         >
-          <span>📖</span> 使い方
+          <span>📖</span> <span className="hidden sm:inline">使い方</span>
         </button>
 
         {/* ログアウトボタン */}
         <button
           type="button"
           onClick={() => handleLogout(false)}
-          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#0f3520] px-3 py-1.5 text-xs font-medium text-green-300 hover:text-white transition-colors" style={{backgroundColor: '#113d24'}}
+          className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-medium text-white transition-colors"
         >
-          <span>🚪</span> ログアウト
+          <span>🚪</span> <span className="hidden sm:inline">ログアウト</span>
         </button>
       </header>
 
       {/* ── メインエリア（サイドバー ＋ コンテンツ）── */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 relative">
+
+        {/* モバイル用オーバーレイ */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         {/* 左サイドバー */}
-        <aside className="w-56 flex-shrink-0 flex flex-col shadow-lg" style={{backgroundColor: '#194e2e'}}>
+        <aside
+          className={[
+            'flex flex-col shadow-lg flex-shrink-0',
+            'fixed inset-y-0 left-0 z-30 w-64 transition-transform duration-200',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+            'md:static md:translate-x-0 md:w-56 md:z-auto',
+          ].join(' ')}
+          style={{backgroundColor: sidebarBg}}
+        >
 
           {/* ロゴ */}
-          <div className="flex flex-col items-center" style={{borderBottom: '1px solid #0f3520', backgroundColor: '#194e2e'}}>
+          <div className="flex flex-col items-center" style={{borderBottom: `1px solid ${sidebarDark}`}}>
             <Image
               src="/logo-dark.png"
               alt="PitLink ロゴ"
@@ -645,8 +677,8 @@ export default function TenantLayout({ children }: Props) {
               className="w-full h-auto"
               priority
             />
-            <div className="pb-3 text-[11px] text-green-400 text-center leading-snug -mt-1">
-              自動車業界向け LINE連携
+            <div className="pb-3 text-[11px] text-white/70 text-center leading-snug -mt-1">
+              LINE連携予約管理プラットフォーム
             </div>
 
             {/* ★ TRIAL プラン用バナー */}
@@ -656,7 +688,7 @@ export default function TenantLayout({ children }: Props) {
           </div>
 
           {/* ナビゲーション */}
-          <nav className="px-3 py-4 text-sm flex-1 flex flex-col">
+          <nav className="px-3 py-4 text-sm flex-1 flex flex-col overflow-y-auto">
             {/* メインメニュー */}
             <div className="space-y-0.5">
               {mainLinks.map((link) => {
@@ -675,11 +707,12 @@ export default function TenantLayout({ children }: Props) {
                   <Link
                     key={link.href}
                     href={link.href}
+                    onClick={() => setSidebarOpen(false)}
                     className={[
                       'flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                       active
-                        ? 'bg-green-500 text-white shadow-sm'
-                        : 'text-green-100 hover:bg-[#0f3520] hover:text-white',
+                        ? 'bg-white text-[#129c4c] shadow-sm font-bold'
+                        : 'text-white/90 hover:bg-white/20',
                     ].join(' ')}
                   >
                     <span className="flex items-center gap-2.5">
@@ -699,8 +732,8 @@ export default function TenantLayout({ children }: Props) {
 
             {/* 各種設定（管理者のみ） */}
             {me?.role === 'MANAGER' && (
-              <div className="mt-5 pt-4 border-t border-[#0f3520]">
-                <div className="mb-2 text-[11px] font-bold text-green-400 tracking-widest px-1">
+              <div className="mt-5 pt-4" style={{borderTop: `1px solid ${sidebarDark}`}}>
+                <div className="mb-2 text-[11px] font-bold text-white/60 tracking-widest px-1">
                   ⚙️ 各種設定
                 </div>
 
@@ -714,11 +747,12 @@ export default function TenantLayout({ children }: Props) {
                       <Link
                         key={link.href}
                         href={link.href}
+                        onClick={() => setSidebarOpen(false)}
                         className={[
                           'flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                           active
-                            ? 'bg-green-500 text-white shadow-sm'
-                            : 'text-green-100 hover:bg-[#0f3520] hover:text-white',
+                            ? 'bg-white text-[#129c4c] shadow-sm font-bold'
+                            : 'text-white/90 hover:bg-white/20',
                         ].join(' ')}
                       >
                         <span>{link.icon}</span>
@@ -732,13 +766,13 @@ export default function TenantLayout({ children }: Props) {
           </nav>
 
           {/* フッター */}
-          <div className="px-3 py-3 text-[10px] text-green-500 text-center" style={{borderTop: '1px solid #0f3520'}}>
+          <div className="px-3 py-3 text-[10px] text-white/50 text-center" style={{borderTop: `1px solid ${sidebarDark}`}}>
             &copy; seibisystem
           </div>
         </aside>
 
         {/* コンテンツエリア */}
-        <div className="flex-1 overflow-auto px-6 py-6 bg-gray-50">
+        <div className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-6 bg-gray-50 min-w-0">
           <OnboardingPanel me={me} />
           {children}
         </div>

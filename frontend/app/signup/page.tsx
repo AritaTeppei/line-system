@@ -150,13 +150,13 @@ export default function SignupPage() {
   // 完了画面
   if (done) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-gray-50 flex flex-col items-center justify-center px-4 py-10">
+      <main className="min-h-screen bg-[#129c4c] flex flex-col items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="flex flex-col items-center mb-8">
             <div className="w-[160px] mx-auto mb-3">
-              <Image src="/logo-light.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
+              <Image src="/logo-dark.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
             </div>
-            <p className="text-sm text-gray-500">自動車業界向け LINE 連携プラットフォーム</p>
+            <p className="text-sm text-white/80">LINE連携予約管理プラットフォーム</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
@@ -177,7 +177,7 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <footer className="text-xs text-gray-400 mt-8 text-center">© seibisystem</footer>
+          <footer className="text-xs text-white/50 mt-8 text-center">© seibisystem</footer>
         </div>
       </main>
     );
@@ -185,15 +185,15 @@ export default function SignupPage() {
 
   // フォーム画面
   return (
-    <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-gray-50 flex flex-col items-center justify-center px-4 py-10">
+    <main className="min-h-screen bg-[#129c4c] flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
 
         {/* ロゴ */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-[160px] mx-auto mb-3">
-            <Image src="/logo-light.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
+            <Image src="/logo-dark.png" alt="PitLink ロゴ" width={200} height={67} className="w-full h-auto" priority />
           </div>
-          <p className="text-sm text-gray-500">自動車業界向け LINE 連携プラットフォーム</p>
+          <p className="text-sm text-white/80">LINE連携予約管理プラットフォーム</p>
         </div>
 
         {/* カード */}
@@ -464,7 +464,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <footer className="text-xs text-gray-400 mt-8 text-center">© seibisystem</footer>
+        <footer className="text-xs text-white/50 mt-8 text-center">© seibisystem</footer>
       </div>
     </main>
   );

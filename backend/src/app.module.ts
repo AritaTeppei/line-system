@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module';
 import { CustomersModule } from './customers/customers.module';
 import { CarsModule } from './cars/cars.module';
@@ -20,6 +21,7 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     AuthModule,
     CustomersModule,
     CarsModule,
