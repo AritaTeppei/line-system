@@ -50,6 +50,15 @@ export default function SignupPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
+  // SMS認証
+  const [smsCode, setSmsCode] = useState('');
+  const [smsSent, setSmsSent] = useState(false);
+  const [smsVerified, setSmsVerified] = useState(false);
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsVerifying, setSmsVerifying] = useState(false);
+  const [smsError, setSmsError] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -57,7 +66,63 @@ export default function SignupPage() {
   const validatePhone = (value: string): boolean => {
     const digits = value.replace(/\D/g, '');
     if (!digits) return false;
-    return digits.length >= 9 && digits.length <= 11;
+    return digits.length >= 10 && digits.length <= 11;
+  };
+
+  const handleSendSmsCode = async () => {
+    setSmsError(null);
+    if (!validatePhone(contactPhone)) {
+      setSmsError('電話番号を正しく入力してください（10〜11桁）。');
+      return;
+    }
+    setSmsSending(true);
+    try {
+      const res = await fetch(`${apiBase}/public/phone/send-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: contactPhone }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSmsError(data?.message ?? 'SMS送信に失敗しました。');
+        return;
+      }
+      setSmsSent(true);
+      setSmsVerified(false);
+      setPhoneVerificationToken('');
+      setSmsCode('');
+    } catch {
+      setSmsError('サーバーに接続できませんでした。');
+    } finally {
+      setSmsSending(false);
+    }
+  };
+
+  const handleVerifySmsCode = async () => {
+    setSmsError(null);
+    if (!smsCode.trim() || smsCode.replace(/\D/g, '').length !== 4) {
+      setSmsError('4桁の認証コードを入力してください。');
+      return;
+    }
+    setSmsVerifying(true);
+    try {
+      const res = await fetch(`${apiBase}/public/phone/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: contactPhone, code: smsCode.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setSmsError(data?.message ?? '認証コードが正しくありません。');
+        return;
+      }
+      setSmsVerified(true);
+      setPhoneVerificationToken(data.token);
+    } catch {
+      setSmsError('サーバーに接続できませんでした。');
+    } finally {
+      setSmsVerifying(false);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -81,6 +146,11 @@ export default function SignupPage() {
 
     if (!contactPhone.trim() || !validatePhone(contactPhone)) {
       setError('連絡先（代表）の電話番号が不正です。');
+      return;
+    }
+
+    if (!smsVerified || !phoneVerificationToken) {
+      setError('電話番号のSMS認証を完了してください。');
       return;
     }
 
@@ -127,6 +197,7 @@ export default function SignupPage() {
           email,
           phone: contactPhone,
           password,
+          phoneVerificationToken,
         }),
       });
 
@@ -289,15 +360,73 @@ export default function SignupPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     連絡先（代表） <span className="text-red-500">*</span>
+                    {smsVerified && (
+                      <span className="ml-2 text-xs text-green-600 font-bold">✓ 認証済み</span>
+                    )}
                   </label>
-                  <input
-                    type="tel"
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="例：0921234567 / 09012345678"
-                    inputMode="tel"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="tel"
+                      className={`flex-1 rounded-xl border bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 ${smsVerified ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}
+                      value={contactPhone}
+                      onChange={(e) => {
+                        setContactPhone(e.target.value);
+                        setSmsVerified(false);
+                        setSmsSent(false);
+                        setPhoneVerificationToken('');
+                        setSmsError(null);
+                      }}
+                      placeholder="例：09012345678"
+                      inputMode="tel"
+                      disabled={smsVerified}
+                    />
+                    {!smsVerified && (
+                      <button
+                        type="button"
+                        onClick={handleSendSmsCode}
+                        disabled={smsSending || !contactPhone.trim()}
+                        className="flex-shrink-0 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-400 text-white text-xs font-bold transition-colors whitespace-nowrap"
+                      >
+                        {smsSending ? '送信中...' : smsSent ? '再送信' : 'SMS認証'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 認証コード入力 */}
+                  {smsSent && !smsVerified && (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-xs text-gray-500">
+                        📱 <span className="font-medium">{contactPhone}</span> に4桁の認証コードを送信しました。
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={4}
+                          className="w-28 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 text-center tracking-[0.3em] font-bold"
+                          value={smsCode}
+                          onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="0000"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleVerifySmsCode}
+                          disabled={smsVerifying || smsCode.length !== 4}
+                          className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-400 text-white text-xs font-bold transition-colors"
+                        >
+                          {smsVerifying ? '確認中...' : 'コードを確認'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {smsVerified && (
+                    <p className="mt-1 text-xs text-green-600 font-medium">✅ 電話番号の認証が完了しました。</p>
+                  )}
+
+                  {smsError && (
+                    <p className="mt-1 text-xs text-red-600">{smsError}</p>
+                  )}
                 </div>
 
                 <div>

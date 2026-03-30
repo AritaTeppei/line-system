@@ -4,12 +4,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { UserRole } from '@prisma/client';
+import { PhoneVerificationService } from './phone-verification.service';
 
 @Injectable()
 export class PublicTenantsService {
   private readonly logger = new Logger(PublicTenantsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly phoneVerification: PhoneVerificationService,
+  ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
     const {
@@ -18,6 +22,7 @@ export class PublicTenantsService {
   email,
   password,
   phone,
+  phoneVerificationToken,
   tenantName,
   companyAddress1,
   companyAddress2,
@@ -26,19 +31,51 @@ export class PublicTenantsService {
   contactMobile,
 } = dto;
 
+    // ① SMS認証トークンを検証（使用済みにもする）
+    if (!phoneVerificationToken) {
+      throw new BadRequestException('電話番号のSMS認証が必要です。');
+    }
+    await this.phoneVerification.consumeToken(phoneVerificationToken);
 
     // ★ ここを追加：今から7日後を trialEnd にする
     const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // 同じメールアドレスのユーザーがすでに存在しないかチェック
+    // ② メールアドレス重複チェック
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
     });
-
     if (existingUser) {
       throw new BadRequestException(
         'このメールアドレスはすでに登録されています。',
       );
+    }
+
+    // ③ 電話番号重複チェック（contactPhone / contactMobile / phone いずれかが一致）
+    const normalizedPhone = (phone ?? contactPhone ?? '').replace(/\D/g, '');
+    if (normalizedPhone) {
+      const existingTenant = await this.prisma.tenant.findFirst({
+        where: {
+          OR: [
+            { contactPhone: { not: null } },
+            { contactMobile: { not: null } },
+          ],
+        },
+        select: { id: true, contactPhone: true, contactMobile: true },
+      });
+      // 既存テナントの電話番号と照合
+      const allTenants = await this.prisma.tenant.findMany({
+        select: { contactPhone: true, contactMobile: true },
+      });
+      const isDuplicate = allTenants.some((t) => {
+        const p1 = (t.contactPhone ?? '').replace(/\D/g, '');
+        const p2 = (t.contactMobile ?? '').replace(/\D/g, '');
+        return (p1 && p1 === normalizedPhone) || (p2 && p2 === normalizedPhone);
+      });
+      if (isDuplicate) {
+        throw new BadRequestException(
+          'この電話番号はすでに登録されています。',
+        );
+      }
     }
 
     // パスワードハッシュ化

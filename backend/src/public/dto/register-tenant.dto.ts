@@ -5,11 +5,13 @@ export class RegisterTenantDto {
   password: string;
   phone: string;             // 代表の電話（必須）
 
+  phoneVerificationToken: string; // SMS認証で取得したトークン（必須）
+
   tenantName?: string | null;
 
   companyAddress1?: string | null;
   companyAddress2?: string | null;
-  representativeName?: string | null; // adminName と同じでもOK
-  contactPhone?: string | null;       // phone と同じでもOK
+  representativeName?: string | null;
+  contactPhone?: string | null;
   contactMobile?: string | null;
 }

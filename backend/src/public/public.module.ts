@@ -1,24 +1,26 @@
 // src/public/public.module.ts
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SmsService } from '../sms/sms.service';
 
-// 既存の Public 系（あなたの元コード）
 import { PublicService } from './public.service';
 import { PublicController } from './public.controller';
 
-// ★ 新規追加したテナント登録用
 import { PublicTenantsService } from './public.tenants.service';
 import { PublicTenantsController } from './public.tenants.controller';
+import { PhoneVerificationService } from './phone-verification.service';
 
 @Module({
   imports: [PrismaModule],
   controllers: [
-    PublicController, // ← 元からある
-    PublicTenantsController, // ← ★ 追加
+    PublicController,
+    PublicTenantsController,
   ],
   providers: [
-    PublicService, // ← 元からある
-    PublicTenantsService, // ← ★ 追加
+    PublicService,
+    PublicTenantsService,
+    PhoneVerificationService,
+    SmsService,
   ],
 })
 export class PublicModule {}
