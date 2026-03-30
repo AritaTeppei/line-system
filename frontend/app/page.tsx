@@ -248,22 +248,22 @@ export default function LoginPage() {
         </main>
       }
     >
-      <main className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{backgroundColor: '#129c4c'}}>
+      <main className="min-h-screen flex flex-col items-center justify-center px-4 py-10" style={{backgroundColor: '#fafafa'}}>
         <div className="w-full max-w-md">
 
           {/* ロゴ */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-full mx-auto">
               <Image
-                src="/logo-dark.png"
+                src="/LOGO_W.png"
                 alt="PitLink ロゴ"
                 width={448}
-                height={149}
+                height={129}
                 className="w-full h-auto"
                 priority
               />
             </div>
-            <p className="text-sm text-white/80 tracking-wide -mt-2">
+            <p className="text-sm text-gray-500 tracking-wide -mt-2">
               LINE連携予約管理プラットフォーム
             </p>
           </div>
@@ -456,9 +456,7 @@ export default function LoginPage() {
             <p className="text-[10px] text-gray-400 text-center mt-2">すべてのプランに7日間の無料トライアルが付きます</p>
           </div>
 
-          <footer className="text-xs text-gray-400 mt-6 text-center">
-            © seibisystem
-          </footer>
+          <footer className="text-xs text-gray-400 mt-6 text-center">© seibisystem</footer>
         </div>
       </main>
     </Suspense>

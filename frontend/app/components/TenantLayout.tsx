@@ -579,8 +579,8 @@ export default function TenantLayout({ children }: Props) {
   }, [handleLogout, lastActivityRef]);
 
 
-  const sidebarBg = '#129c4c';
-  const sidebarDark = '#0e7a3c';
+  const sidebarBg = '#0f9949';
+  const sidebarDark = '#0b7a3a';
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
@@ -670,10 +670,10 @@ export default function TenantLayout({ children }: Props) {
           {/* ロゴ */}
           <div className="flex flex-col items-center" style={{borderBottom: `1px solid ${sidebarDark}`}}>
             <Image
-              src="/logo-dark.png"
+              src="/LOGO_Green.png"
               alt="PitLink ロゴ"
               width={224}
-              height={75}
+              height={69}
               className="w-full h-auto"
               priority
             />
@@ -711,8 +711,8 @@ export default function TenantLayout({ children }: Props) {
                     className={[
                       'flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 font-medium text-sm',
                       active
-                        ? 'bg-white text-[#129c4c] shadow-sm font-bold'
-                        : 'text-white/90 hover:bg-white/20',
+                        ? 'bg-white text-[#0f9949] shadow-sm font-bold'
+                        : 'text-white hover:bg-black/20',
                     ].join(' ')}
                   >
                     <span className="flex items-center gap-2.5">
