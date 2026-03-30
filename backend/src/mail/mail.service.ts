@@ -47,6 +47,30 @@ export class MailService {
     }
   }
 
+  async sendEmailVerificationCode(params: { to: string; code: string }) {
+    const { to, code } = params;
+    const subject = '【PitLink】メール認証コードのご案内';
+    const text = [
+      'PitLink 新規登録のメール認証コードをお送りします。',
+      '',
+      `認証コード: ${code}`,
+      '',
+      'このコードは10分間有効です。',
+      '心当たりのない場合は、このメールを無視してください。',
+      '',
+      '――――――――――――――――',
+      'PitLink 運営',
+    ].join('\n');
+
+    try {
+      await this.resend.emails.send({ from: this.from, to, subject, text });
+      this.logger.log(`EmailVerificationCode sent to ${to}`);
+    } catch (e: any) {
+      this.logger.error(`Failed to send verification mail: ${e?.message ?? e}`);
+      throw e;
+    }
+  }
+
   async sendPasswordResetEmail(params: { to: string; resetUrl: string; userName?: string | null }) {
     const { to, resetUrl, userName } = params;
     const subject = '【PitLink】パスワード再設定のご案内';

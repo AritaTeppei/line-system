@@ -5,7 +5,7 @@ export class RegisterTenantDto {
   password: string;
   phone: string;             // 代表の電話（必須）
 
-  phoneVerificationToken: string; // SMS認証で取得したトークン（必須）
+  emailVerificationToken: string; // メール認証で取得したトークン（必須）
 
   tenantName?: string | null;
 

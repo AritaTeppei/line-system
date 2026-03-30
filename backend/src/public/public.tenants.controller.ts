@@ -2,37 +2,37 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { PublicTenantsService } from './public.tenants.service';
-import { PhoneVerificationService } from './phone-verification.service';
+import { EmailVerificationService } from './email-verification.service';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 
 @Controller('public')
 export class PublicTenantsController {
   constructor(
     private readonly publicTenantsService: PublicTenantsService,
-    private readonly phoneVerification: PhoneVerificationService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
-  /** SMS認証コード送信 */
-  @Post('phone/send-code')
+  /** メール認証コード送信 */
+  @Post('email/send-code')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { ttl: 300000, limit: 3 } }) // 5分に3回まで
-  async sendCode(@Body() body: { phone: string }) {
-    if (!body.phone) {
-      return { error: '電話番号は必須です。' };
+  @Throttle({ default: { ttl: 120000, limit: 3 } }) // 2分に3回まで
+  async sendCode(@Body() body: { email: string }) {
+    if (!body.email) {
+      return { error: 'メールアドレスは必須です。' };
     }
-    await this.phoneVerification.sendCode(body.phone);
+    await this.emailVerification.sendCode(body.email);
     return { ok: true };
   }
 
-  /** SMS認証コード確認 */
-  @Post('phone/verify-code')
+  /** メール認証コード確認 */
+  @Post('email/verify-code')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { ttl: 60000, limit: 10 } })
-  async verifyCode(@Body() body: { phone: string; code: string }) {
-    if (!body.phone || !body.code) {
-      return { error: '電話番号と認証コードは必須です。' };
+  async verifyCode(@Body() body: { email: string; code: string }) {
+    if (!body.email || !body.code) {
+      return { error: 'メールアドレスと認証コードは必須です。' };
     }
-    const result = await this.phoneVerification.verifyCode(body.phone, body.code);
+    const result = await this.emailVerification.verifyCode(body.email, body.code);
     return { ok: true, token: result.token };
   }
 

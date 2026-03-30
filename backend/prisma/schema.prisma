@@ -257,6 +257,18 @@ model PhoneVerification {
   @@index([phone])
 }
 
+model EmailVerification {
+  id        Int       @id @default(autoincrement())
+  email     String
+  code      String
+  token     String?   @unique
+  expiresAt DateTime
+  verified  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
 model Announcement {
   id        Int      @id @default(autoincrement())
   title     String

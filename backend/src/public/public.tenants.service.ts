@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { UserRole } from '@prisma/client';
-import { PhoneVerificationService } from './phone-verification.service';
+import { EmailVerificationService } from './email-verification.service';
 
 @Injectable()
 export class PublicTenantsService {
@@ -12,7 +12,7 @@ export class PublicTenantsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly phoneVerification: PhoneVerificationService,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   async registerTenant(dto: RegisterTenantDto) {
@@ -22,7 +22,7 @@ export class PublicTenantsService {
   email,
   password,
   phone,
-  phoneVerificationToken,
+  emailVerificationToken,
   tenantName,
   companyAddress1,
   companyAddress2,
@@ -31,11 +31,11 @@ export class PublicTenantsService {
   contactMobile,
 } = dto;
 
-    // ① SMS認証トークンを検証（使用済みにもする）
-    if (!phoneVerificationToken) {
-      throw new BadRequestException('電話番号のSMS認証が必要です。');
+    // ① メール認証トークンを検証（使用済みにもする）
+    if (!emailVerificationToken) {
+      throw new BadRequestException('メールアドレスの認証が必要です。');
     }
-    await this.phoneVerification.consumeToken(phoneVerificationToken);
+    await this.emailVerification.consumeToken(emailVerificationToken);
 
     // ★ ここを追加：今から7日後を trialEnd にする
     const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
