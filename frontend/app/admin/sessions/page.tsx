@@ -19,6 +19,27 @@ type SessionRow = {
   tokenSuffix: string | null;
 };
 
+type LookupSession = {
+  id: number;
+  createdAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  tokenSuffix: string | null;
+  status: 'active' | 'expired' | 'revoked' | 'no_expiry';
+};
+
+type LookupResult = {
+  user: {
+    id: number;
+    email: string;
+    name: string | null;
+    role: string;
+    tenantName: string | null;
+    tenantPlan: string | null;
+  } | null;
+  sessions: LookupSession[];
+};
+
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   return window.sessionStorage.getItem('auth_token') ?? window.localStorage.getItem('auth_token');
@@ -65,9 +86,15 @@ export default function AdminSessionsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [revoking, setRevoking] = useState<number | null>(null); // sessionId or userId being revoked
+  const [revoking, setRevoking] = useState<number | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<{ type: 'session' | 'user'; id: number; label: string } | null>(null);
   const [search, setSearch] = useState('');
+
+  // メール検索
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupRevoking, setLookupRevoking] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     const token = getAuthToken();
@@ -98,6 +125,42 @@ export default function AdminSessionsPage() {
     const timer = setInterval(() => setSessions((s) => [...s]), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleLookup = async () => {
+    if (!lookupEmail.trim()) return;
+    const token = getAuthToken();
+    if (!token) return;
+    setLookupLoading(true);
+    setLookupResult(null);
+    try {
+      const res = await fetch(
+        `${apiBase}/admin/sessions/lookup?email=${encodeURIComponent(lookupEmail.trim())}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const data = await res.json();
+      setLookupResult(data);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const handleLookupRevokeAll = async () => {
+    if (!lookupResult?.user) return;
+    const token = getAuthToken();
+    if (!token) return;
+    setLookupRevoking(true);
+    try {
+      await fetch(`${apiBase}/admin/sessions/user/${lookupResult.user.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // 再検索して結果を更新
+      await handleLookup();
+      await fetchSessions();
+    } finally {
+      setLookupRevoking(false);
+    }
+  };
 
   const revokeSession = async (sessionId: number) => {
     const token = getAuthToken();
@@ -229,6 +292,104 @@ export default function AdminSessionsPage() {
         </header>
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+
+          {/* ===== メール検索・緊急強制ログアウト ===== */}
+          <div className="rounded-2xl bg-gray-900 border border-red-900/50 overflow-hidden">
+            <div className="bg-red-950/60 border-b border-red-900/50 px-4 py-3 flex items-center gap-2">
+              <span className="text-base">🚨</span>
+              <h2 className="text-sm font-bold text-red-300">メール検索で強制ログアウト</h2>
+              <span className="text-[11px] text-gray-500">（ログインできない場合はこちら）</span>
+            </div>
+            <div className="px-4 py-4 space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={lookupEmail}
+                  onChange={(e) => setLookupEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  placeholder="例：test@gmail.com"
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 placeholder-gray-500 outline-none focus:border-red-500 transition-colors"
+                />
+                <button
+                  onClick={handleLookup}
+                  disabled={lookupLoading || !lookupEmail.trim()}
+                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs font-bold transition-colors"
+                >
+                  {lookupLoading ? '検索中...' : '検索'}
+                </button>
+              </div>
+
+              {lookupResult && (
+                <div className="rounded-xl border border-gray-700 overflow-hidden">
+                  {!lookupResult.user ? (
+                    <p className="px-4 py-3 text-sm text-gray-500">ユーザーが見つかりませんでした。</p>
+                  ) : (
+                    <>
+                      {/* ユーザー情報 */}
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-800/60 border-b border-gray-700">
+                        <div>
+                          <p className="text-sm font-bold text-white">{lookupResult.user.name ?? lookupResult.user.email}</p>
+                          <p className="text-xs text-gray-400">{lookupResult.user.email}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            <span className={`font-bold ${roleBadge(lookupResult.user.role).includes('sky') ? 'text-sky-400' : lookupResult.user.role === 'DEVELOPER' ? 'text-purple-400' : 'text-gray-400'}`}>
+                              {lookupResult.user.role}
+                            </span>
+                            {lookupResult.user.tenantName && <> ／ {lookupResult.user.tenantName} ({lookupResult.user.tenantPlan})</>}
+                          </p>
+                        </div>
+                        {lookupResult.sessions.some(s => s.status === 'active' || s.status === 'no_expiry') && (
+                          <button
+                            onClick={handleLookupRevokeAll}
+                            disabled={lookupRevoking}
+                            className="px-3 py-2 rounded-xl bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold transition-colors"
+                          >
+                            {lookupRevoking ? '処理中...' : '全セッション強制削除'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* セッション一覧（全ステータス） */}
+                      <div className="divide-y divide-gray-800">
+                        {lookupResult.sessions.length === 0 ? (
+                          <p className="px-4 py-3 text-xs text-gray-500">セッション履歴なし</p>
+                        ) : (
+                          lookupResult.sessions.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between px-4 py-2.5 gap-3">
+                              <div className="flex items-center gap-3">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                  s.status === 'active' ? 'bg-emerald-400' :
+                                  s.status === 'no_expiry' ? 'bg-yellow-400' :
+                                  s.status === 'expired' ? 'bg-gray-600' : 'bg-red-800'
+                                }`} />
+                                <div>
+                                  <p className="text-xs text-gray-300">
+                                    作成: {fmtTime(s.createdAt)}
+                                    {s.tokenSuffix && <span className="ml-2 font-mono text-[10px] text-gray-600">{s.tokenSuffix}</span>}
+                                  </p>
+                                  <p className="text-[11px] mt-0.5">
+                                    <span className={`font-bold ${
+                                      s.status === 'active' ? 'text-emerald-400' :
+                                      s.status === 'no_expiry' ? 'text-yellow-400' :
+                                      s.status === 'expired' ? 'text-gray-500' : 'text-red-600'
+                                    }`}>
+                                      {s.status === 'active' ? `アクティブ（${expiresIn(s.expiresAt)}）` :
+                                       s.status === 'no_expiry' ? '期限なし（要確認）' :
+                                       s.status === 'expired' ? `期限切れ（${fmtTime(s.expiresAt)}）` :
+                                       `ログアウト済（${fmtTime(s.revokedAt)}）`}
+                                    </span>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* KPI */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

@@ -66,7 +66,53 @@ export class AdminSessionsController {
     }));
   }
 
-  /** ユーザー単位で全セッションを強制ログアウト */
+  /** メールアドレスでユーザー検索してセッション情報を返す（期限切れ含む） */
+  @Get('lookup')
+  async lookupByEmail(@Req() req: Request) {
+    this.requireDeveloper(req);
+
+    // クエリパラメータから email を取得
+    const email = (req as any).query?.email as string | undefined;
+    if (!email) return { user: null, sessions: [] };
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        tenant: { select: { id: true, name: true, plan: true } },
+      },
+    });
+    if (!user) return { user: null, sessions: [] };
+
+    // 期限切れ・revoke済み含む直近100件を返す（状況確認用）
+    const sessions = await this.prisma.userSession.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const now = new Date();
+    return {
+      user: { ...user, tenantName: user.tenant?.name, tenantPlan: user.tenant?.plan },
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        expiresAt: s.expiresAt,
+        revokedAt: s.revokedAt,
+        tokenSuffix: s.sessionToken ? `...${s.sessionToken.slice(-6)}` : null,
+        status:
+          s.revokedAt ? 'revoked'
+          : !s.expiresAt ? 'no_expiry'
+          : s.expiresAt < now ? 'expired'
+          : 'active',
+      })),
+    };
+  }
+
+  /** ユーザー単位で全セッションを強制ログアウト（期限切れ含む全削除） */
   @Delete('user/:userId')
   async revokeUserSessions(
     @Req() req: Request,
