@@ -203,12 +203,12 @@ export class AuthService {
     // テナント状態チェック（DEVELOPER は ensureTenantActive の中でスルーされる）
     await this.ensureTenantActive(payload);
 
-    // ★ 同時ログイン数のチェック
-    await this.ensureSessionLimit(payload);
-
-    // ★ 問題なければセッションを1行作成し、sessionToken を payload に付与
-    const sessionToken = await this.createSession(payload);
-    payload.sessionToken = sessionToken;
+    // DEVELOPER はセッション管理対象外（制限なし・DB記録なし）
+    if (payload.role !== UserRole.DEVELOPER) {
+      await this.ensureSessionLimit(payload);
+      const sessionToken = await this.createSession(payload);
+      payload.sessionToken = sessionToken;
+    }
 
     return { user, payload };
   }
@@ -280,6 +280,8 @@ export class AuthService {
    * JwtAuthGuard と getPayloadFromRequestWithTenantCheck の両方から呼ぶ
    */
   async validateAndRefreshSession(payload: AuthPayload): Promise<void> {
+    // DEVELOPER はセッション管理対象外 → 常に通過
+    if (payload.role === UserRole.DEVELOPER) return;
     if (!payload.sessionToken) return; // sessionToken なし（旧JWT）はスルー
 
     const session = await this.prisma.userSession.findUnique({
