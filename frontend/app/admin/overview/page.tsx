@@ -157,7 +157,7 @@ export default function DeveloperOverviewPage() {
               ＋ 新規テナント
             </button>
             <button
-              onClick={() => { if (typeof window !== 'undefined') { window.localStorage.removeItem('auth_token'); } router.push('/admin/login'); }}
+              onClick={() => { if (typeof window !== 'undefined') { window.sessionStorage.removeItem('auth_token'); } router.push('/admin/login'); }}
               className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors"
             >
               ログアウト

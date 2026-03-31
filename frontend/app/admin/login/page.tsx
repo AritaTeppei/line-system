@@ -18,9 +18,9 @@ export default function DevLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 既にログイン済みのDEVELOPERなら即リダイレクト
+  // 既にログイン済みのDEVELOPERなら即リダイレクト（sessionStorage のみ確認）
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('auth_token') : null;
+    const token = typeof window !== 'undefined' ? window.sessionStorage.getItem('auth_token') : null;
     if (!token) return;
     fetch(`${apiBase}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.ok ? r.json() : null)
@@ -50,7 +50,8 @@ export default function DevLoginPage() {
         setError('このページは開発者アカウント専用です。');
         return;
       }
-      window.localStorage.setItem('auth_token', data.token);
+      // sessionStorage に保存（タブ固有 → テナントの localStorage と干渉しない）
+      window.sessionStorage.setItem('auth_token', data.token);
       router.replace('/admin/overview');
     } catch {
       setError('サーバーに接続できませんでした。');

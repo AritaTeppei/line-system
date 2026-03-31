@@ -27,7 +27,7 @@ type TenantDetail = {
 
 function getToken() {
   if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem('auth_token');
+  return window.sessionStorage.getItem('auth_token') ?? window.localStorage.getItem('auth_token');
 }
 
 function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {

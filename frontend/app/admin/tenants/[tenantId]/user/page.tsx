@@ -89,7 +89,7 @@ export default function AdminTenantUsersPage() {
 
       const savedToken =
         typeof window !== "undefined"
-          ? window.localStorage.getItem("auth_token")
+          ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
           : null;
 
       if (!savedToken) {
@@ -135,7 +135,7 @@ export default function AdminTenantUsersPage() {
 
     const savedToken =
       typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
+        ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
         : null;
     if (!savedToken) { setCreateError("再ログインしてください。"); return; }
     if (!newEmail.trim() || !newInitialPassword.trim()) {
@@ -188,7 +188,7 @@ export default function AdminTenantUsersPage() {
 
     const savedToken =
       typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
+        ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
         : null;
     if (!savedToken) { setResetError("再ログインしてください。"); return; }
     if (!resetPasswordInput.trim()) { setResetError("新しいパスワードを入力してください。"); return; }
@@ -228,7 +228,7 @@ export default function AdminTenantUsersPage() {
     if (!deleteTargetUser) return;
     const savedToken =
       typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
+        ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
         : null;
     if (!savedToken) { setDeleteError("再ログインしてください。"); return; }
 

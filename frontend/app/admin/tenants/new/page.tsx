@@ -40,7 +40,7 @@ export default function NewTenantPage() {
   useEffect(() => {
     const savedToken =
       typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
+        ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
         : null;
 
     if (!savedToken) {
@@ -93,7 +93,7 @@ export default function NewTenantPage() {
 
     const savedToken =
       typeof window !== "undefined"
-        ? window.localStorage.getItem("auth_token")
+        ? window.sessionStorage.getItem("auth_token") ?? window.localStorage.getItem("auth_token")
         : null;
 
     if (!savedToken) {
