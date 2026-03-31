@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -79,6 +79,19 @@ export default function DeveloperOverviewPage() {
   const [search, setSearch] = useState('');
   const [filterPlan, setFilterPlan] = useState('ALL');
   const [view, setView] = useState<'table' | 'cards'>('table');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -138,6 +151,7 @@ export default function DeveloperOverviewPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* デスクトップ用ボタン */}
             <button
               onClick={() => router.push('/admin/sessions')}
               className="text-xs text-sky-400 hover:text-sky-300 border border-sky-700 hover:border-sky-500 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
@@ -156,6 +170,37 @@ export default function DeveloperOverviewPage() {
             >
               ＋ 新規テナント
             </button>
+            {/* モバイル用「⋮」メニュー */}
+            <div className="relative sm:hidden" ref={mobileMenuRef}>
+              <button
+                onClick={() => setMobileMenuOpen((v) => !v)}
+                className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors"
+              >
+                ⋮
+              </button>
+              {mobileMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl bg-gray-800 border border-gray-700 shadow-xl z-50 overflow-hidden">
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); router.push('/admin/sessions'); }}
+                    className="w-full text-left text-xs text-sky-400 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700"
+                  >
+                    🔐 セッション管理
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); router.push('/admin/announcements'); }}
+                    className="w-full text-left text-xs text-amber-400 px-4 py-3 hover:bg-gray-700 transition-colors border-b border-gray-700"
+                  >
+                    📢 お知らせ管理
+                  </button>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); router.push('/admin/tenants/new'); }}
+                    className="w-full text-left text-xs text-emerald-400 px-4 py-3 hover:bg-gray-700 transition-colors"
+                  >
+                    ＋ 新規テナント
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={() => { if (typeof window !== 'undefined') { window.sessionStorage.removeItem('auth_token'); } router.push('/admin/login'); }}
               className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-lg px-2.5 py-1.5 transition-colors"
