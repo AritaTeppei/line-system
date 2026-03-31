@@ -62,12 +62,13 @@ model User {
 }
 
 model UserSession {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  createdAt DateTime  @default(now())
-  expiresAt DateTime?
-  revokedAt DateTime?
-  user      User      @relation(fields: [userId], references: [id])
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  sessionToken String?   @unique
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  user         User      @relation(fields: [userId], references: [id])
 }
 
 model Customer {

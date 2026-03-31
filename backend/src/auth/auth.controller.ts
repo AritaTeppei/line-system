@@ -224,9 +224,9 @@ export class AuthController {
     // JWT から payload を取り出す（トークンが無くてもエラーにはしない）
     const payload = this.auth.getPayloadFromRequest(req);
 
-    // payload が取れた場合のみ、そのユーザーのセッションを無効化
+    // payload が取れた場合のみ、現在のセッションだけを無効化
     if (payload) {
-      await this.auth.logoutAllSessionsForUser(payload.id);
+      await this.auth.logoutSession(payload.id, payload.sessionToken);
     }
 
     // クッキーは今まで通り全部消す

@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import type { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -24,6 +25,7 @@ export interface AuthPayload {
   name: string | null;
   tenantId: number | null; // 開発者は null
   role: UserRole; // 'DEVELOPER' | 'MANAGER' | 'CLIENT'
+  sessionToken?: string; // セッション識別トークン（ログアウト・有効性検証に使用）
 
   // ★ ここから追加（あとで使う用のテナント情報）
   tenantStatus?: TenantStatus;
@@ -71,20 +73,23 @@ export class AuthService {
   }
 
   /**
-   * ログアウト時に、このユーザーの有効なセッションをすべて無効化する
-   * （同一アカウントの同時ログイン制限のため）
+   * 現在のセッション（sessionToken で特定）だけを無効化する
+   * sessionToken が無い場合（旧JWT）はそのユーザーの全セッションを無効化
    */
-async logoutAllSessionsForUser(userId: number): Promise<void> {
-  await this.prisma.userSession.updateMany({
-    where: {
-      userId,
-      revokedAt: null,
-    },
-    data: {
-      revokedAt: new Date(),
-    },
-  });
-}
+  async logoutSession(userId: number, sessionToken?: string): Promise<void> {
+    if (sessionToken) {
+      await this.prisma.userSession.updateMany({
+        where: { userId, sessionToken, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    } else {
+      // 旧JWT（sessionToken なし）はフォールバックで全削除
+      await this.prisma.userSession.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+  }
 
   // ★ 追加：プラン＆ロールから同時ログイン上限を返す
   private getMaxSessionsForUser(
@@ -201,8 +206,9 @@ async logoutAllSessionsForUser(userId: number): Promise<void> {
     // ★ 同時ログイン数のチェック
     await this.ensureSessionLimit(payload);
 
-    // ★ 問題なければセッションを1行作成
-    await this.createSession(payload);
+    // ★ 問題なければセッションを1行作成し、sessionToken を payload に付与
+    const sessionToken = await this.createSession(payload);
+    payload.sessionToken = sessionToken;
 
     return { user, payload };
   }
@@ -272,6 +278,7 @@ async logoutAllSessionsForUser(userId: number): Promise<void> {
   /**
    * /auth/me 用：
    * - JWT を検証して payload を取り出す
+   * - セッションが有効かチェック（revoke・期限切れを検出）
    * - MANAGER / CLIENT の場合はテナントの有効状態もチェックする
    * - DEVELOPER はテナント状態に関係なく通す
    */
@@ -284,6 +291,18 @@ async logoutAllSessionsForUser(userId: number): Promise<void> {
       throw new UnauthorizedException(
         '認証情報が無効です。再度ログインしてください。',
       );
+    }
+
+    // セッション有効性チェック（sessionToken がある場合のみ）
+    if (payload.sessionToken) {
+      const session = await this.prisma.userSession.findUnique({
+        where: { sessionToken: payload.sessionToken },
+      });
+      if (!session || session.revokedAt !== null || (session.expiresAt && session.expiresAt < new Date())) {
+        throw new UnauthorizedException(
+          '別の端末からログアウトされたか、セッションが期限切れです。再度ログインしてください。',
+        );
+      }
     }
 
     // テナント状態チェック（MANAGER / CLIENT のみ）
@@ -395,22 +414,24 @@ async logoutAllSessionsForUser(userId: number): Promise<void> {
     }
   }
 
-private async createSession(payload: AuthPayload): Promise<void> {
+private async createSession(payload: AuthPayload): Promise<string> {
   const now = new Date();
-
-  // セッションは 10 分で失効
   const expiresAt = new Date(
     now.getTime() + USER_SESSION_EXPIRES_MINUTES * 60 * 1000,
   );
+  const sessionToken = crypto.randomBytes(16).toString('hex');
 
   await this.prisma.userSession.create({
     data: {
       userId: payload.id,
+      sessionToken,
       createdAt: now,
       expiresAt,
       revokedAt: null,
     },
   });
+
+  return sessionToken;
 }
 
   /**
