@@ -139,6 +139,12 @@ export default function DeveloperOverviewPage() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
+              onClick={() => router.push('/admin/sessions')}
+              className="text-xs text-sky-400 hover:text-sky-300 border border-sky-700 hover:border-sky-500 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
+            >
+              🔐 セッション管理
+            </button>
+            <button
               onClick={() => router.push('/admin/announcements')}
               className="text-xs text-amber-400 hover:text-amber-300 border border-amber-700 hover:border-amber-500 rounded-lg px-2.5 py-1.5 transition-colors hidden sm:block"
             >
