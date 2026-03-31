@@ -21,11 +21,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('認証情報がありません');
     }
 
-    // 開発者 / 管理者 / クライアントいずれかであればOK
-    // （ここではまだロール別制限はかけない）
-    // リクエストに載せて、あとでコントローラから参照できるようにする
-    (req as any).authUser = payload;
+    // セッション有効性チェック＋スライディング延長（10分無操作で失効）
+    await this.authService.validateAndRefreshSession(payload);
 
+    (req as any).authUser = payload;
     return true;
   }
 }

@@ -52,8 +52,8 @@ function calcTenantStatus(
   return 'ACTIVE';
 }
 
-// セッションの有効時間 = JWT の有効期限（7日）に合わせる
-const USER_SESSION_EXPIRES_MINUTES = 7 * 24 * 60;
+// セッションの有効時間（スライディング）: 10分間無操作で自動失効
+const USER_SESSION_EXPIRES_MINUTES = 10;
 
 
 @Injectable()
@@ -276,9 +276,39 @@ export class AuthService {
   }
 
   /**
+   * セッション有効性チェック＋スライディング延長
+   * JwtAuthGuard と getPayloadFromRequestWithTenantCheck の両方から呼ぶ
+   */
+  async validateAndRefreshSession(payload: AuthPayload): Promise<void> {
+    if (!payload.sessionToken) return; // sessionToken なし（旧JWT）はスルー
+
+    const session = await this.prisma.userSession.findUnique({
+      where: { sessionToken: payload.sessionToken },
+    });
+
+    if (
+      !session ||
+      session.revokedAt !== null ||
+      (session.expiresAt && session.expiresAt < new Date())
+    ) {
+      throw new UnauthorizedException(
+        'セッションが期限切れです。再度ログインしてください。',
+      );
+    }
+
+    // スライディング延長：有効期限を now + 10分 に更新
+    await this.prisma.userSession.update({
+      where: { sessionToken: payload.sessionToken },
+      data: {
+        expiresAt: new Date(Date.now() + USER_SESSION_EXPIRES_MINUTES * 60 * 1000),
+      },
+    });
+  }
+
+  /**
    * /auth/me 用：
    * - JWT を検証して payload を取り出す
-   * - セッションが有効かチェック（revoke・期限切れを検出）
+   * - セッション有効性チェック＋延長
    * - MANAGER / CLIENT の場合はテナントの有効状態もチェックする
    * - DEVELOPER はテナント状態に関係なく通す
    */
@@ -293,17 +323,7 @@ export class AuthService {
       );
     }
 
-    // セッション有効性チェック（sessionToken がある場合のみ）
-    if (payload.sessionToken) {
-      const session = await this.prisma.userSession.findUnique({
-        where: { sessionToken: payload.sessionToken },
-      });
-      if (!session || session.revokedAt !== null || (session.expiresAt && session.expiresAt < new Date())) {
-        throw new UnauthorizedException(
-          '別の端末からログアウトされたか、セッションが期限切れです。再度ログインしてください。',
-        );
-      }
-    }
+    await this.validateAndRefreshSession(payload);
 
     // テナント状態チェック（MANAGER / CLIENT のみ）
     await this.ensureTenantActive(payload);
