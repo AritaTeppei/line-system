@@ -21,12 +21,13 @@ import type { AuthPayload } from '../auth/auth.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Express } from 'express';
 import { memoryStorage } from 'multer';
+
+type MulterFile = { originalname: string; mimetype: string; buffer: Buffer; size: number };
 
 const CSV_FILE_FILTER = (
   _req: any,
-  file: Express.Multer.File,
+  file: MulterFile,
   cb: (error: Error | null, acceptFile: boolean) => void,
 ) => {
   const allowedMimeTypes = ['text/csv', 'text/plain', 'application/vnd.ms-excel'];
@@ -76,7 +77,7 @@ export class CustomersController {
   )
   importCsv(
     @Req() req: Request,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @Query('strategy') strategy: ImportStrategy = 'skip',
   ) {
     if (!file) throw new BadRequestException('ファイルが選択されていません');
