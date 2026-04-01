@@ -31,7 +31,7 @@ async function bootstrap() {
 
   // ★ Render では PORT 環境変数が入るので、両対応にしておく
   const port = process.env.PORT || 4000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();
