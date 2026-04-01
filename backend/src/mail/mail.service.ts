@@ -98,4 +98,28 @@ export class MailService {
       throw e;
     }
   }
+
+  async sendAdminOtp(params: { to: string; code: string }) {
+    const { to, code } = params;
+    const subject = '【PitLink】管理者ログイン認証コード';
+    const text = [
+      'PitLink Developer Console へのログイン認証コードをお送りします。',
+      '',
+      `認証コード: ${code}`,
+      '',
+      'このコードは10分間有効です。',
+      '心当たりのない場合は、このメールを無視し、パスワードを変更してください。',
+      '',
+      '――――――――――――――――',
+      'PitLink 運営',
+    ].join('\n');
+
+    try {
+      await this.resend.emails.send({ from: this.from, to, subject, text });
+      this.logger.log(`AdminOtp sent to ${to}`);
+    } catch (e: any) {
+      this.logger.error(`Failed to send admin OTP mail: ${e?.message ?? e}`);
+      throw e;
+    }
+  }
 }

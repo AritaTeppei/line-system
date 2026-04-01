@@ -219,6 +219,36 @@ export class AuthController {
     return { message: 'パスワードを再設定しました。新しいパスワードでログインしてください。' };
   }
 
+  /**
+   * 管理者2FA STEP1: メール＋パスワード検証 → OTPメール送信
+   * POST /auth/admin/request-otp
+   */
+  @Post('admin/request-otp')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  async adminRequestOtp(@Body() body: { email: string; password: string }) {
+    if (!body.email || !body.password) {
+      throw new BadRequestException('メールアドレスとパスワードは必須です。');
+    }
+    await this.auth.issueAdminOtp(body.email, body.password);
+    return { message: '認証コードをメールで送信しました。' };
+  }
+
+  /**
+   * 管理者2FA STEP2: OTP検証 → JWT発行
+   * POST /auth/admin/verify-otp
+   */
+  @Post('admin/verify-otp')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  async adminVerifyOtp(@Body() body: { email: string; code: string }) {
+    if (!body.email || !body.code) {
+      throw new BadRequestException('メールアドレスとコードは必須です。');
+    }
+    const token = await this.auth.verifyAdminOtp(body.email, body.code);
+    return { token, role: 'DEVELOPER' };
+  }
+
   @Post('logout')
   async logout(@Req() req: Request, @Res() res: Response) {
     // JWT から payload を取り出す（トークンが無くてもエラーにはしない）

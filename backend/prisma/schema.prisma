@@ -270,6 +270,17 @@ model EmailVerification {
   @@index([email])
 }
 
+model AdminOtp {
+  id        Int       @id @default(autoincrement())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
 model Announcement {
   id        Int      @id @default(autoincrement())
   title     String

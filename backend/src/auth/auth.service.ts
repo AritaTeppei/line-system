@@ -653,4 +653,65 @@ async revokeAllSessionsForUser(userId: number): Promise<void> {
       data: { usedAt: new Date() },
     });
   }
+
+  /**
+   * 管理者2FA: メールアドレス＋パスワードを検証してOTPを発行する
+   * DEVELOPERアカウント専用
+   */
+  async issueAdminOtp(email: string, password: string): Promise<void> {
+    const user = await this.validateUser(email, password);
+    if (user.role !== UserRole.DEVELOPER) {
+      throw new UnauthorizedException('このページは開発者アカウント専用です。');
+    }
+
+    // 古い未使用OTPを無効化（同一メール宛の重複送信を防ぐ）
+    await this.prisma.adminOtp.deleteMany({
+      where: { email, usedAt: null },
+    });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6桁
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10分
+
+    await this.prisma.adminOtp.create({ data: { email, code, expiresAt } });
+    await this.mailService.sendAdminOtp({ to: email, code });
+  }
+
+  /**
+   * 管理者2FA: OTPを検証してJWTを発行する
+   */
+  async verifyAdminOtp(email: string, code: string): Promise<string> {
+    const otp = await this.prisma.adminOtp.findFirst({
+      where: { email, usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otp || otp.code !== code) {
+      throw new UnauthorizedException('認証コードが正しくありません。');
+    }
+    if (otp.expiresAt < new Date()) {
+      throw new UnauthorizedException('認証コードの有効期限が切れています。再度ログインしてください。');
+    }
+
+    // OTPを使用済みにする
+    await this.prisma.adminOtp.update({
+      where: { id: otp.id },
+      data: { usedAt: new Date() },
+    });
+
+    // ユーザー情報を取得してJWT発行
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.role !== UserRole.DEVELOPER) {
+      throw new UnauthorizedException('アカウントが見つかりません。');
+    }
+
+    const payload: AuthPayload = {
+      id: user.id,
+      email: user.email,
+      name: (user as any).name ?? null,
+      tenantId: null,
+      role: UserRole.DEVELOPER,
+    };
+
+    return this.issueToken(payload);
+  }
 }
