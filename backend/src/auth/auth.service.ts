@@ -654,20 +654,84 @@ async revokeAllSessionsForUser(userId: number): Promise<void> {
     });
   }
 
+  // ─── 管理者アカウントロック ───────────────────────────────────
+
+  private readonly ADMIN_LOCK_THRESHOLD = 10;      // 10回失敗でロック
+  private readonly ADMIN_LOCK_DURATION_MS = 30 * 60 * 1000; // 30分
+
+  /** ロック状態を確認し、ロック中なら ForbiddenException を投げる */
+  private async checkAdminLock(email: string): Promise<void> {
+    const lock = await this.prisma.adminLoginLock.findUnique({ where: { email } });
+    if (!lock?.lockedAt) return;
+
+    const unlockAt = new Date(lock.lockedAt.getTime() + this.ADMIN_LOCK_DURATION_MS);
+    if (unlockAt > new Date()) {
+      const remaining = Math.ceil((unlockAt.getTime() - Date.now()) / 60000);
+      throw new ForbiddenException(
+        `ログイン試行回数が上限を超えたためアカウントをロックしました。${remaining}分後に再度お試しください。`,
+      );
+    }
+    // ロック期限切れ → リセット
+    await this.prisma.adminLoginLock.update({
+      where: { email },
+      data: { failCount: 0, lockedAt: null },
+    });
+  }
+
+  /** ログイン失敗を記録し、閾値に達したらロックする */
+  private async recordAdminLoginFailure(email: string): Promise<void> {
+    const lock = await this.prisma.adminLoginLock.upsert({
+      where: { email },
+      create: { email, failCount: 1 },
+      update: { failCount: { increment: 1 } },
+    });
+
+    if (lock.failCount >= this.ADMIN_LOCK_THRESHOLD && !lock.lockedAt) {
+      await this.prisma.adminLoginLock.update({
+        where: { email },
+        data: { lockedAt: new Date() },
+      });
+    }
+  }
+
+  /** ログイン成功時にカウンターをリセットする */
+  private async resetAdminLock(email: string): Promise<void> {
+    await this.prisma.adminLoginLock.upsert({
+      where: { email },
+      create: { email, failCount: 0 },
+      update: { failCount: 0, lockedAt: null },
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────
+
   /**
    * 管理者2FA: メールアドレス＋パスワードを検証してOTPを発行する
    * DEVELOPERアカウント専用
    */
   async issueAdminOtp(email: string, password: string): Promise<void> {
-    const user = await this.validateUser(email, password);
+    // ① アカウントロック確認
+    await this.checkAdminLock(email);
+
+    // ② パスワード検証（失敗したら失敗カウントを記録）
+    let user: any;
+    try {
+      user = await this.validateUser(email, password);
+    } catch {
+      await this.recordAdminLoginFailure(email);
+      throw new UnauthorizedException('メールアドレスまたはパスワードが違います。');
+    }
+
     if (user.role !== UserRole.DEVELOPER) {
+      await this.recordAdminLoginFailure(email);
       throw new UnauthorizedException('このページは開発者アカウント専用です。');
     }
 
-    // 古い未使用OTPを無効化（同一メール宛の重複送信を防ぐ）
-    await this.prisma.adminOtp.deleteMany({
-      where: { email, usedAt: null },
-    });
+    // ③ 成功 → カウンターリセット
+    await this.resetAdminLock(email);
+
+    // ④ OTP発行・送信
+    await this.prisma.adminOtp.deleteMany({ where: { email, usedAt: null } });
 
     const code = String(Math.floor(100000 + Math.random() * 900000)); // 6桁
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10分

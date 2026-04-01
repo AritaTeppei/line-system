@@ -270,6 +270,14 @@ model EmailVerification {
   @@index([email])
 }
 
+model AdminLoginLock {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  failCount Int       @default(0)
+  lockedAt  DateTime?
+  updatedAt DateTime  @updatedAt
+}
+
 model AdminOtp {
   id        Int       @id @default(autoincrement())
   email     String
