@@ -16,7 +16,7 @@ export default function TokushoPage() {
               {[
                 { label: '販売業者', value: '松本美香' },
                 { label: '代表者名', value: '松本美香' },
-                { label: '所在地', value: '〒815-0081　福岡県福岡市南区高木3-5-10-101' },
+                { label: '所在地', value: '香川県高松市一宮町683-1' },
                 { label: '電話番号', value: '0878858463', note: '※お問い合わせはメールにてお願いします。電話でのお問い合わせには対応しておりません。' },
                 { label: 'メールアドレス', value: 'info@seibisystem.com' },
                 { label: 'サービス名', value: 'PitLink（ピットリンク）' },
