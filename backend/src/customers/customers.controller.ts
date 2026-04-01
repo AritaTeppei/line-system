@@ -1,5 +1,6 @@
 // src/customers/customers.controller.ts
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -21,6 +22,20 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
+import { memoryStorage } from 'multer';
+
+const CSV_FILE_FILTER = (
+  _req: any,
+  file: Express.Multer.File,
+  cb: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  const allowedMimeTypes = ['text/csv', 'text/plain', 'application/vnd.ms-excel'];
+  const ext = file.originalname.split('.').pop()?.toLowerCase();
+  if (ext !== 'csv' || !allowedMimeTypes.includes(file.mimetype)) {
+    return cb(new BadRequestException('CSVファイル（.csv）のみアップロード可能です'), false);
+  }
+  cb(null, true);
+};
 
 type ImportStrategy = 'skip' | 'rollback';
 
@@ -52,12 +67,19 @@ export class CustomersController {
   }
 
   @Post('import-csv')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB 上限
+      fileFilter: CSV_FILE_FILTER,
+    }),
+  )
   importCsv(
     @Req() req: Request,
-    @UploadedFile() file: any, // まずは any でOK（型でハマらないように）
+    @UploadedFile() file: Express.Multer.File,
     @Query('strategy') strategy: ImportStrategy = 'skip',
   ) {
+    if (!file) throw new BadRequestException('ファイルが選択されていません');
     const user = (req as any).authUser as AuthPayload;
     return this.customersService.importFromCsv(user, file, strategy);
   }
