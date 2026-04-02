@@ -22,7 +22,7 @@ export default function TokushoPage() {
                 { label: 'サービス名', value: 'PitLink（ピットリンク）' },
                 {
                   label: '販売価格',
-                  value: '・BASICプラン：¥9,800／月（税込）\n・STANDARDプラン：¥15,000／月（税込）\n・PROプラン：¥20,000／月（税込）',
+                  value: '・BASICプラン：¥3,980／月（税込）\n・STANDARDプラン：¥5,000／月（税込）\n・PROプラン：¥10,000／月（税込）',
                 },
                 { label: '支払方法', value: 'クレジットカード決済（Visa・Mastercard・American Express・JCB等）' },
                 { label: '支払時期', value: 'ご契約開始時および毎月の更新日に自動引き落とし' },
