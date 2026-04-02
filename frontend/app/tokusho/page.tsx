@@ -14,7 +14,7 @@ export default function TokushoPage() {
           <table className="w-full text-sm">
             <tbody>
               {[
-                { label: '販売業者', value: 'seibisystem' },
+                { label: '販売業者', value: '松本美香（seibisystem）' },
                 { label: '代表者名', value: '松本美香' },
                 { label: '所在地', value: '香川県高松市一宮町683-1' },
                 { label: '電話番号', value: '0878858463', note: '※お問い合わせはメールにてお願いします。電話でのお問い合わせには対応しておりません。' },

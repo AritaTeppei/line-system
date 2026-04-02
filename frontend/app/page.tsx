@@ -462,7 +462,7 @@ export default function LoginPage() {
           </div>
 
           <footer className="text-xs text-gray-400 mt-6 text-center space-y-1">
-            <div>販売者：seibisystem</div>
+            <div>販売者：松本美香（seibisystem）</div>
             <div>
               <a href="/tokusho" className="underline underline-offset-2 hover:text-gray-600 transition-colors">
                 特定商取引法に基づく表記
