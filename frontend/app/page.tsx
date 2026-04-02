@@ -418,7 +418,7 @@ export default function LoginPage() {
                   <span className="text-base">🔵</span>
                   <span className="text-xs font-black text-gray-800">BASIC</span>
                 </div>
-                <div className="text-sm font-black text-gray-900">¥3,980<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-gray-900">¥9,800<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ リマインド自動送信</li>
                   <li className="text-[10px] text-gray-500">管理者・客: 同時1台</li>
@@ -432,7 +432,7 @@ export default function LoginPage() {
                   <span className="text-base">⭐</span>
                   <span className="text-xs font-black text-gray-800">STANDARD</span>
                 </div>
-                <div className="text-sm font-black text-green-700">¥5,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-green-700">¥15,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ 一括送信・API連携</li>
                   <li className="text-[10px] text-gray-500">管理者: 同時2台</li>
@@ -445,7 +445,7 @@ export default function LoginPage() {
                   <span className="text-base">💎</span>
                   <span className="text-xs font-black text-gray-800">PRO</span>
                 </div>
-                <div className="text-sm font-black text-purple-700">¥10,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
+                <div className="text-sm font-black text-purple-700">¥20,000<span className="text-[10px] font-normal text-gray-400">/月</span></div>
                 <ul className="space-y-0.5 mt-1">
                   <li className="text-[10px] text-gray-600">✓ 全機能・外部API</li>
                   <li className="text-[10px] text-gray-500">管理者: 同時3台</li>
@@ -461,7 +461,15 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <footer className="text-xs text-gray-400 mt-6 text-center">© seibisystem</footer>
+          <footer className="text-xs text-gray-400 mt-6 text-center space-y-1">
+            <div>販売者：松本美香 / PitLink</div>
+            <div>
+              <a href="/tokusho" className="underline underline-offset-2 hover:text-gray-600 transition-colors">
+                特定商取引法に基づく表記
+              </a>
+            </div>
+            <div>© seibisystem</div>
+          </footer>
         </div>
       </main>
     </Suspense>
